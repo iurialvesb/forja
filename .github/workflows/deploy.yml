@@ -34,7 +34,7 @@ jobs:
       - name: Base de datos (migraciones)
         run: |
           supabase link --project-ref "$PROJECT_ID"
-          supabase db push --password "$SUPABASE_DB_PASSWORD" --include-all
+          supabase db push --remote --include-all --yes || supabase db push --linked --include-all --yes
       - name: Secretos de las funciones
         run: |
           supabase secrets set --project-ref "$PROJECT_ID" \
