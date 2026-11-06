@@ -37,7 +37,7 @@ jobs:
           supabase db push --remote --include-all --yes || supabase db push --linked --include-all --yes
       - name: Secretos de las funciones
         run: |
-          supabase secrets set --project-ref "$PROJECT_ID" \
+          supabase secrets set --yes --project-ref "$PROJECT_ID" \
             AI_PROVIDER=gemini \
             GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}" \
             USDA_API_KEY="${{ secrets.USDA_API_KEY }}" \
@@ -45,12 +45,12 @@ jobs:
           # Claves de notificaciones: se generan una sola vez y se guardan en Supabase.
           if ! supabase secrets list --project-ref "$PROJECT_ID" | grep -q VAPID_PUBLIC_KEY; then
             KEYS=$(npx --yes web-push@3 generate-vapid-keys --json)
-            supabase secrets set --project-ref "$PROJECT_ID" \
+            supabase secrets set --yes --project-ref "$PROJECT_ID" \
               VAPID_PUBLIC_KEY="$(echo "$KEYS" | node -pe 'JSON.parse(require("fs").readFileSync(0)).publicKey')" \
               VAPID_PRIVATE_KEY="$(echo "$KEYS" | node -pe 'JSON.parse(require("fs").readFileSync(0)).privateKey')"
           fi
       - name: Funciones
-        run: supabase functions deploy --project-ref "$PROJECT_ID" --use-api
+        run: supabase functions deploy --yes --project-ref "$PROJECT_ID" --use-api
 
   web:
     needs: test
