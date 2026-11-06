@@ -1,0 +1,92 @@
+// Proveedor de IA intercambiable. Por defecto Gemini (nivel gratuito de Google AI Studio).
+// AI_PROVIDER=gemini (por defecto) | claude. Misma interfaz para todo el backend (mensajes, imágenes, herramientas).
+// Aviso: en el nivel gratuito, Google puede usar el contenido enviado para mejorar sus productos.
+import { claude as claudeCall, type ContentBlock, type Message, type Tool } from './anthropic.ts';
+import { env } from './supabase.ts';
+
+export type { ContentBlock, Message, Tool };
+export const PROVIDER = () => (Deno.env.get('AI_PROVIDER') ?? 'gemini').toLowerCase();
+export const MODEL = () => PROVIDER() === 'claude' ? (Deno.env.get('ANTHROPIC_MODEL') ?? 'claude-sonnet-5-5') : (Deno.env.get('GEMINI_MODEL') ?? 'gemini-flash-latest');
+export const PROVIDER_LABEL = () => PROVIDER() === 'claude' ? 'Anthropic (Claude)' : 'Google (Gemini)';
+
+export interface GenArgs {
+  system: string; messages: Message[]; tools?: Tool[]; toolChoice?: { type: 'auto' | 'any' | 'tool'; name?: string };
+  maxTokens?: number; temperature?: number;
+}
+export interface GenResult { content: ContentBlock[]; stop_reason: string; usage?: unknown }
+
+/** JSON Schema → esquema OpenAPI que acepta Gemini (tipos en mayúsculas, sin additionalProperties). */
+export function toGeminiSchema(s: any): any {
+  if (Array.isArray(s)) return s.map(toGeminiSchema);
+  if (!s || typeof s !== 'object') return s;
+  const out: any = {};
+  for (const [k, v] of Object.entries(s)) {
+    if (k === 'additionalProperties' || k === '$schema') continue;
+    if (k === 'type' && typeof v === 'string') out.type = v.toUpperCase();
+    else if (k === 'properties') out.properties = Object.fromEntries(Object.entries(v as object).map(([pk, pv]) => [pk, toGeminiSchema(pv)]));
+    else if (k === 'items') out.items = toGeminiSchema(v);
+    else out[k] = v;
+  }
+  if (out.type === 'OBJECT' && out.properties && !Object.keys(out.properties).length) delete out.properties;
+  return out;
+}
+
+async function gemini(a: GenArgs): Promise<GenResult> {
+  const idToName = new Map<string, string>();
+  const contents = a.messages.map((m) => {
+    const blocks: ContentBlock[] = typeof m.content === 'string' ? [{ type: 'text', text: m.content }] : m.content;
+    const parts = blocks.map((b): any => {
+      switch (b.type) {
+        case 'text': return { text: b.text };
+        case 'image': return { inline_data: { mime_type: b.source.media_type, data: b.source.data } };
+        case 'tool_use': idToName.set(b.id, b.name); return { functionCall: { name: b.name, args: b.input ?? {} } };
+        case 'tool_result': {
+          let response: unknown; try { response = JSON.parse(b.content); } catch { response = { text: b.content }; }
+          return { functionResponse: { name: idToName.get(b.tool_use_id) ?? 'herramienta', response: { result: response } } };
+        }
+      }
+    });
+    return { role: m.role === 'assistant' ? 'model' : 'user', parts };
+  });
+  const body: any = {
+    systemInstruction: { parts: [{ text: a.system }] }, contents,
+    generationConfig: { maxOutputTokens: a.maxTokens ?? 2048, temperature: a.temperature ?? 0.4 },
+  };
+  if (a.tools?.length) {
+    body.tools = [{ functionDeclarations: a.tools.map((t) => ({ name: t.name, description: t.description, parameters: toGeminiSchema(t.input_schema) })) }];
+    if (a.toolChoice?.type === 'tool' && a.toolChoice.name) body.toolConfig = { functionCallingConfig: { mode: 'ANY', allowedFunctionNames: [a.toolChoice.name] } };
+    else if (a.toolChoice?.type === 'any') body.toolConfig = { functionCallingConfig: { mode: 'ANY' } };
+  }
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL()}:generateContent`;
+  let res: Response | undefined;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env('GEMINI_API_KEY') }, body: JSON.stringify(body) });
+    if (res.status !== 429 && res.status !== 503) break;
+    await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));      // límites del nivel gratuito
+  }
+  if (!res!.ok) {
+    const t = await res!.text();
+    if (res!.status === 429) throw new Error('Has alcanzado el límite gratuito de la IA por hoy o por minuto. Inténtalo un poco más tarde.');
+    throw new Error(`Gemini ${res!.status}: ${t.slice(0, 300)}`);
+  }
+  const j = await res!.json();
+  const parts: any[] = j.candidates?.[0]?.content?.parts ?? [];
+  const content: ContentBlock[] = [];
+  parts.forEach((p, i) => {
+    if (p.text) content.push({ type: 'text', text: p.text });
+    if (p.functionCall) content.push({ type: 'tool_use', id: `call_${i}_${crypto.randomUUID().slice(0, 8)}`, name: p.functionCall.name, input: p.functionCall.args ?? {} });
+  });
+  if (!content.length) {
+    const reason = j.candidates?.[0]?.finishReason ?? j.promptFeedback?.blockReason ?? 'desconocido';
+    throw new Error(`La IA no devolvió respuesta (${reason}).`);
+  }
+  return { content, stop_reason: content.some((c) => c.type === 'tool_use') ? 'tool_use' : 'end_turn', usage: j.usageMetadata };
+}
+
+export async function generate(a: GenArgs): Promise<GenResult> {
+  return PROVIDER() === 'claude' ? await claudeCall(a) : await gemini(a);
+}
+
+export function textOf(content: ContentBlock[]): string {
+  return content.filter((b): b is { type: 'text'; text: string } => b.type === 'text').map((b) => b.text).join('\n').trim();
+}

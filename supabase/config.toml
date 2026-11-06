@@ -1,0 +1,50 @@
+project_id = "forja"
+
+# Fragmento de configuración relevante (el resto lo genera `supabase init`).
+[functions.strava-webhook]
+verify_jwt = false          # lo llama Strava
+
+[functions.strava-auth]
+verify_jwt = false          # la redirección OAuth llega desde el navegador; los POST validan el JWT en código
+
+[functions.coach]
+verify_jwt = false          # el código valida al usuario con requireUser
+[functions.parse-photo]
+verify_jwt = false          # el código valida al usuario con requireUser
+[functions.ingest-session]
+verify_jwt = false          # el código valida al usuario con requireUser
+[functions.replan]
+verify_jwt = false          # el código valida al usuario con requireUser
+[functions.export-data]
+verify_jwt = false          # el código valida al usuario con requireUser
+
+[functions.insights]
+verify_jwt = false          # el código valida al usuario con requireUser
+[functions.nutrition-day]
+verify_jwt = false          # el código valida al usuario con requireUser
+[functions.nutrition-log]
+verify_jwt = false          # el código valida al usuario con requireUser
+[functions.pantry]
+verify_jwt = false          # el código valida al usuario con requireUser
+[functions.menu-plan]
+verify_jwt = false          # el código valida al usuario con requireUser
+[functions.calendar-sync]
+verify_jwt = false          # el código valida al usuario con requireUser
+[functions.meal-update]
+verify_jwt = false          # el código valida al usuario con requireUser
+[functions.parse-workout-text]
+verify_jwt = false          # el código valida al usuario con requireUser
+[functions.shopping-list]
+verify_jwt = false          # el código valida al usuario con requireUser
+[functions.health-token]
+verify_jwt = false          # el código valida al usuario con requireUser
+[functions.health-inbox]
+verify_jwt = false
+[functions.process-inbox]
+verify_jwt = false          # el código valida al usuario con requireUser
+[functions.push-config]
+verify_jwt = false
+[functions.push-subscribe]
+verify_jwt = false          # el código valida al usuario con requireUser
+[functions.push-send]
+verify_jwt = false

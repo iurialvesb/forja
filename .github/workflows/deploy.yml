@@ -1,0 +1,69 @@
+# Despliega Forja gratis: base de datos y funciones en Supabase + web app en GitHub Pages.
+# Se ejecuta al subir cambios a main o a mano (Actions → Desplegar Forja → Run workflow).
+name: Desplegar Forja
+on:
+  push: { branches: [main] }
+  workflow_dispatch:
+permissions: { contents: read, pages: write, id-token: write }
+concurrency: { group: deploy, cancel-in-progress: false }
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: cd engine && node --test test/*.test.ts
+
+  backend:
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with: { version: latest }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Copiar el motor a las funciones
+        run: ./scripts/sync-engine.sh
+      - name: Base de datos (migraciones)
+        run: |
+          supabase link --project-ref "$PROJECT_ID" --password "$SUPABASE_DB_PASSWORD"
+          supabase db push --password "$SUPABASE_DB_PASSWORD" --include-all
+      - name: Secretos de las funciones
+        run: |
+          supabase secrets set --project-ref "$PROJECT_ID" \
+            AI_PROVIDER=gemini \
+            GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}" \
+            USDA_API_KEY="${{ secrets.USDA_API_KEY }}" \
+            CRON_SECRET="${{ secrets.CRON_SECRET }}"
+          # Claves de notificaciones: se generan una sola vez y se guardan en Supabase.
+          if ! supabase secrets list --project-ref "$PROJECT_ID" | grep -q VAPID_PUBLIC_KEY; then
+            KEYS=$(npx --yes web-push@3 generate-vapid-keys --json)
+            supabase secrets set --project-ref "$PROJECT_ID" \
+              VAPID_PUBLIC_KEY="$(echo "$KEYS" | node -pe 'JSON.parse(require("fs").readFileSync(0)).publicKey')" \
+              VAPID_PRIVATE_KEY="$(echo "$KEYS" | node -pe 'JSON.parse(require("fs").readFileSync(0)).privateKey')"
+          fi
+      - name: Funciones
+        run: supabase functions deploy --project-ref "$PROJECT_ID" --use-api
+
+  web:
+    needs: test
+    runs-on: ubuntu-latest
+    environment: { name: github-pages, url: '${{ steps.deploy.outputs.page_url }}' }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configurar la web con tu proyecto
+        run: |
+          printf 'window.FORJA_CONFIG = { SUPABASE_URL: "%s", SUPABASE_ANON_KEY: "%s" };\n' "${{ secrets.SUPABASE_URL }}" "${{ secrets.SUPABASE_ANON_KEY }}" > web/js/config.js
+          sed -i "s/forja-v1/forja-${GITHUB_SHA::8}/" web/sw.js
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: web }
+      - id: deploy
+        uses: actions/deploy-pages@v4

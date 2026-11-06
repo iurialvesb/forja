@@ -1,0 +1,12 @@
+{
+  "name": "@forja/engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Motor determinista de entrenamiento de Forja (carga, fatiga, 1RM, ritmos, periodización, planificación adaptativa).",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "node --test test/*.test.ts"
+  },
+  "engines": { "node": ">=22.18" }
+}

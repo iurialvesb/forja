@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key><string>es</string>
+	<key>CFBundleDisplayName</key><string>Forja</string>
+	<key>CFBundleExecutable</key><string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleName</key><string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key><string>APPL</string>
+	<key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>CFBundleLocalizations</key><array><string>es</string><string>en</string></array>
+	<key>LSRequiresIPhoneOS</key><true/>
+	<key>UILaunchScreen</key><dict/>
+	<key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string></array>
+	<key>UIUserInterfaceStyle</key><string>Dark</string>
+	<key>SupabaseURL</key><string>$(SUPABASE_URL)</string>
+	<key>SupabaseAnonKey</key><string>$(SUPABASE_ANON_KEY)</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Forja lee tus entrenamientos, frecuencia cardíaca, HRV, sueño y actividad de Apple Health para analizar tu carga, tu recuperación y adaptar tu plan.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Forja puede guardar en Apple Health los entrenamientos que registres manualmente o desde una foto.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Forja lee tus clases reservadas (WodBuster) y tu agenda para organizar los entrenos en tus huecos libres, y puede añadir tu plan a un calendario "Forja".</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>Forja puede añadir tus sesiones planificadas a un calendario "Forja".</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Para fotografiar la pizarra del box, tus platos, la nevera o escanear códigos de barras de alimentos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Para elegir fotos de pizarras o capturas de tus entrenamientos.</string>
+	<key>CFBundleURLTypes</key>
+	<array><dict>
+		<key>CFBundleURLName</key><string>com.forja.app</string>
+		<key>CFBundleURLSchemes</key><array><string>forja</string></array>
+	</dict></array>
+	<key>UIBackgroundModes</key><array><string>fetch</string><string>processing</string></array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key><array><string>com.forja.app.sync</string></array>
+	<key>ITSAppUsesNonExemptEncryption</key><false/>
+</dict>
+</plist>
