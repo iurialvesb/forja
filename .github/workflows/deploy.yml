@@ -33,7 +33,7 @@ jobs:
         run: ./scripts/sync-engine.sh
       - name: Base de datos (migraciones)
         run: |
-          supabase link --project-ref "$PROJECT_ID" --password "$SUPABASE_DB_PASSWORD"
+          supabase link --project-ref "$PROJECT_ID"
           supabase db push --password "$SUPABASE_DB_PASSWORD" --include-all
       - name: Secretos de las funciones
         run: |
