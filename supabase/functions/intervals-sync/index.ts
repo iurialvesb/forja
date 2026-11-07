@@ -2,6 +2,7 @@
 //  Usuario (JWT):  { action:'connect', athleteId, apiKey }  → comprueba la clave, guarda la conexión y trae el historial
 //                  { action:'pull' }                         → trae lo nuevo de Intervals.icu y lo procesa al momento
 //                  { action:'process' }                      → procesa el siguiente lote del buzón (importación del historial)
+//                  { action:'history', days }                → busca de nuevo en Intervals.icu un periodo largo
 //                  { action:'status' } | { action:'disconnect' }
 //  pg_cron (x-cron-secret): { action:'pull' } → para cada usuario conectado, deja lo nuevo en el buzón y avisa al móvil.
 import webpush from 'npm:web-push@3';
@@ -76,6 +77,13 @@ Deno.serve(handler(async (req) => {
     return json({ ok: true });
   }
   if (!conn) return json({ connected: false, activities: 0, days: 0, remaining: 0, prs: [], changes: [] });
+  if (action === 'history') {
+    // Vuelve a mirar en Intervals.icu un periodo largo (lo que HealthFit haya subido después de conectar).
+    const oldest = addDays(todayMadrid(new Date()), -(Number(body.days) || 365));
+    const r = await pullToInbox(sb, conn, { oldest });
+    const { count } = await sb.from('intervals_inbox').select('id', { count: 'exact', head: true }).eq('kind', 'activity').is('processed_at', null);
+    return json({ connected: true, found: r.newActivities.length, pending: count ?? 0 });
+  }
   if (action === 'pull') {
     try { await pullToInbox(sb, conn); } catch (e) { await sb.from('intervals_connections').update({ last_error: String((e as Error).message ?? e) }).eq('user_id', userId); throw e; }
   }

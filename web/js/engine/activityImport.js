@@ -34,6 +34,12 @@ export function disciplineFromIcu(type         )             {
   return TYPE_MAP[type] ?? (/run/i.test(type) ? 'running' : /ride|bike|cycl/i.test(type) ? 'cycling' : /swim/i.test(type) ? 'swimming' : 'other');
 }
 
+/** Los nombres genéricos de Apple ("Cross Training", "Entrenamiento funcional"…) pasan a "CrossFit". */
+export function titleFor(d            , name         )                     {
+  if (d === 'crossfit' && (!name || /cross ?training|functional|funcional|hiit|high intensity|intervalos de alta|strength training|entrenamiento|workout|fuerza|weight/i.test(name))) return 'CrossFit';
+  return name ?? undefined;
+}
+
 const num = (v         )                     => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
 const round = (v                    , d = 0) => (v == null ? undefined : Math.round(v * 10 ** d) / 10 ** d);
 
@@ -151,7 +157,7 @@ export function icuToActivity(act     , streams             , profile           
 
   const cadence = avgCadRaw != null ? round(doubleCad ? avgCadRaw * 2 : avgCadRaw, 1) : undefined;
   const session                              = {
-    id: `icu-${act.id}`, startedAt, durationS: Math.round(durationS), discipline, title: act.name ?? undefined,
+    id: `icu-${act.id}`, startedAt, durationS: Math.round(durationS), discipline, title: titleFor(discipline, act.name),
     avgHr: round(num(act.average_heartrate) ?? mean(hr ?? [])), maxHr: round(num(act.max_heartrate) ?? (hr ? Math.max(...(hr.filter((x) => x != null)            )) : undefined)),
     hrZoneSeconds: zones?.seconds.length === 5 ? zones.seconds : undefined,
     distanceM: round(num(act.distance), 1) || undefined, elevationGainM: round(num(act.total_elevation_gain), 1), elevationLossM: round(num(act.total_elevation_loss), 1),

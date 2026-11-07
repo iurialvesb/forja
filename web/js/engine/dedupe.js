@@ -6,6 +6,9 @@
 
 const family = (d        ) => (['running'].includes(d) ? 'run' : ['cycling'].includes(d) ? 'bike' : ['walking', 'hiking'].includes(d) ? 'walk' : ['crossfit', 'hybrid', 'hyrox', 'strength', 'weightlifting', 'gymnastics', 'calisthenics'].includes(d) ? 'gym' : d);
 
+const sourceOf = (x         ) => (x.source === 'healthkit' ? 'watch' : x.source === 'manual' || x.source === 'photo' ? 'log' : 'other');
+const madridDay = (ms        ) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date(ms));
+
                                                                                         
 
 export function findDuplicate(candidate         , existing           )                        {
@@ -16,6 +19,15 @@ export function findDuplicate(candidate         , existing           )          
     if (candidate.externalId && e.externalId === candidate.externalId && e.source === candidate.source) return { existingId: e.id, score: 1, reasons: ['mismo identificador externo'] };
     if (family(e.discipline) !== family(candidate.discipline)) continue;
     const es = Date.parse(e.startedAt), ee = es + e.durationS * 1000;
+    // CrossFit/fuerza registrado a mano (hora aproximada) frente al entreno del Apple Watch del mismo día: es el mismo.
+    const manualVsWatch = family(e.discipline) === 'gym' && new Set([sourceOf(e), sourceOf(candidate)]).size === 2 && [sourceOf(e), sourceOf(candidate)].includes('watch')
+      && madridDay(es) === madridDay(cs) && Math.abs(cs - es) <= 3 * 3.6e6
+      && (sourceOf(candidate) === 'watch' ? e.avgHr == null : !e.blocks?.length);     // ese registro aún no tiene su pareja
+    if (manualVsWatch) {
+      const sc = 0.75 + 0.2 * Math.max(0, 1 - Math.abs(cs - es) / (3 * 3.6e6));
+      if (!best || sc > best.score) best = { existingId: e.id, score: sc, reasons: ['registro manual y Apple Watch del mismo día'] };
+      continue;
+    }
     const overlap = Math.max(0, Math.min(ce, ee) - Math.max(cs, es));
     const shorter = Math.min(ce - cs, ee - es);
     if (shorter <= 0) continue;
@@ -34,6 +46,15 @@ export function findDuplicate(candidate         , existing           )          
     if (score >= 0.7 && (!best || score > best.score)) best = { existingId: e.id, score, reasons };
   }
   return best;
+}
+
+/** El Apple Watch manda en tiempos y fisiología; el registro manual o la foto aportan nombre, RPE y estructura. */
+export function mergeWatchIntoLog(log         , watch         )          {
+  return {
+    ...watch, id: log.id, source: log.source,
+    title: log.title ?? watch.title, rpe: log.rpe ?? watch.rpe, discipline: log.discipline,
+    blocks: log.blocks?.length ? log.blocks : watch.blocks,
+  };
 }
 
 /** Política de fusión: HealthKit aporta FC/zonas; Strava aporta nombre y desnivel; la entrada manual o foto aporta estructura. */

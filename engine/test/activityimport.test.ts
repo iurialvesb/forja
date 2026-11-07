@@ -48,3 +48,17 @@ test('wellness: VFC (SDNN preferente), sueño y pulso', () => {
   assert.equal(disciplineFromIcu('TrailRun'), 'running');
   assert.equal(kmSplits([0, 1], [0, 500]).length, 0);
 });
+
+import { findDuplicate, mergeWatchIntoLog, titleFor } from '../src/index.ts';
+test('WOD registrado a mano a las 9:00 + Apple Watch a las 9:20 del mismo día → mismo entreno; manda el reloj en tiempos', () => {
+  const log = { id: 'm', startedAt: '2026-11-07T08:00:00Z', durationS: 2520, discipline: 'crossfit' as const, title: 'Morning CrossFit Endurance', rpe: 8, source: 'manual' as const, blocks: [{ kind: 'wod' as const, sets: [] }] };
+  const watch = { id: 'w', startedAt: '2026-11-07T08:20:00Z', durationS: 2971, discipline: 'crossfit' as const, title: 'CrossFit', avgHr: 153, source: 'healthkit' as const };
+  assert.equal(findDuplicate(watch, [log])?.existingId, 'm');
+  assert.equal(findDuplicate({ ...log, id: 'n' }, [watch])?.existingId, 'w');
+  assert.equal(findDuplicate(watch, [{ ...log, avgHr: 150 }]), null);              // ese registro ya tiene su reloj
+  const m = mergeWatchIntoLog(log, watch);
+  assert.equal(m.startedAt, watch.startedAt); assert.equal(m.durationS, 2971); assert.equal(m.avgHr, 153);
+  assert.equal(m.title, 'Morning CrossFit Endurance'); assert.equal(m.rpe, 8); assert.equal(m.id, 'm');
+  assert.equal(titleFor('crossfit', 'Cross Training'), 'CrossFit');
+  assert.equal(titleFor('running', 'Carrera'), 'Carrera');
+});

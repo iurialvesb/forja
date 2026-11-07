@@ -7,7 +7,7 @@ import {
 } from './ui.js';
 
 import { activityExtras } from './activity.js';
-import { startFromText, startFromPhoto, startManual, editSession, exerciseHistory, sessionEdits, draftBanner } from './logbook.js';
+import { startFromText, startFromPhoto, startManual, editSession, exerciseHistory, sessionEdits, draftBanner, addWodTo, joinWithWatch } from './logbook.js';
 
 const uid = () => api.userId();
 const q = (o) => o;
@@ -116,6 +116,15 @@ async function sessionDetail(id) {
   const name = Object.fromEntries(ex.map((e) => [e.id, e.name]));
   const blocks = (s.session_blocks || []).sort((a, b) => a.position - b.position);
   const watch = await activityExtras(s).catch(() => []);
+  const GYM = ['crossfit', 'hybrid', 'hyrox', 'strength', 'weightlifting', 'gymnastics', 'calisthenics', 'other'];
+  const hasLog = blocks.some((b) => b.prescribed);
+  // Registro manual sin reloj: ¿hay un entreno del Apple Watch ese día al que unirlo?
+  let watchMate = null;
+  if (hasLog && !s.avg_hr && s.primary_source !== 'healthkit') {
+    const day = s.started_at.slice(0, 10);
+    const near = await api.db.select('sessions', { select: 'id,started_at,duration_s,title,avg_hr,session_blocks(id)', deleted_at: 'is.null', primary_source: 'eq.healthkit', and: `(started_at.gte.${addDays(day, -1)}T12:00:00Z,started_at.lt.${addDays(day, 1)}T12:00:00Z)`, order: 'started_at' }).catch(() => []);
+    watchMate = near.find((w) => !(w.session_blocks || []).length && Math.abs(Date.parse(w.started_at) - Date.parse(s.started_at)) < 4 * 3.6e6) ?? null;
+  }
   setSheet(html`
     <h3>${s.title ?? s.discipline}</h3><p class="small muted">${dayName(s.started_at.slice(0, 10), true)} · ${timeOf(s.started_at)} · ${({ healthkit: 'Apple Salud', manual: 'Registro manual', photo: 'Foto' })[s.primary_source] ?? s.primary_source}</p>
     <div class="stats"><div class="stat"><div class="l">Duración</div><div class="v">${dur(s.duration_s)}</div></div>
@@ -135,7 +144,9 @@ async function sessionDetail(id) {
       ${groups.map((g) => html`${g.k ? html`<div class="xs muted glabel" style="margin-top:6px">${g.k}</div>` : ''}${g.rows.map((x) => html`<div class="row small"><span style="width:18px;color:${col(x.status)}">${x.set_label ? ico[x.status] ?? '' : ''}</span><span class="grow" data-act="${act(() => exerciseHistory(x.exercise_id))}">${name[x.exercise_id] ?? x.exercise_id ?? 'Ejercicio'}</span><span class="muted">${x.status === 'skipped' ? 'no hecho' : qty(x)}${x.status === 'partial' && x.target_reps != null ? ` (obj. ${+x.target_reps})` : ''}</span></div>`)}`)}
       ${b.result_text ? html`<div class="ok small">Resultado: ${b.result_text}</div>` : ''}</div>`;
     })}
-    <div class="grid2">${blocks.some((b) => b.prescribed) ? html`<button data-act="${act(() => editSession(id))}">✎ Editar registro</button>` : ''}<button data-act="${act(() => sessionEdits(id))}">Historial de cambios</button></div>
+    ${!hasLog && GYM.includes(s.discipline) ? html`<button class="block primary" data-act="${act(() => addWodTo(s))}">✎ Añadir el WOD (texto, foto o a mano)</button>` : ''}
+    ${watchMate ? html`<button class="block primary" data-act="${act((b) => busy(b, async () => { await joinWithWatch(id, watchMate.id); closeSheet(); invalidate('sessions', 'planned', 'readiness', 'insights', 'exhist'); render(); toast('Unido al entreno del Apple Watch'); }))}">⌚ Unir con el Apple Watch (${timeOf(watchMate.started_at)} · ${Math.round(watchMate.duration_s / 60)} min${watchMate.avg_hr ? ` · ${watchMate.avg_hr} ppm` : ''})</button>` : ''}
+    <div class="grid2">${hasLog ? html`<button data-act="${act(() => editSession(id))}">✎ Editar registro</button>` : ''}<button data-act="${act(async () => { const t = prompt('Nombre del entreno', s.title ?? ''); if (t == null || !t.trim()) return; await api.db.update('sessions', { title: t.trim() }, { id: `eq.${id}` }); invalidate('sessions'); render(); sessionDetail(id); })}">Renombrar</button><button data-act="${act(() => sessionEdits(id))}">Historial de cambios</button></div>
     <button class="block danger" data-act="${act((btn) => busy(btn, async () => { await api.db.update('sessions', { deleted_at: new Date().toISOString() }, { id: `eq.${id}` }); closeSheet(); invalidate('sessions'); render(); toast('Entreno eliminado'); }))}">Eliminar</button>`);
 }
 
@@ -217,17 +228,17 @@ export async function WORKOUTS(params = []) {
     body: html`${seg}
       ${await draftBanner()}
       <button class="primary block" data-act="${act(() => startFromText())}">📋 Pegar entreno (Strava, notas, WhatsApp)</button>
-      <div class="grid2"><button data-act="${act(startFromPhoto)}">📷 Foto de pizarra</button><button data-act="${act(manualMenu)}">✍️ Manual</button></div>
+      <div class="grid2"><button data-act="${act(() => startFromPhoto())}">📷 Foto de pizarra</button><button data-act="${act(manualMenu)}">✍️ Manual</button></div>
       ${Object.keys(byWeek).sort().reverse().map((w) => html`<h2>Semana del ${shortDate(w)} <small>${byWeek[w].length} sesiones</small></h2>${byWeek[w].map(sessionRow)}`)}
       ${!list.length ? html`<div class="card muted">Aún no hay entrenamientos.</div>` : ''}`,
   };
 }
 
 function addWorkoutMenu() {
-  sheet('Registrar entreno', html`<button class="block primary" data-act="${act(() => startFromText())}">📋 Pegar texto</button><button class="block" data-act="${act(startFromPhoto)}">📷 Foto de pizarra o captura</button><button class="block" data-act="${act(startManual)}">🏋️ CrossFit por bloques (fuerza, WOD…)</button><button class="block" data-act="${act(manualWorkout)}">✍️ Otra actividad</button>`);
+  sheet('Registrar entreno', html`<button class="block primary" data-act="${act(() => startFromText())}">📋 Pegar texto</button><button class="block" data-act="${act(() => startFromPhoto())}">📷 Foto de pizarra o captura</button><button class="block" data-act="${act(() => startManual())}">🏋️ CrossFit por bloques (fuerza, WOD…)</button><button class="block" data-act="${act(manualWorkout)}">✍️ Otra actividad</button>`);
 }
 function manualMenu() {
-  sheet('Registro manual', html`<button class="block primary" data-act="${act(startManual)}">🏋️ CrossFit por bloques (fuerza, WOD, endurance)</button><button class="block" data-act="${act(manualWorkout)}">✍️ Otra actividad (carrera, pádel, natación…)</button>`);
+  sheet('Registro manual', html`<button class="block primary" data-act="${act(() => startManual())}">🏋️ CrossFit por bloques (fuerza, WOD, endurance)</button><button class="block" data-act="${act(manualWorkout)}">✍️ Otra actividad (carrera, pádel, natación…)</button>`);
 }
 
 /** Compatibilidad: otras pantallas abren el pegado de texto. */

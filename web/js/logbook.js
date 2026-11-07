@@ -19,10 +19,12 @@ function persist() {
   D.updatedAt = new Date().toISOString();
   try { localStorage.setItem(LS, JSON.stringify(D)); } catch { /* sin espacio */ }
   clearTimeout(saveT);
-  saveT = setTimeout(() => { api.db.upsert('workout_drafts', [{ id: draftUuid(D), user_id: api.userId(), payload: D, updated_at: D.updatedAt }]).catch(() => {}); }, 1500);
+  const d = D; const id = draftUuid(d);
+  saveT = setTimeout(() => { if (D !== d) return; api.db.upsert('workout_drafts', [{ id, user_id: api.userId(), payload: d, updated_at: d.updatedAt }]).catch(() => {}); }, 1500);
 }
 function draftUuid(d) { return (d.uuid ??= uuid()); }
 function dropDraft(d = D) {
+  clearTimeout(saveT);
   try { localStorage.removeItem(LS); } catch { /* */ }
   if (d?.uuid) api.db.remove('workout_drafts', { id: `eq.${d.uuid}` }).catch(() => {});
   D = null; editing.clear();
@@ -42,8 +44,33 @@ export async function draftBanner() {
 }
 
 // ---------------- Entradas ----------------
+/** Une el registro a un entreno ya existente (p. ej. el del Apple Watch): misma fecha, hora y duración. */
+function withLink(d, link) {
+  if (!link) return d;
+  return { ...d, linkSessionId: link.id, date: link.date, startTime: link.time, durationMin: link.min, title: d.title && !/^(afternoon|morning|evening|lunch)\s/i.test(d.title) ? d.title : link.title ?? d.title };
+}
+
+/** Desde un entreno del Apple Watch: añadir lo que hiciste (texto, foto o a mano) conservando sus datos. */
+export function addWodTo(s) {
+  const link = { id: s.id, date: new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date(s.started_at)), time: timeOf(s.started_at), min: Math.round(s.duration_s / 60), title: s.title && !/cross ?training|funcional|functional/i.test(s.title) ? s.title : 'CrossFit' };
+  sheet('Añadir el WOD', html`<p class="small muted">Se guarda dentro de este entreno del Apple Watch: conserva su FC, zonas, calorías y tiempos.</p>
+    <button class="block primary" data-act="${act(() => startFromText('', link))}">📋 Pegar texto (Strava, notas, WhatsApp)</button>
+    <button class="block" data-act="${act(() => startFromPhoto(link))}">📷 Foto de la pizarra</button>
+    <button class="block" data-act="${act(() => startManual(link))}">✍️ Por bloques, a mano</button>`);
+}
+
+/** Une un registro manual con el entreno del Apple Watch del mismo día (y quita el duplicado). */
+export async function joinWithWatch(manualId, watchId) {
+  const [m] = await api.db.select('sessions', { id: `eq.${manualId}`, select: 'id,title,started_at,duration_s,rpe,discipline,session_blocks(position,prescribed)' });
+  const d = logFromSaved({ id: m.id, title: m.title ?? undefined, startedAt: m.started_at, durationS: m.duration_s, rpe: m.rpe ?? undefined }, (m.session_blocks || []).sort((a, b) => a.position - b.position));
+  if (!d) throw new Error('Este registro no tiene estructura que unir');
+  const session = logToSession(d, { id: uuid(), startedAt: m.started_at, durationS: m.duration_s, discipline: m.discipline });
+  const r = await api.fn('ingest-session', { session, attachTo: watchId });
+  await api.db.update('sessions', { deleted_at: new Date().toISOString() }, { id: `eq.${manualId}` });
+  return r;
+}
 /** Pegar texto (Strava, notas, WhatsApp): se interpreta mientras escribes, sin servidor. */
-export async function startFromText(prefill = '') {
+export async function startFromText(prefill = '', link = null) {
   let text = prefill;
   const preview = () => {
     const out = document.getElementById('tprev'); if (!out) return;
@@ -62,12 +89,12 @@ export async function startFromText(prefill = '') {
       text = document.getElementById('wtext').value;
       const p = parseWorkoutText(text);
       if (!p.sections.length) return toast('No encuentro ejercicios en el texto');
-      D = buildLog(p, { date: today(), origin: 'text', sourceText: text }); persist(); openLogger();
+      D = withLink(buildLog(p, { date: today(), origin: 'text', sourceText: text }), link); persist(); openLogger();
     })}">Registrar</button>
     <button class="block ghost small" data-act="${act((b) => busy(b, async () => {
       text = document.getElementById('wtext').value;
       const r = await api.fn('parse-workout-text', { action: 'parse', text, date: today() });
-      D = buildLog(r.parsed, { date: today(), origin: r.engine === 'motor' ? 'text' : 'ai', sourceText: text }); persist(); openLogger();
+      D = withLink(buildLog(r.parsed, { date: today(), origin: r.engine === 'motor' ? 'text' : 'ai', sourceText: text }), link); persist(); openLogger();
     }))}">Revisar con IA si no lo entiende bien</button>`);
   document.getElementById('wtext').addEventListener('input', (e) => { text = e.target.value; clearTimeout(preview.t); preview.t = setTimeout(preview, 200); });
   if (!prefill) { try { const c = await navigator.clipboard.readText(); if (c && /\d/.test(c) && c.length < 4000) { text = c; document.getElementById('wtext').value = c; } } catch { /* sin permiso */ } }
@@ -75,25 +102,25 @@ export async function startFromText(prefill = '') {
 }
 
 /** Foto: se sube y se lee en segundo plano; puedes cerrar la hoja o empezar a mano mientras tanto. */
-export function startFromPhoto() {
+export function startFromPhoto(link = null) {
   sheet('Foto de entreno', html`<p class="small muted">Pizarra del box o captura de WodBuster. La foto se envía a la IA (Google Gemini) para leerla; mientras tanto puedes seguir usando Forja.</p>
     <input type="file" accept="image/*" id="wphoto"><div id="wout"></div>`);
   document.getElementById('wphoto').onchange = (e) => {
     const f = e.target.files[0]; if (!f) return;
     const out = document.getElementById('wout');
     out.innerHTML = html`<p class="small"><span class="spinner"></span> Leyendo la foto… Te aviso al terminar.</p>
-      <button class="block" data-act="${act(() => { D = emptyLog(today()); persist(); openLogger(); })}">Empezar a registrar a mano mientras</button>`.s;
-    readPhoto(f);
+      <button class="block" data-act="${act(() => { D = withLink(emptyLog(today()), link); persist(); openLogger(); })}">Empezar a registrar a mano mientras</button>`.s;
+    readPhoto(f, link);
   };
 }
-async function readPhoto(file) {
+async function readPhoto(file, link = null) {
   const t0 = Date.now();
   try {
     const blob = await resizeImage(file, 1600, 0.8);
     const path = await api.uploadPhoto(blob);
     const [row] = await api.db.insert('photo_imports', [{ user_id: api.userId(), storage_path: path }]);
     const r = await api.fn('parse-photo', { action: 'parse', importId: row.id });
-    const fresh = buildLog(r.parsed, { date: r.parsed.date ?? today(), origin: 'ai', sourceText: r.transcript || '', importId: row.id });
+    const fresh = withLink(buildLog(r.parsed, { date: r.parsed.date ?? today(), origin: 'ai', sourceText: r.transcript || '', importId: row.id }), link);
     const secs = Math.round((Date.now() - t0) / 1000);
     // Si ya habías empezado a mano un borrador vacío, la lectura lo sustituye; si habías marcado casillas, se añade al final.
     if (D && D.blocks.some((b) => b.groups.some((g) => g.rows.some((x) => !x.rest && x.status !== 'pending')))) { D.blocks.push(...fresh.blocks); D.importId = row.id; D.sourceText = fresh.sourceText; }
@@ -107,7 +134,7 @@ async function readPhoto(file) {
 }
 
 /** Registro manual por bloques (Fuerza, WOD, Endurance). */
-export function startManual() { D = emptyLog(today()); persist(); openLogger(); }
+export function startManual(link = null) { D = withLink(emptyLog(today()), link); persist(); openLogger(); }
 
 /** Editar un entreno ya guardado. */
 export async function editSession(id) {

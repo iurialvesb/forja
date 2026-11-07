@@ -139,6 +139,19 @@ await shot('#/entrenos', '05e-historial-ejercicio', async () => { await page.get
 await shot('#/entrenos', '05f-carrera-watch', async () => { await reopen(); await page.getByRole('button', { name: 'Historial', exact: true }).click(); await page.waitForTimeout(400); await page.locator('#view .card.row').filter({ hasText: 'Carrera' }).first().click(); await page.waitForTimeout(800); });
 await page.evaluate(() => { const p = document.querySelector('#sheet .panel'); if (p) p.scrollTop = 900; }); await page.screenshot({ path: `${OUT}/05g-carrera-watch-2.png` });
 await page.evaluate(() => { const p = document.querySelector('#sheet .panel'); if (p) p.scrollTop = 2200; }); await page.screenshot({ path: `${OUT}/05h-carrera-watch-3.png` });
+await shot('#/entrenos', '05i-anadir-wod', async () => { await reopen(); await page.getByRole('button', { name: 'Historial', exact: true }).click(); await page.waitForTimeout(400); await page.locator('#view .card.row').filter({ hasText: 'Afternoon Workout' }).first().click(); await page.waitForTimeout(800); await page.evaluate(() => { const p = document.querySelector('#sheet .panel'); if (p) p.scrollTop = 9999; }); });
+await (async () => {
+  posted.length = 0;
+  await page.getByRole('button', { name: /Añadir el WOD/ }).click(); await page.waitForTimeout(300);
+  await page.getByRole('button', { name: /Pegar texto/ }).click(); await page.waitForTimeout(300);
+  await page.fill('#wtext', 'WOD\n4 rounds\n20 hang clean 30kg\n50 single unders');
+  await page.getByRole('button', { name: 'Registrar', exact: true }).click(); await page.waitForSelector('#logger');
+  await page.screenshot({ path: `${OUT}/05j-wod-unido.png` });
+  await page.getByRole('button', { name: 'Guardar entreno' }).click(); await page.waitForTimeout(800);
+  const b = posted[0];
+  if (b?.attachTo !== 's1' || b?.edit) errors.push(`añadir WOD al Apple Watch: ${JSON.stringify({ attachTo: b?.attachTo, edit: b?.edit })}`);
+  else console.log(`WOD unido a la sesión del Watch: ${b.session.title} · ${b.session.blocks[0].sets.length} series`);
+})();
 await shot('#/entrenos', '06-progreso', () => page.getByRole('button', { name: 'Progreso' }).click());
 await shot('#/nutricion', '07-nutricion-hoy');
 await shot('#/nutricion', '08-compra', () => page.getByRole('button', { name: 'Compra', exact: true }).click());

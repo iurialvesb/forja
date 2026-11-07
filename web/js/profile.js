@@ -149,6 +149,10 @@ async function watchSync() {
     <p class="small">Cada entreno que grabas en el Apple Watch llega solo: HealthFit lo sube a Intervals.icu al desbloquear el iPhone y Forja lo recoge cada 10 minutos (y al abrir la app). Te avisa con una notificación.</p>
     ${st.pending ? html`<div class="card tight"><b>Historial pendiente</b><div class="small" id="icuprog">Quedan ${st.pending} entrenos por importar.</div>
       <button class="primary block" ${importing ? 'disabled' : ''} data-act="${act(importAll)}">${importing ? 'Importando… no cierres Forja' : 'Importar ahora'}</button></div>` : ''}
+    <div class="card tight"><b>¿Faltan entrenos antiguos?</b>
+      <p class="small muted">Forja solo ve lo que HealthFit ha subido a Intervals.icu. Si después has subido tu historial, búscalo aquí.</p>
+      <div class="row" style="gap:8px"><select id="icuhist" class="grow"><option value="365">Último año</option><option value="1095">Últimos 3 años</option><option value="3650">Todo</option></select>
+      <button data-act="${act((b) => busy(b, async () => { const r = await api.fn('intervals-sync', { action: 'history', days: +document.getElementById('icuhist').value }); toast(r.found ? `${r.found} entrenos nuevos encontrados` : 'No hay entrenos nuevos en Intervals.icu en ese periodo', 6000); st = await api.fn('intervals-sync', { action: 'status' }); draw(); if (st.pending) importAll(); }))}">Buscar</button></div></div>
     <button class="block" data-act="${act((b) => busy(b, async () => { const r = await api.fn('intervals-sync', { action: 'pull' }); invalidate('sessions', 'planned', 'readiness', 'insights', 'icuconn'); st = await api.fn('intervals-sync', { action: 'status' }); draw(); toast(r.activities ? `${r.activities} entreno(s) nuevo(s)` : 'Todo al día'); }))}">Recoger ahora</button>
     <button class="block ghost danger" data-act="${act(async () => { if (!confirm('¿Desconectar Intervals.icu? Los entrenos ya importados se quedan.')) return; await api.fn('intervals-sync', { action: 'disconnect' }); invalidate('icuconn'); st = { connected: false }; draw(); })}">Desconectar</button>`
   : html`

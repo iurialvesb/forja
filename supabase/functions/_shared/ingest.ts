@@ -1,6 +1,6 @@
 // Alta de sesiones desde cualquier fuente con deduplicación y adaptación del plan.
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2';
-import { findDuplicate, mergeSessions, isoDate, type Session } from './engine/index.ts';
+import { findDuplicate, mergeSessions, mergeWatchIntoLog, isoDate, type Session } from './engine/index.ts';
 import { loadContext, rowToSession } from './context.ts';
 import { adaptUpcoming, persistDerived } from './replan.ts';
 import { HttpError } from './supabase.ts';
@@ -43,7 +43,9 @@ export async function ingestSession(sb: SupabaseClient, userId: string, s: Sessi
   if (dup) {
     const existing = nearS.find((x) => x.id === dup.existingId)!;
     // HealthKit aporta fisiología; la entrada manual/foto aporta estructura. Primaria = la que ya existía.
-    const m = source === 'healthkit' ? mergeSessions({ ...existing, avgHr: s.avgHr ?? existing.avgHr, maxHr: s.maxHr ?? existing.maxHr, hrZoneSeconds: s.hrZoneSeconds ?? existing.hrZoneSeconds }, s) : mergeSessions(existing, s);
+    const existingIsLog = existing.source === 'manual' || existing.source === 'photo';
+    const m = source === 'healthkit' && existingIsLog ? mergeWatchIntoLog(existing, s)
+      : source === 'healthkit' ? mergeSessions({ ...existing, avgHr: s.avgHr ?? existing.avgHr, maxHr: s.maxHr ?? existing.maxHr, hrZoneSeconds: s.hrZoneSeconds ?? existing.hrZoneSeconds }, s) : mergeSessions(existing, s);
     const { error } = await sb.from('sessions').update(base(m)).eq('id', existing.id);
     if (error) throw error;
     sessionId = existing.id; merged = true;
@@ -55,7 +57,11 @@ export async function ingestSession(sb: SupabaseClient, userId: string, s: Sessi
       }   // el texto/foto sustituye a la estructura previa
       if (!existing.blocks?.length || attachTo) await writeBlocks(sb, userId, sessionId, s);
     }
-    if (opts.edit && attachTo) await sb.from('sessions').update({ rpe: s.rpe ?? null, title: s.title ?? existing.title ?? null, duration_s: Math.round(s.durationS), started_at: s.startedAt }).eq('id', sessionId);
+    if (opts.edit && attachTo) {
+      // Los tiempos del Apple Watch son exactos: al editar el WOD solo se cambian si los has movido más de un minuto.
+      const moved = Math.abs(Date.parse(s.startedAt) - Date.parse(existing.startedAt)) > 60e3 || Math.abs(s.durationS - existing.durationS) > 60;
+      await sb.from('sessions').update({ rpe: s.rpe ?? null, title: s.title ?? existing.title ?? null, discipline: s.discipline === 'other' ? existing.discipline : s.discipline, ...(moved ? { duration_s: Math.round(s.durationS), started_at: s.startedAt } : {}) }).eq('id', sessionId);
+    }
     else if (s.title && (attachTo || !existing.title)) await sb.from('sessions').update({ title: s.title, rpe: s.rpe ?? existing.rpe ?? null, discipline: s.discipline === 'other' ? existing.discipline : s.discipline }).eq('id', sessionId);
   } else {
     const { data, error } = await sb.from('sessions').insert({ user_id: userId, ...base(s), primary_source: source, notes: s.notes ?? null, active_kcal: s.activeKcal ?? null, avg_stride_m: s.strideM ?? null }).select('id').single();
