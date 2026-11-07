@@ -73,7 +73,7 @@ Cash out
 });
 
 test('E2MOM y líneas que no entiende → pregunta, nunca inventa', () => {
-  const p = parseWorkoutText(`E2MOM 12'\n- 3 Snatch 60kg\n- quetzalcoatl swings`);
+  const p = parseWorkoutText(`E2MOM 12'\n- 3 Snatch 60kg\n- quetzalcoatl flips`);
   assert.equal(p.sections[0].emomIntervalS, 120); assert.equal(p.sections[0].rounds, 3);
   assert.ok(p.uncertainties.some((u) => /quetzalcoatl/.test(u.question)));
 });

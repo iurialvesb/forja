@@ -44,7 +44,8 @@ export function parseFormat(line        )             {
   const cap = t.match(/(?:TC|CAP|TIME ?CAP)\s*:?\s*(\d+)/);
   const rr = t.match(/\(\s*(\d+)\s*(?:R|RONDAS?|ROUNDS?|SETS?|VUELTAS?)\s*\)|[X×]\s*(\d+)\s*(?:R|RONDAS?|ROUNDS?)\b/);
   const roundsParen = rr ? Number(rr[1] ?? rr[2]) : undefined;
-  if ((m = t.match(/\bE(\d+)?\s*MOM\s*(?:X\s*)?(\d+)?\s*'?/))) {
+  if ((m = t.match(/(\d+)\s*'\s*E(\d+)?\s*MOM\b/))) return { format: 'emom', intervalS: (m[2] ? Number(m[2]) : 1) * 60, durationMin: Number(m[1]), rounds: roundsParen };
+  if ((m = t.match(/\bE(\d+)?\s*MOM\s*(?:X\s*|DE\s*)?(\d+)?\s*'?/))) {
     const every = m[1] ? Number(m[1]) : 1;
     return { format: 'emom', intervalS: every * 60, durationMin: m[2] ? Number(m[2]) : undefined, rounds: roundsParen };
   }
@@ -52,10 +53,13 @@ export function parseFormat(line        )             {
     const iv = Number(m[1]) * 60 + (m[2] ? Number(m[2]) : 0);
     return { format: 'emom', intervalS: iv, durationMin: m[3] && Number(m[3]) > 6 ? Number(m[3]) : undefined, rounds: m[3] && Number(m[3]) <= 6 ? Number(m[3]) : roundsParen };
   }
-  if ((m = t.match(/\bAMRAP\s*(\d+)?/))) return { format: 'amrap', durationMin: m[1] ? Number(m[1]) : undefined, timeCapMin: m[1] ? Number(m[1]) : undefined };
+  if ((m = t.match(/(\d+)\s*'?\s*AMRAP\b/))) return { format: 'amrap', durationMin: Number(m[1]), timeCapMin: Number(m[1]) };
+  if ((m = t.match(/\bAMRAP\s*(?:DE\s*)?(\d+)?/))) return { format: 'amrap', durationMin: m[1] ? Number(m[1]) : undefined, timeCapMin: m[1] ? Number(m[1]) : undefined };
   if (/\bTABATA\b/.test(t)) return { format: 'tabata', durationMin: 4, rounds: 8 };
   if ((m = t.match(/\b(\d+)\s*(?:RFT|RONDAS?\s+(?:POR|FOR)\s+TIEMPO|ROUNDS?\s+FOR\s+TIME)\b/))) return { format: 'for_time', rounds: Number(m[1]), timeCapMin: cap ? Number(cap[1]) : undefined };
   if ((m = t.match(/^(\d+(?:\s*-\s*\d+){1,})\s*(?:FOR TIME|POR TIEMPO|REPS)?/)) && /FOR TIME|POR TIEMPO/.test(t)) return { format: 'for_time', scheme: m[1].replace(/\s/g, ''), timeCapMin: cap ? Number(cap[1]) : undefined };
+  // Escalera sola en una línea: "21-15-9", "10*9*8*…*1*", "10/8/6/4/2", "5, 4, 3, 2, 1" (cada número = reps de cada ejercicio)
+  if ((m = t.match(/^\s*(\d+(?:\s*[-*\/·,]\s*\d+){2,})\s*[*]?\s*(?:REPS?|FOR TIME|POR TIEMPO)?\s*\.?$/))) return { format: 'for_time', scheme: m[1].split(/\s*[-*\/·,]\s*/).join('-'), timeCapMin: cap ? Number(cap[1]) : undefined };
   if (/\b(FOR TIME|POR TIEMPO|CHIPPER)\b/.test(t)) return { format: /CHIPPER/.test(t) ? 'chipper' : 'for_time', timeCapMin: cap ? Number(cap[1]) : undefined, rounds: roundsParen };
   if ((m = t.match(/\b(\d+)\s*(?:RONDAS?|ROUNDS?|VUELTAS?)\b/))) return { format: 'rounds', rounds: Number(m[1]) };
   if ((m = t.match(/^\s*(\d+)\s*[X×]\s*(\d+)\s*$/))) return { format: 'sets', setsReps: { sets: Number(m[1]), reps: Number(m[2]) } };
@@ -94,6 +98,7 @@ export function parseItem(raw        )                    {
   if ((m = s.match(/^(\d+(?:\s*-\s*\d+)+)\s+/))) { item.repScheme = m[1].replace(/\s/g, ''); s = s.slice(m[0].length); }
   if ((m = s.match(/^(\d+(?:[.,]\d+)?)\s*(cal|cals|calorias|kcal)\b\s*/i))) { item.calories = Number(m[1].replace(',', '.')); s = s.slice(m[0].length); }
   else if ((m = s.match(/^(\d+(?:[.,]\d+)?)\s*(km|m|mts|metros|meters)\b\s*/i))) { const v = Number(m[1].replace(',', '.')); item.distanceM = /km/i.test(m[2]) ? v * 1000 : v; s = s.slice(m[0].length); }
+  else if ((m = s.match(/^(\d+)\s*(?:''|"|seg\b|sec\b|s\b)\s*/i))) { item.durationS = Number(m[1]); s = s.slice(m[0].length); }
   else if ((m = s.match(/^(\d+)\s*(?:'|’|min)\s*/i))) { item.durationS = Number(m[1]) * 60; s = s.slice(m[0].length); }
   else if ((m = s.match(/^(\d+)\s*(?:"|”|s|seg|sec)\b\s*/i))) { item.durationS = Number(m[1]); s = s.slice(m[0].length); }
   else if ((m = s.match(/^(\d+)\s*(?:x\s*)?(?:reps?)?\s*/i)) && m[1]) { item.reps = Number(m[1]); s = s.slice(m[0].length); }
@@ -104,7 +109,7 @@ export function parseItem(raw        )                    {
   // Esquema o series escritos al final: "back squat 5-5-3-3-1", "deadlift 5x5"
   if (!item.repScheme && (m = s.match(/\s(\d+(?:\s*-\s*\d+)+)\s*$/))) { item.repScheme = m[1].replace(/\s/g, ''); item.reps = undefined; s = s.slice(0, m.index); }
   else if (!item.repScheme && (m = s.match(/\s(\d+)\s*[x×]\s*(\d+)\s*$/i))) { item.repScheme = Array(Number(m[1])).fill(m[2]).join('-'); item.reps = undefined; s = s.slice(0, m.index); }
-  s = s.replace(/\s+/g, ' ').replace(/[.:;,]+$/, '').trim();
+  s = s.replace(/\(\s*\)/g, ' ').replace(/\s+/g, ' ').replace(/^[\s\-–:.)]+/, '').replace(/[\s\-–.:;,(]+$/, '').trim();
   const variants           = [];
   if (/heels? (on|elevated)|talones (en|elevados)/i.test(s)) variants.push('talones elevados');
   if (/\bstrict\b|\bestrict[oa]s?\b/i.test(s)) variants.push('estricto');
@@ -118,20 +123,34 @@ export function parseItem(raw        )                    {
   return item;
 }
 
+// Letras cirílicas o griegas que se cuelan al copiar ("EМОМ" con М y О rusas) → latinas.
+const HOMO                         = { 'А': 'A', 'В': 'B', 'Е': 'E', 'К': 'K', 'М': 'M', 'Н': 'H', 'О': 'O', 'Р': 'P', 'С': 'C', 'Т': 'T', 'Х': 'X', 'У': 'Y', 'а': 'a', 'е': 'e', 'о': 'o', 'р': 'p', 'с': 'c', 'у': 'y', 'х': 'x', 'к': 'k', 'м': 'm', 'т': 't', 'Α': 'A', 'Β': 'B', 'Ε': 'E', 'Κ': 'K', 'Μ': 'M', 'Ν': 'N', 'Ο': 'O', 'Ρ': 'P', 'Τ': 'T', 'Χ': 'X', 'ο': 'o', '×': 'x', '’': "'", '´': "'", '`': "'", '“': '"', '”': '"' };
+export const deHomoglyph = (s        ) => s.replace(/[А-яΑ-ωΆ-Ϋ×’´`“”]/g, (c) => HOMO[c] ?? c);
+
+/** "1: 3 FRONT SQUAT", "2. 1' WALL SIT", "Min 3 - REST", "M2) …" → número de estación aparte. */
+export function stationPrefix(line        )                                                        {
+  const m = line.match(/^\s*(min(?:uto)?\.?\s*|m)?(\d{1,2})\s*[:.)\-–]\s*(?=\S)(.*)$/i);
+  if (!m || !m[3] || /^\d*\s*[-*\/·,]\s*\d/.test(m[3]) || /^\d+\s*(kg|lb|%|m\b|km|cal)/i.test(m[3])) return null;
+  return { n: Number(m[2]), rest: m[3].trim(), explicit: !!m[1] };
+}
+
 const isNoise = (l        ) => /^(afternoon|morning|evening|lunch|night)\s+(workout|run|ride|weight training)$/i.test(l.trim()) || /^(entreno|entrenamiento)\s+de\s+(mañana|tarde|noche)$/i.test(l.trim());
 
 /** Interpreta el texto completo. Devuelve la misma estructura que la lectura de fotos (para reutilizar preguntas y registro). */
 export function parseWorkoutText(text        )                                         {
-  const lines = text.replace(/\r/g, '').split('\n').map((l) => l.trim()).filter(Boolean);
+  const lines = deHomoglyph(text).replace(/\r/g, '').split('\n').map((l) => l.trim()).filter(Boolean);
   const out                                         = { sourceKind: 'whiteboard', sections: [], uncertainties: [], unparsed: [] };
   let cur                                                        = null;
+  let stationN = 0;
   const close = () => {
+    stationN = 0;
     if (!cur) return;
     finalize(cur, out);
     if (cur.items.length || cur.rests) out.sections.push(stripInternal(cur));
     cur = null;
   };
-  lines.forEach((line, idx) => {
+  lines.forEach((line0, idx) => {
+    let line = line0;
     if (idx === 0 && (isNoise(line) || (!headerKind(line) && !parseFormat(line) && !/\d/.test(line) && !resolveExercise(line)))) { out.title = line; return; }
     const hk = headerKind(line.split(/[:\-–]/)[0]);
     const fmtLine = parseFormat(line);
@@ -140,21 +159,43 @@ export function parseWorkoutText(text        )                                  
       cur = { kind: hk, items: [], rests: 0, title: KIND_LABEL[hk] };
       const tail = line.slice(line.split(/[:\-–]/)[0].length);
       const tf = parseFormat(tail); if (tf) cur.fmt = tf;
+      else { const it = parseItem(tail.replace(/^[\s:\-–]+/, '')); if (it?.exercise && /\d/.test(tail)) cur.items.push(it); }   // "Buy in: 1000 m row"
       return;
+    }
+    // "Press militar" + "4x6 @ 40kg": las series y el peso son del ejercicio anterior
+    if (fmtLine?.format === 'sets' && cur && !cur.fmt && cur.items.length) {
+      const last = cur.items[cur.items.length - 1];
+      const restTxt = line.replace(/^\s*\d+\s*[x×]\s*\d+\s*/i, '').trim();
+      if (last.reps == null && !last.repScheme && (!restTxt || !parseItem(restTxt)?.exercise || /^@/.test(restTxt))) {
+        const ss = fmtLine.setsReps ?? { sets: 1, reps: 1 };
+        last.repScheme = Array(ss.sets).fill(String(ss.reps)).join('-');
+        if (restTxt) { const li = parseItem(`x ${restTxt}`); if (li?.loadKg != null) last.loadKg = li.loadKg; else if (li?.loadText) last.loadText = li.loadText; }
+        cur.fmt = { format: 'sets' };
+        return;
+      }
     }
     if (fmtLine && !/^[\-–•*·]/.test(line) && !(fmtLine.format === 'sets' && cur?.fmt)) {
       if (!cur || cur.fmt || cur.items.length) { const kind            = cur?.kind ?? (fmtLine.format === 'sets' ? 'strength' : 'wod'); close(); cur = { kind, items: [], rests: 0 }; }
-      cur .fmt = fmtLine; cur .title = cur .title ?? line;
+      cur .fmt = fmtLine; cur .title = cur .title ?? KIND_LABEL[cur .kind];
       // Formato y ejercicio en la misma línea: "5x5 back squat @80kg", "21-15-9 thrusters 43/29"
       const sameLine = line.replace(/^\s*\d+\s*[x×]\s*\d+\s*/i, '').trim();
       if (fmtLine.format === 'sets' && sameLine && sameLine !== line.trim()) { const it = parseItem(sameLine); if (it?.exercise) cur .items.push(it); }
       return;
     }
+    const sp = stationPrefix(line);
+    if (sp && (sp.explicit || sp.n === stationN + 1)) { stationN = sp.n; line = sp.rest; }
     const setsLine = line.match(/^(\d+)\s*[x×]\s*(\d+)\s+(.+)$/i);
     if (setsLine && !/cal|m\b/i.test(setsLine[2])) {
       if (!cur) cur = { kind: 'strength', items: [], rests: 0 };
       const it = parseItem(setsLine[3]);
-      if (it) { it.reps = Number(setsLine[2]); it.repScheme = Array(Number(setsLine[1])).fill(setsLine[2]).join('-'); cur.items.push(it); if (!cur.fmt) cur.fmt = { format: 'sets' }; }
+      const last = cur.items[cur.items.length - 1];
+      if (!it?.exercise && last && last.reps == null && !last.repScheme) {      // "Press militar" + "4x6 @ 40kg"
+        last.repScheme = Array(Number(setsLine[1])).fill(setsLine[2]).join('-');
+        if (it?.loadKg != null) last.loadKg = it.loadKg; else if (it?.loadText) last.loadText = it.loadText;
+        if (!cur.fmt) cur.fmt = { format: 'sets' };
+        return;
+      }
+      if (it?.exercise) { it.reps = Number(setsLine[2]); it.repScheme = Array(Number(setsLine[1])).fill(setsLine[2]).join('-'); cur.items.push(it); if (!cur.fmt) cur.fmt = { format: 'sets' }; }
       return;
     }
     const clean = line.replace(/^[\s\-–•*·>]+/, '').trim();
@@ -172,7 +213,12 @@ export function parseWorkoutText(text        )                                  
 
 function finalize(sec                                              , out               ) {
   const f = sec.fmt;
-  if (!f) { if (sec.kind === 'strength' && sec.items.some((i) => i.repScheme)) sec.format = 'sets'; return; }
+  if (!f) {
+    // "Deadlift 5-5-5-3-3-3" sin formato ni cabecera: son series de fuerza, no un WOD
+    if (sec.items.length && sec.items.length <= 3 && sec.items.every((i) => i.repScheme) && sec.kind === 'wod' && !sec.title) { sec.kind = 'strength'; sec.title = KIND_LABEL.strength; }
+    if (sec.kind === 'strength' && sec.items.some((i) => i.repScheme)) sec.format = 'sets';
+    return;
+  }
   sec.format = f.format;
   if (f.timeCapMin) sec.timeCapMin = f.timeCapMin;
   if (f.format === 'emom') {

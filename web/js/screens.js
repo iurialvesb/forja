@@ -111,7 +111,7 @@ export const sessionRow = (s) => html`
 
 async function sessionDetail(id) {
   sheet('Entrenamiento', html`<div class="center"><span class="spinner"></span></div>`);
-  const [s] = await api.db.select('sessions', { id: `eq.${id}`, select: '*,session_blocks(*),session_sets(*)' });
+  const [s] = await api.db.select('sessions', { id: `eq.${id}`, select: '*,session_blocks(*),session_sets(*,user_exercises(name))' });
   const ex = await get('exercises', () => api.db.select('exercises', { select: 'id,name' }), 864e5);
   const name = Object.fromEntries(ex.map((e) => [e.id, e.name]));
   const blocks = (s.session_blocks || []).sort((a, b) => a.position - b.position);
@@ -141,7 +141,7 @@ async function sessionDetail(id) {
       const ico = { done: '✓', partial: '◐', skipped: '✕' };
       const col = (st) => (st === 'skipped' ? 'var(--red)' : st === 'partial' ? 'var(--amber)' : 'var(--green)');
       return html`<div class="card tight"><div class="row"><b class="grow">${b.title ?? ({ warmup: 'Calentamiento', strength: 'Fuerza', skill: 'Técnica', wod: 'WOD', accessory: 'Accesorios', cooldown: 'Vuelta a la calma' })[b.kind] ?? b.kind}</b>${b.scaling ? html`<span class="tag ${b.scaling === 'rx' ? 'green' : 'amber'}">${b.scaling === 'rx' ? 'RX' : 'Scaled'}</span> ` : ''}${b.format ? html`<span class="tag accent">${b.format.replace('_', ' ')}</span>` : ''}${b.rounds && !b.prescribed ? html` <span class="muted small">×${+b.rounds}</span>` : ''}</div>
-      ${groups.map((g) => html`${g.k ? html`<div class="xs muted glabel" style="margin-top:6px">${g.k}</div>` : ''}${g.rows.map((x) => html`<div class="row small"><span style="width:18px;color:${col(x.status)}">${x.set_label ? ico[x.status] ?? '' : ''}</span><span class="grow" data-act="${act(() => exerciseHistory(x.exercise_id))}">${name[x.exercise_id] ?? x.exercise_id ?? 'Ejercicio'}</span><span class="muted">${x.status === 'skipped' ? 'no hecho' : qty(x)}${x.status === 'partial' && x.target_reps != null ? ` (obj. ${+x.target_reps})` : ''}</span></div>`)}`)}
+      ${groups.map((g) => html`${g.k ? html`<div class="xs muted glabel" style="margin-top:6px">${g.k}</div>` : ''}${g.rows.map((x) => html`<div class="row small"><span style="width:18px;color:${col(x.status)}">${x.set_label ? ico[x.status] ?? '' : ''}</span><span class="grow" data-act="${act(() => exerciseHistory(x.exercise_id))}">${name[x.exercise_id] ?? x.user_exercises?.name ?? x.exercise_id ?? 'Ejercicio'}</span><span class="muted">${x.status === 'skipped' ? 'no hecho' : qty(x)}${x.status === 'partial' && x.target_reps != null ? ` (obj. ${+x.target_reps})` : ''}</span></div>`)}`)}
       ${b.result_text ? html`<div class="ok small">Resultado: ${b.result_text}</div>` : ''}</div>`;
     })}
     ${!hasLog && GYM.includes(s.discipline) ? html`<button class="block primary" data-act="${act(() => addWodTo(s))}">✎ Añadir el WOD (texto, foto o a mano)</button>` : ''}
