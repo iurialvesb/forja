@@ -21,3 +21,4 @@ export * from './foods.js';
 export * from './workoutText.js';
 export * from './shopping.js';
 export * from './logbook.js';
+export * from './activityImport.js';

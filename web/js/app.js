@@ -71,9 +71,12 @@ function renderAuth(mode = 'login') {
 // ---------- Sincronización al abrir ----------
 let lastSync = 0;
 export async function backgroundSync(force = false) {
-  if (!api.user() || (!force && Date.now() - lastSync < 10 * 60_000)) return;
+  if (!api.user() || (!force && Date.now() - lastSync < 3 * 60_000)) return;
   lastSync = Date.now();
   try {
+    const icu = await api.fn('intervals-sync', { action: 'pull' }).catch(() => null);   // Apple Watch vía HealthFit + Intervals.icu
+    if (icu?.activities) { invalidate('sessions', 'planned', 'readiness', 'changes', 'insights'); toast(`⌚ ${icu.activities} entreno${icu.activities > 1 ? 's' : ''} nuevo${icu.activities > 1 ? 's' : ''} del Apple Watch`, 5000); }
+    if (icu?.prs?.length) toast(`🏆 Nuevo récord: ${icu.prs[0]}`, 6000);
     const inbox = await api.fn('process-inbox');
     const cal = await api.fn('calendar-sync', {}).catch(() => null);
     await api.fn('replan', { trigger: 'checkin' });

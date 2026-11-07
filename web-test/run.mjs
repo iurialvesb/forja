@@ -59,6 +59,19 @@ const FN = {
 };
 
 const posted = [];
+// Carrera del Apple Watch recibida de Intervals.icu (sintética), procesada con el motor real.
+{ const N = 2900; const t = [...Array(N)].map((_, i) => i); const v = t.map((i) => 1000 / (318 - 10 * Math.sin(i / 400)));
+  let d = 0; const dist = t.map((i) => (d += v[i]));
+  const st = [{ type: 'time', data: t }, { type: 'distance', data: dist }, { type: 'velocity_smooth', data: v }, { type: 'heartrate', data: t.map((i) => 138 + Math.round(22 * i / N) + Math.round(3 * Math.sin(i / 60))) }, { type: 'cadence', data: t.map(() => 85 + Math.round(Math.random() * 2)) }, { type: 'altitude', data: t.map((i) => 15 + 8 * Math.sin(i / 500)) }, { type: 'latlng', data: t.map((i) => 39.98 + 0.01 * Math.sin(i / 460)), data2: t.map((i) => -0.04 + 0.012 * Math.cos(i / 460)) }];
+  const a = E.icuToActivity({ id: 'i9', type: 'Run', name: 'Carrera', start_date: `${E.addDays(today, -2)}T07:00:00Z`, elapsed_time: 2900, moving_time: 2880, distance: Math.round(d), average_heartrate: 151, max_heartrate: 168, average_cadence: 86, total_elevation_gain: 42, total_elevation_loss: 41, calories: 610, average_stride: 1.12, average_speed: 3.16, max_speed: 3.9,
+    icu_intervals: [0, 1, 2].map((k) => ({ type: 'WORK', start_time: k * 966, end_time: (k + 1) * 966, distance: 3030, average_heartrate: 145 + k * 6, average_speed: 3.14 })) }, st, { hrRest: 52, hrMax: 192 });
+  Object.assign(sessions[1], { moving_s: 2880, cadence_spm: a.session.cadenceSpm, avg_stride_m: 1.12, elevation_gain_m: 42, elevation_loss_m: 41, max_hr: 168, active_kcal: 610, max_speed_mps: 3.9, distance_m: a.session.distanceM });
+  REST.session_streams = [{ session_id: 's2', series: a.series, route: a.route, zones: a.zones }];
+  REST.run_splits = a.session.splits.map((x) => ({ km_index: x.kmIndex, duration_s: x.durationS, avg_hr: x.avgHr, cadence_spm: x.cadence, elevation_delta_m: x.elevationDeltaM }));
+  REST.session_laps = a.laps.map((l) => ({ idx: l.idx, duration_s: l.durationS, distance_m: l.distanceM, avg_hr: l.avgHr, avg_speed_mps: l.avgSpeed }));
+  REST.intervals_connections = [{ athlete_id: 'i123456', last_pull_at: new Date().toISOString(), last_error: null }];
+  FN['intervals-sync'] = { connected: true, athleteId: 'i123456', lastPullAt: new Date().toISOString(), lastError: null, pending: 0, total: 214, activities: 1, days: 1, remaining: 0, prs: [], changes: [] };
+}
 REST.session_sets = [...Array(6)].flatMap((_, w) => [1, 2, 3, 4, 5].map((k) => ({ exercise_id: 'front_squat', performed_on: E.addDays(today, -7 * w), reps: k === 5 && w === 0 ? 4 : 6, load_kg: 45 + (5 - w), status: k === 5 && w === 0 ? 'partial' : 'done', set_label: `Min ${k * 2 - 1} · R${k}`, target_reps: 6, session_id: 's1' })));
 const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'es-ES', timezoneId: 'Europe/Madrid' });
@@ -77,7 +90,7 @@ await page.route('http://forja.test/**', (route) => {
 await page.route('https://mock.supabase.co/**', (route) => {
   const u = new URL(route.request().url());
   const parts = u.pathname.split('/').filter(Boolean);
-  if (parts[0] === 'rest') { const t = parts[2]; return route.fulfill({ contentType: 'application/json', body: JSON.stringify(REST[t] ?? []) }); }
+  if (parts[0] === 'rest') { const t = parts[2]; let rows = REST[t] ?? []; const idq = u.searchParams.get('id'); if (idq?.startsWith('eq.') && route.request().method() === 'GET') rows = rows.filter((r) => r.id === idq.slice(3)); return route.fulfill({ contentType: 'application/json', body: JSON.stringify(rows) }); }
   if (parts[0] === 'functions' && parts[2] === 'ingest-session') { posted.push(JSON.parse(route.request().postData())); return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ sessionId: 's9', merged: true, prs: ['Front Squat 50 kg × 6'], changes: [] }) }); }
   if (parts[0] === 'functions') { return route.fulfill({ contentType: 'application/json', body: JSON.stringify(FN[parts[2]] ?? { ok: true, changes: [], processed: 0 }) }); }
   if (parts[0] === 'auth') return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ access_token: 'x', refresh_token: 'y', expires_in: 3600, user: { id: 'u1', email: 'iuri@example.com' } }) });
@@ -123,6 +136,9 @@ await (async () => {
   if (left) errors.push('el borrador no se borró tras guardar');
 })();
 await shot('#/entrenos', '05e-historial-ejercicio', async () => { await page.getByRole('button', { name: 'Progreso' }).click(); await page.waitForTimeout(500); await page.getByText('Historial por ejercicio').click(); });
+await shot('#/entrenos', '05f-carrera-watch', async () => { await reopen(); await page.getByRole('button', { name: 'Historial', exact: true }).click(); await page.waitForTimeout(400); await page.locator('#view .card.row').filter({ hasText: 'Carrera' }).first().click(); await page.waitForTimeout(800); });
+await page.evaluate(() => { const p = document.querySelector('#sheet .panel'); if (p) p.scrollTop = 900; }); await page.screenshot({ path: `${OUT}/05g-carrera-watch-2.png` });
+await page.evaluate(() => { const p = document.querySelector('#sheet .panel'); if (p) p.scrollTop = 2200; }); await page.screenshot({ path: `${OUT}/05h-carrera-watch-3.png` });
 await shot('#/entrenos', '06-progreso', () => page.getByRole('button', { name: 'Progreso' }).click());
 await shot('#/nutricion', '07-nutricion-hoy');
 await shot('#/nutricion', '08-compra', () => page.getByRole('button', { name: 'Compra', exact: true }).click());
@@ -131,6 +147,7 @@ await shot('#/nutricion', '10-despensa', () => page.getByRole('button', { name: 
 await shot('#/nutricion', '11-suplementos', () => page.getByRole('button', { name: 'Suplementos', exact: true }).click());
 await shot('#/coach', '12-coach', async () => { await page.getByText('¿Puedo hacer series mañana').click(); });
 await shot('#/perfil', '13-perfil');
+await shot('#/perfil', '14b-watch', () => page.getByText('Apple Watch automático').click());
 await shot('#/perfil', '14-atajo', () => page.getByText('Apple Salud (Atajo)').click());
 await shot('#/inicio', '15-checkin', () => page.locator('#view .card.row').first().click());
 await shot('#/nutricion', '16-editar-comida', async () => { await page.getByRole('button', { name: 'Hoy', exact: true }).click(); await page.waitForTimeout(500); await page.getByRole('button', { name: '✎ Cambiar' }).first().click(); });

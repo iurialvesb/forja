@@ -10,6 +10,7 @@ const GOAL_TYPES = [['half_marathon', 'Media maratón'], ['marathon', 'Maratón'
 export async function PROFILE() {
   const item = (icon, label, fn, sub = '') => html`<div class="item" data-act="${act(fn)}"><div class="ico">${icon}</div><div class="grow"><div>${label}</div>${sub ? html`<div class="xs muted">${sub}</div>` : ''}</div><span class="muted">›</span></div>`;
   const tokenRow = await get('ingest_token', async () => (await api.db.select('ingest_tokens', { user_id: `eq.${uid()}` }))[0], 300_000).catch(() => null);
+  const icuConn = await get('icuconn', async () => (await api.db.select('intervals_connections', { select: 'athlete_id,last_pull_at,last_error' }))[0], 120_000).catch(() => null);
   const cal = await get('calset', async () => (await api.db.select('calendar_settings', { user_id: `eq.${uid()}` }))[0], 300_000).catch(() => null);
   return {
     title: 'Perfil',
@@ -20,8 +21,9 @@ export async function PROFILE() {
         ${item('🧍', 'Datos personales y físicos', personal)}${item('❤️', 'Frecuencia cardíaca', physiology)}${item('📆', 'Disponibilidad semanal', availability)}
         ${item('⚙️', 'Preferencias de entrenamiento', preferences)}${item('🩹', 'Lesiones y molestias', injuries)}</div>
       <h2>Planificación</h2><div class="card tight list">${item('🏁', 'Objetivos y competiciones', goals)}</div>
-      <h2>Conexiones gratuitas</h2><div class="card tight list">
-        ${item('⌚', 'Apple Salud (Atajo)', health, tokenRow?.last_used_at ? `Último envío: ${new Date(tokenRow.last_used_at).toLocaleString('es-ES')}` : 'Sin configurar')}
+      <h2>Conexiones</h2><div class="card tight list">
+        ${item('⌚', 'Apple Watch automático (HealthFit + Intervals.icu)', watchSync, icuConn ? (icuConn.last_error ? `⚠️ ${icuConn.last_error}` : `Conectado${icuConn.last_pull_at ? ` · última recogida ${new Date(icuConn.last_pull_at).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}` : ''}`) : 'Sin conectar')}
+        ${item('📲', 'Apple Salud (Atajo)', health, tokenRow?.last_used_at ? `Último envío: ${new Date(tokenRow.last_used_at).toLocaleString('es-ES')}` : 'Sin configurar')}
         ${item('🗓️', 'Calendario y WodBuster', calendar, cal?.ics_urls?.length ? `${cal.ics_urls.length} calendario(s)` : 'Sin configurar')}
         ${item('🔔', 'Notificaciones', notifications)}</div>
       <h2>Privacidad y datos</h2><div class="card tight list">${item('🔒', 'Privacidad e IA', privacy)}${item('📦', 'Exportar mis datos', exportData)}</div>
@@ -121,6 +123,52 @@ function goalEditor(g) {
     <label>Tiempo objetivo (h:mm:ss, opcional)</label><input name="target" placeholder="1:35:00">
     <button class="primary block">Guardar</button></form>
     ${g.id ? html`<button class="block danger" data-act="${act((b) => busy(b, async () => { await api.db.update('goals', { status: 'cancelled' }, { id: `eq.${g.id}` }); await api.fn('replan', { trigger: 'goal_change' }); closeSheet(); invalidate(); render(); }))}">Eliminar objetivo</button>` : ''}`);
+}
+
+// ---------- Apple Watch automático: HealthFit → Intervals.icu → Forja ----------
+async function watchSync() {
+  let st = await api.fn('intervals-sync', { action: 'status' }).catch(() => ({ connected: false }));
+  let importing = false;
+  const importAll = async () => {
+    importing = true; draw();
+    try {
+      for (let i = 0; i < 80; i++) {
+        const r = await api.fn('intervals-sync', { action: 'process', limit: 15 });
+        st = { ...st, pending: r.remaining };
+        const el = document.getElementById('icuprog'); if (el) el.textContent = `Quedan ${r.remaining} entrenos por importar…`;
+        if (!r.remaining) break;
+      }
+      invalidate('sessions', 'planned', 'readiness', 'insights', 'records', 'exhist'); toast('Historial importado');
+    } catch (e) { toast(e.message, 6000); }
+    importing = false; st = await api.fn('intervals-sync', { action: 'status' }).catch(() => st); draw();
+  };
+  const draw = () => setSheet(st.connected ? html`
+    <div class="card tight"><b>✓ Conectado</b> <span class="xs muted">(atleta ${st.athleteId})</span>
+      <div class="small muted">${st.lastPullAt ? `Última recogida: ${new Date(st.lastPullAt).toLocaleString('es-ES')}` : 'Aún no ha recogido nada'} · ${st.total} entrenos recibidos</div>
+      ${st.lastError ? html`<div class="small bad">${st.lastError}</div>` : ''}</div>
+    <p class="small">Cada entreno que grabas en el Apple Watch llega solo: HealthFit lo sube a Intervals.icu al desbloquear el iPhone y Forja lo recoge cada 10 minutos (y al abrir la app). Te avisa con una notificación.</p>
+    ${st.pending ? html`<div class="card tight"><b>Historial pendiente</b><div class="small" id="icuprog">Quedan ${st.pending} entrenos por importar.</div>
+      <button class="primary block" ${importing ? 'disabled' : ''} data-act="${act(importAll)}">${importing ? 'Importando… no cierres Forja' : 'Importar ahora'}</button></div>` : ''}
+    <button class="block" data-act="${act((b) => busy(b, async () => { const r = await api.fn('intervals-sync', { action: 'pull' }); invalidate('sessions', 'planned', 'readiness', 'insights', 'icuconn'); st = await api.fn('intervals-sync', { action: 'status' }); draw(); toast(r.activities ? `${r.activities} entreno(s) nuevo(s)` : 'Todo al día'); }))}">Recoger ahora</button>
+    <button class="block ghost danger" data-act="${act(async () => { if (!confirm('¿Desconectar Intervals.icu? Los entrenos ya importados se quedan.')) return; await api.fn('intervals-sync', { action: 'disconnect' }); invalidate('icuconn'); st = { connected: false }; draw(); })}">Desconectar</button>`
+  : html`
+    <p class="small">Así los entrenos del Apple Watch llegan solos, con FC, ritmo, splits, zonas, cadencia, potencia, ruta y vueltas, y también la VFC, el pulso en reposo y el sueño.</p>
+    <ol class="small">
+      <li>En <b>HealthFit</b>: pestaña de perfil → sincronización → <b>Intervals.icu</b> → inicia sesión y activa la sincronización automática (entrenos y métricas de salud).</li>
+      <li>En <b>intervals.icu</b> (desde Safari): tu nombre → <b>Settings</b> → abajo del todo, <b>Developer Settings</b>. Ahí verás tu <b>Athlete ID</b> (empieza por «i») y el botón para generar la <b>API Key</b>.</li>
+      <li>Copia los dos aquí:</li></ol>
+    <label>Athlete ID</label><input id="icuid" placeholder="i123456" autocapitalize="off">
+    <label>API Key</label><input id="icukey" placeholder="clave larga" autocapitalize="off" autocomplete="off">
+    <label>Traer historial de</label><select id="icudays"><option value="90">Últimos 3 meses</option><option value="365" selected>Último año</option><option value="1095">Últimos 3 años</option></select>
+    <button class="primary block" data-act="${act((b) => busy(b, async () => {
+      const r = await api.fn('intervals-sync', { action: 'connect', athleteId: document.getElementById('icuid').value, apiKey: document.getElementById('icukey').value, historyDays: +document.getElementById('icudays').value });
+      invalidate('icuconn');
+      toast(`Conectado${r.athlete ? ` como ${r.athlete}` : ''}: ${r.found} entrenos encontrados`, 6000);
+      st = await api.fn('intervals-sync', { action: 'status' }); draw();
+      if (st.pending) importAll();
+    }))}">Conectar</button>
+    <p class="xs muted">La clave se guarda en tu base de datos de Supabase y solo la usa tu servidor para leer tus datos de Intervals.icu.</p>`);
+  sheet('Apple Watch automático', ''); draw();
 }
 
 // ---------- Apple Salud vía Atajos ----------

@@ -6,6 +6,7 @@ import {
   icon, intensityTag, levelColor, ring, bar, barChart, lineChart, steps, resizeImage, phaseName, slotName,
 } from './ui.js';
 
+import { activityExtras } from './activity.js';
 import { startFromText, startFromPhoto, startManual, editSession, exerciseHistory, sessionEdits, draftBanner } from './logbook.js';
 
 const uid = () => api.userId();
@@ -114,6 +115,7 @@ async function sessionDetail(id) {
   const ex = await get('exercises', () => api.db.select('exercises', { select: 'id,name' }), 864e5);
   const name = Object.fromEntries(ex.map((e) => [e.id, e.name]));
   const blocks = (s.session_blocks || []).sort((a, b) => a.position - b.position);
+  const watch = await activityExtras(s).catch(() => []);
   setSheet(html`
     <h3>${s.title ?? s.discipline}</h3><p class="small muted">${dayName(s.started_at.slice(0, 10), true)} · ${timeOf(s.started_at)} · ${({ healthkit: 'Apple Salud', manual: 'Registro manual', photo: 'Foto' })[s.primary_source] ?? s.primary_source}</p>
     <div class="stats"><div class="stat"><div class="l">Duración</div><div class="v">${dur(s.duration_s)}</div></div>
@@ -122,6 +124,7 @@ async function sessionDetail(id) {
       ${s.rpe ? html`<div class="stat"><div class="l">RPE</div><div class="v">${s.rpe}</div></div>` : ''}</div>
     ${s.discipline === 'running' && s.distance_m > 0 ? html`<p class="small">Ritmo medio: <b>${pace(s.duration_s / (s.distance_m / 1000))}</b></p>` : ''}
     ${s.internal_load ? html`<p class="small muted">Carga ${n0(s.internal_load)} UA · fatiga de piernas ${n0(s.leg_index)}</p>` : ''}
+    ${watch}
     ${blocks.map((b) => {
       const sets = (s.session_sets || []).filter((x) => x.block_id === b.id).sort((a, c) => a.position - c.position);
       const groups = []; for (const x of sets) { const k = x.set_label ?? ''; let g = groups.find((y) => y.k === k); if (!g) groups.push(g = { k, rows: [] }); g.rows.push(x); }
@@ -200,7 +203,8 @@ export async function PLAN() {
 
 // ======================= ENTRENOS =======================
 let wTab = 'historial';
-export async function WORKOUTS() {
+export async function WORKOUTS(params = []) {
+  const openWod = params[0] === 'wod';
   const right = html`<button class="icon-btn" data-act="${act(addWorkoutMenu)}">＋</button>`;
   const seg = html`<div class="seg"><button class="${wTab === 'historial' ? 'on' : ''}" data-act="${act(() => { wTab = 'historial'; render(); })}">Historial</button><button class="${wTab === 'progreso' ? 'on' : ''}" data-act="${act(() => { wTab = 'progreso'; render(); })}">Progreso</button></div>`;
   if (wTab === 'progreso') return { title: 'Entrenos', right, body: html`${seg}${await progress()}` };
@@ -209,6 +213,7 @@ export async function WORKOUTS() {
   for (const s of list) (byWeek[monday(s.started_at.slice(0, 10))] ??= []).push(s);
   return {
     title: 'Entrenos', right,
+    after: openWod ? () => { history.replaceState(null, '', '#/entrenos'); startFromText(); } : undefined,
     body: html`${seg}
       ${await draftBanner()}
       <button class="primary block" data-act="${act(() => startFromText())}">📋 Pegar entreno (Strava, notas, WhatsApp)</button>

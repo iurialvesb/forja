@@ -20,3 +20,4 @@ export * from './foods.ts';
 export * from './workoutText.ts';
 export * from './shopping.ts';
 export * from './logbook.ts';
+export * from './activityImport.ts';
