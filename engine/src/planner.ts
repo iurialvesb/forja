@@ -276,7 +276,7 @@ export function planWeek(input: PlannerInput): WeekPlan {
       const r = crossfitBoxPrescription(ctx, !!next, next ? META[next.d.type] && runLabel(next.d.type) : undefined);
       const f = fixedBySlot.get(`${s.date}-${s.slot}`);
       if (f) return { ...base, id: `${s.date}-${s.slot}-crossfit_box-${f.uid}`.slice(0, 120), ...r, title: f.title || r.title, estMinutes: f.minutes, startLocal: f.startLocal, fromCalendar: true, rationale: `Clase reservada en tu calendario a las ${f.startLocal}. ` + (hyroxMode ? 'El CrossFit aporta fuerza-resistencia útil para las estaciones.' : 'El resto de la semana se organiza alrededor de tus clases.') };
-      if (input.fixed && fixedThisWeek.length === 0) r.title = 'CrossFit (pendiente de reserva)';
+      if (input.fixed && fixedThisWeek.length === 0) r.title = 'CrossFit recomendado';
       return { ...base, ...r, estMinutes: r.minutes, rationale: why(hyroxMode ? 'El CrossFit aporta fuerza-resistencia útil para las estaciones.' : 'Mantienes CrossFit para no perder fuerza ni capacidad, controlando su impacto en la carrera.') };
     }
     if (d.type === 'strength_lower' || d.type === 'strength_upper' || d.type === 'strength_full') {

@@ -59,6 +59,9 @@ const FN = {
 };
 
 const posted = [];
+REST.planned_sessions.push({ id: 'pcf', date: E.addDays(today, -1), slot: 'pm', type: 'crossfit_box', discipline: 'crossfit', title: 'CrossFit (pendiente de reserva)', objective: 'Mantener fuerza', intensity: 'alta', est_minutes: 60, status: 'done', completed_session_id: 's1', steps: [] },
+  { id: 'pcf2', date: E.addDays(today, -1), slot: 'am', type: 'run_easy', discipline: 'running', title: 'Rodaje suave', objective: 'Aeróbico', intensity: 'baja', est_minutes: 40, status: 'planned', steps: [] },
+  { id: 'pcf3', date: today, slot: 'pm', type: 'crossfit_box', discipline: 'crossfit', title: 'CrossFit (pendiente de reserva)', objective: 'Mantener fuerza', intensity: 'alta', est_minutes: 60, status: 'planned', steps: [] });
 // Carrera del Apple Watch recibida de Intervals.icu (sintética), procesada con el motor real.
 { const N = 2900; const t = [...Array(N)].map((_, i) => i); const v = t.map((i) => 1000 / (318 - 10 * Math.sin(i / 400)));
   let d = 0; const dist = t.map((i) => (d += v[i]));
@@ -105,6 +108,7 @@ await page.reload(); await page.waitForTimeout(800); if (errors.length) console.
 const shot = async (hash, name, fn) => { await page.evaluate(() => { const s = document.getElementById('sheet'); if (!s.hidden) { s.hidden = true; s.innerHTML = ''; } }); await page.goto(`http://forja.test/index.html${hash}`); await page.waitForTimeout(700); if (fn) { await fn(); await page.waitForTimeout(600); } await page.screenshot({ path: `${OUT}/${name}.png`, fullPage: false }); };
 await shot('#/inicio', '01-inicio');
 await shot('#/plan', '02-plan');
+await shot('#/plan', '02b-plan-ayer', async () => { const n = new Date(Date.parse(today + 'T12:00:00Z') - 864e5).getUTCDate(); await page.locator('.day', { hasText: String(n).padStart(2, '0') }).first().click(); });
 await shot('#/plan', '03-sesion', async () => { await page.locator('.day').first().click(); await page.waitForTimeout(400); await page.locator('#view .card.row').first().click(); });
 await shot('#/entrenos', '04-entrenos');
 const reopen = async () => { await page.goto('http://forja.test/index.html#/inicio'); await page.waitForTimeout(300); await page.goto('http://forja.test/index.html#/entrenos'); await page.waitForTimeout(700); };

@@ -5,10 +5,9 @@ import type { AthleteContext } from './context.ts';
 import {
   planWeek, adaptPlan, handleMissed, phaseAt, weekVolumeFactor, mondayOf, addDays, internalLoad, regionalLoad, legIndex,
   estimate1RM, getExercise, fmtTime, STANDARD_DISTANCES,
-  type PlannedSession, type PlanChange, type Session,
-} from './engine/index.ts';
+  type PlannedSession, type PlanChange, type Session, reconcilePlan } from './engine/index.ts';
 
-export type Trigger = 'session' | 'checkin' | 'goal_change' | 'missed' | 'manual' | 'weekly';
+export type Trigger = 'session' | 'checkin' | 'goal_change' | 'missed' | 'manual' | 'weekly' | 'done' | 'undone';
 
 export function rowToPlanned(r: any): PlannedSession & { dbId: string; locked: boolean } {
   return {
@@ -72,8 +71,18 @@ async function logChanges(sb: SupabaseClient, userId: string, trigger: Trigger, 
 }
 
 /** Re-evalúa los próximos días tras una sesión o un check-in. */
+/** Marca como hechas las sesiones del plan que ya has entrenado (mismo día y tipo) y deshace los "hechos" sin entreno. */
+export async function reconcileDone(sb: SupabaseClient, ctx: AthleteContext): Promise<number> {
+  const { data } = await sb.from('planned_sessions').select('id,date,discipline,status,completed_session_id,done_manually').gte('date', addDays(ctx.today, -28)).lte('date', ctx.today);
+  const rows = (data ?? []).map((r: any) => ({ id: r.id, date: r.date, discipline: r.discipline, status: r.status, completedSessionId: r.completed_session_id, doneManually: r.done_manually }));
+  const upd = reconcilePlan(rows, ctx.sessions, ctx.today);
+  for (const u of upd) await sb.from('planned_sessions').update({ status: u.status, completed_session_id: u.sessionId }).eq('id', u.id);
+  return upd.length;
+}
+
 export async function adaptUpcoming(sb: SupabaseClient, ctx: AthleteContext, trigger: Trigger, completedSessionId?: string): Promise<PlanChange[]> {
   await ensureWeeks(sb, ctx, false);
+  await reconcileDone(sb, ctx).catch((e) => console.warn('reconcile', e));
   const { data, error } = await sb.from('planned_sessions').select('*').gte('date', addDays(ctx.today, -1)).lte('date', addDays(ctx.today, 8));
   if (error) throw error;
   const rows = (data ?? []).map(rowToPlanned);

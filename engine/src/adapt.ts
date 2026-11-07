@@ -47,6 +47,29 @@ export function matchPlanned(session: Session, plan: PlannedSession[]): PlannedS
   return plan.find((p) => p.date === d && p.status === 'planned' && fam(p.discipline) === fam(session.discipline));
 }
 
+// ---------- Plan frente a lo realizado ----------
+export const planGroup = (d: string) => (d === 'running' ? 'run' : d === 'walking' || d === 'hiking' ? 'walk' : d === 'cycling' ? 'bike' : d === 'swimming' ? 'swim'
+  : d === 'mobility' || d === 'yoga' ? 'mob' : ['crossfit', 'hybrid', 'hyrox', 'strength', 'weightlifting', 'gymnastics', 'calisthenics'].includes(d) ? 'gym' : d);
+const madridDate = (iso: string) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date(iso));
+
+export interface PlanRow { id: string; date: string; discipline: string; status: string; completedSessionId?: string | null; doneManually?: boolean }
+/** Une cada sesión planificada (hasta hoy) con lo que hiciste ese día del mismo tipo; deshace los "hechos" sin entreno detrás. */
+export function reconcilePlan(rows: PlanRow[], sessions: { id: string; startedAt: string; discipline: string }[], today: string): { id: string; status: 'done' | 'planned'; sessionId: string | null }[] {
+  const out: { id: string; status: 'done' | 'planned'; sessionId: string | null }[] = [];
+  const byDay = new Map<string, { id: string; g: string }[]>();
+  for (const x of sessions) { const d = madridDate(x.startedAt); byDay.set(d, [...(byDay.get(d) ?? []), { id: x.id, g: planGroup(x.discipline) }]); }
+  const ids = new Set(sessions.map((x) => x.id));
+  const used = new Set(rows.filter((r) => r.status === 'done' && r.completedSessionId && ids.has(r.completedSessionId)).map((r) => r.completedSessionId!));
+  for (const r of [...rows].filter((x) => x.date <= today).sort((a, b) => a.date.localeCompare(b.date))) {
+    if (r.status === 'skipped' || r.doneManually) continue;
+    if (r.status === 'done' && r.completedSessionId && ids.has(r.completedSessionId)) continue;
+    const m = (byDay.get(r.date) ?? []).find((x) => x.g === planGroup(r.discipline) && !used.has(x.id));
+    if (m) { used.add(m.id); out.push({ id: r.id, status: 'done', sessionId: m.id }); }
+    else if (r.status === 'done') out.push({ id: r.id, status: 'planned', sessionId: null });
+  }
+  return out;
+}
+
 export function adaptPlan(input: AdaptInput): { plan: PlannedSession[]; changes: PlanChange[] } {
   const plan = input.plan.map((p) => ({ ...p, steps: [...p.steps] }));
   const changes: PlanChange[] = [];
@@ -54,11 +77,7 @@ export function adaptPlan(input: AdaptInput): { plan: PlannedSession[]; changes:
   const today = isoDate(input.now);
   const horizon = addDays(today, input.horizonDays ?? 4);
 
-  const latest = [...input.history].sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0];
-  if (latest) {
-    const m = matchPlanned(latest, plan);
-    if (m) { m.status = 'done'; changes.push({ plannedId: m.id, date: m.date, action: 'mark_done', reason: `Registrado: ${latest.title ?? latest.discipline}.`, data: {} }); }
-  }
+  // Lo ya realizado lo marca reconcilePlan (por día y tipo de entreno), no aquí.
 
   const upcoming = plan.filter((p) => p.status === 'planned' && p.date >= today && p.date <= horizon)
     .sort((a, b) => (a.date + a.slot).localeCompare(b.date + b.slot));

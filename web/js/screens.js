@@ -79,17 +79,36 @@ export async function HOME() {
   };
 }
 
-export const plannedCard = (s) => html`
-  <div class="card row" data-act="${act(() => plannedDetail(s))}" style="${s.status === 'skipped' ? 'opacity:.45' : ''}">
+const cleanTitle = (t) => String(t ?? '').replace(/\s*\(pendiente de reserva\)/i, ' recomendado');
+/** Estado de una sesión del plan, en claro. */
+function planState(s) {
+  const past = s.date < today();
+  if (s.status === 'done') return { tag: html`<span class="tag green">Hecha ✓</span>`, dim: false };
+  if (s.status === 'skipped') return { tag: html`<span class="tag">No la hiciste</span>`, dim: true };
+  if (past) return { tag: html`<span class="tag">No registrada</span>`, dim: true };
+  if (s.from_calendar) return { tag: html`<span class="tag blue">Reservada</span>`, dim: false };
+  return { tag: html`<span class="tag accent">Recomendada</span>`, dim: false };
+}
+export const plannedCard = (s) => { const st = planState(s); return html`
+  <div class="card row" data-act="${act(() => plannedDetail(s))}" style="${st.dim ? 'opacity:.55' : ''}">
     ${icon(s.discipline)}
-    <div class="grow"><div style="font-weight:700">${s.title} ${s.status === 'modified' ? '🔄' : ''}${s.status === 'done' ? ' ✅' : ''}</div>
+    <div class="grow"><div style="font-weight:700">${cleanTitle(s.title)} ${s.status === 'modified' ? '🔄' : ''}</div>
       <div class="small muted">${[s.start_local ?? (s.slot === 'am' ? 'Mañana' : 'Tarde'), s.est_minutes ? `${s.est_minutes} min` : null, s.planned_km ? `${(+s.planned_km).toFixed(1)} km` : null].filter(Boolean).join(' · ')}</div>
-      ${s.objective ? html`<div class="small muted">${s.objective}</div>` : ''}</div>
-    ${intensityTag(s.intensity)}
-  </div>`;
+      ${/pendiente de reserva|recomendado/i.test(s.title ?? '') && !s.from_calendar && s.status !== 'done' ? html`<div class="xs muted">Aún no tienes clase reservada en WodBuster ese día: es la que te recomienda el plan.</div>` : s.objective ? html`<div class="small muted">${s.objective}</div>` : ''}
+      <div class="row" style="gap:6px;margin-top:4px">${st.tag}${s.status !== 'done' ? intensityTag(s.intensity) : ''}</div></div>
+  </div>`; };
+
+async function markDone(s) {
+  const day = s.date;
+  const list = await api.db.select('sessions', { select: 'id,started_at,duration_s,title,discipline,distance_m', deleted_at: 'is.null', and: `(started_at.gte.${addDays(day, -1)}T22:00:00Z,started_at.lt.${day}T23:00:00Z)`, order: 'started_at' }).catch(() => []);
+  const go2 = (sessionId) => busy(null, async () => { await api.fn('replan', { trigger: 'done', plannedId: s.id, sessionId }); closeSheet(); invalidate('planned', 'changes'); render(); toast('Marcada como hecha'); });
+  sheet('¿Con qué entreno la hiciste?', html`${list.map((x) => html`<button class="block" data-act="${act(() => go2(x.id))}">${timeOf(x.started_at)} · ${x.title ?? x.discipline} · ${dur(x.duration_s)}${x.distance_m > 0 ? ` · ${(x.distance_m / 1000).toFixed(1)} km` : ''}</button>`)}
+    <button class="block ${list.length ? 'ghost' : 'primary'}" data-act="${act(() => go2(null))}">La hice, pero no la tengo registrada</button>
+    <p class="xs muted">Normalmente no hace falta: en cuanto llega un entreno de ese día y del mismo tipo (Apple Watch o registro), Forja la marca sola.</p>`);
+}
 
 function plannedDetail(s) {
-  sheet(s.title, html`
+  sheet(cleanTitle(s.title), html`
     <div class="row" style="gap:6px">${intensityTag(s.intensity)}${s.key ? html`<span class="tag accent">Sesión clave</span>` : ''}${s.from_calendar ? html`<span class="tag blue">Reservada</span>` : ''}</div>
     <p style="font-weight:600">${s.objective ?? ''}</p>
     <div class="stats"><div class="stat"><div class="l">Duración</div><div class="v">${s.est_minutes ?? '–'}<span class="u"> min</span></div></div>
@@ -97,7 +116,9 @@ function plannedDetail(s) {
       <div class="stat"><div class="l">Piernas</div><div class="v">${s.leg_stress ?? 0}<span class="u">/3</span></div></div></div>
     <div class="card tight"><div class="small" style="color:var(--accent);font-weight:700">💡 Por qué esta sesión</div><div class="small">${s.rationale ?? ''}</div></div>
     <h3>Sesión</h3>${steps(s.steps)}
-    ${s.status === 'planned' || s.status === 'modified' ? html`<button class="block danger" data-act="${act((b) => busy(b, async () => {
+    ${s.status === 'planned' || s.status === 'modified' ? html`<button class="block primary" data-act="${act(() => markDone(s))}">✓ La he hecho</button>` : ''}
+    ${s.status === 'done' ? html`<button class="block" data-act="${act((b) => busy(b, async () => { await api.fn('replan', { trigger: 'undone', plannedId: s.id }); closeSheet(); invalidate('planned'); render(); }))}">Desmarcar como hecha</button>` : ''}
+    ${(s.status === 'planned' || s.status === 'modified') && s.date >= today() ? html`<button class="block danger" data-act="${act((b) => busy(b, async () => {
       const r = await api.fn('replan', { trigger: 'missed', plannedId: s.id }); closeSheet(); toast(r.changes?.[0]?.reason ?? 'Plan recolocado', 6000); invalidate('planned', 'changes'); render();
     }))}">No puedo hacerla</button>` : ''}`);
 }
@@ -189,6 +210,7 @@ export async function checkIn() {
 
 // ======================= PLAN =======================
 let planOffset = 0, planDay = null;
+const madridDay = (iso) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date(iso));
 export async function PLAN() {
   const mon = addDays(monday(), 7 * planOffset); const t = today();
   const days = [...Array(7)].map((_, i) => addDays(mon, i));
@@ -206,8 +228,13 @@ export async function PLAN() {
       <div class="chips">${phases.filter((p) => p.kind !== 'base').map((p) => html`<span class="chip ${p.start_date <= t && t <= p.end_date ? 'on' : ''}">${phaseName(p.kind)} · ${shortDate(p.start_date)}–${shortDate(p.end_date)}</span>`)}</div>
       <div class="row"><button class="sm" data-act="${act(() => { planOffset--; render(); })}">‹</button><b class="grow" style="text-align:center">Semana del ${shortDate(mon)}</b><button class="sm" data-act="${act(() => { planOffset++; render(); })}">›</button></div>
       <div class="days">${days.map((d) => html`<button class="day ${d === planDay ? 'on' : ''} ${d === t ? 'today' : ''}" data-act="${act(() => { planDay = d; render(); })}"><div class="w">${dayName(d).split(' ')[0]}</div><div class="d">${d.slice(8)}</div><div class="dots">${ses.filter((s) => s.date === d).map((s) => raw(`<i style="background:${DC[s.discipline] ?? 'var(--muted)'}"></i>`))}</div></button>`)}</div>
-      ${daySes.length ? daySes.map(plannedCard) : html`<div class="card muted">Descanso</div>`}
-      ${done.filter((s) => s.started_at.slice(0, 10) === planDay).length ? html`<h2>Realizado</h2>${done.filter((s) => s.started_at.slice(0, 10) === planDay).map(sessionRow)}` : ''}
+      ${(() => {
+        const dayDone = done.filter((x) => madridDay(x.started_at) === planDay);
+        const linked = new Map(daySes.filter((p) => p.status === 'done' && p.completed_session_id).map((p) => [p.completed_session_id, p]));
+        const pending = daySes.filter((p) => !(p.status === 'done' && dayDone.some((x) => x.id === p.completed_session_id)));
+        return html`${pending.length ? pending.map(plannedCard) : !dayDone.length ? html`<div class="card muted">Descanso</div>` : ''}
+          ${dayDone.length ? html`<h2>Realizado</h2>${dayDone.map((x) => html`${sessionRow(x)}${linked.get(x.id) ? html`<div class="xs" style="color:var(--green);margin:-6px 0 10px 6px">✓ Cumple el plan: ${cleanTitle(linked.get(x.id).title)}</div>` : ''}`)}` : ''}`;
+      })()}
       <button class="block" data-act="${act((b) => busy(b, async () => { await api.fn('replan', { trigger: 'goal_change' }); invalidate('planned', 'phases', 'changes'); render(); toast('Semanas recalculadas'); }))}">Recalcular semanas</button>`,
   };
 }

@@ -1,8 +1,8 @@
-// POST /replan { trigger: 'checkin'|'goal_change'|'missed'|'manual'|'weekly', plannedId? }
+// POST /replan { trigger: 'checkin'|'goal_change'|'missed'|'manual'|'weekly'|'done'|'undone', plannedId?, sessionId? }
 // Recalcula fases y semanas, o adapta los próximos días. Devuelve el estado y los cambios con su motivo.
 import { handler, json, requireUser, userClient, HttpError } from '../_shared/supabase.ts';
 import { loadContext } from '../_shared/context.ts';
-import { ensureWeeks, adaptUpcoming, markMissed } from '../_shared/replan.ts';
+import { ensureWeeks, adaptUpcoming, markMissed, reconcileDone } from '../_shared/replan.ts';
 
 Deno.serve(handler(async (req) => {
   const sb = userClient(req);
@@ -23,6 +23,15 @@ Deno.serve(handler(async (req) => {
   switch (trigger) {
     case 'goal_change': case 'weekly': notes = await ensureWeeks(sb, ctx, true); break;
     case 'checkin': case 'manual': changes = await adaptUpcoming(sb, ctx, trigger); break;
+    case 'done': {   // { plannedId, sessionId? } → la marcas tú como hecha (con o sin entreno registrado)
+      if (!body.plannedId) throw new HttpError(400, 'Falta plannedId');
+      await sb.from('planned_sessions').update({ status: 'done', completed_session_id: body.sessionId ?? null, done_manually: !body.sessionId }).eq('id', body.plannedId);
+      break;
+    }
+    case 'undone':
+      if (!body.plannedId) throw new HttpError(400, 'Falta plannedId');
+      await sb.from('planned_sessions').update({ status: 'planned', completed_session_id: null, done_manually: false }).eq('id', body.plannedId);
+      await reconcileDone(sb, ctx); break;
     case 'missed':
       if (!body.plannedId) throw new HttpError(400, 'Falta plannedId');
       changes = [await markMissed(sb, ctx, body.plannedId)]; break;
