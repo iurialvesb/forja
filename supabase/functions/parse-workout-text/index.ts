@@ -24,7 +24,7 @@ Deno.serve(handler(async (req) => {
     if (doubtful) {
       const { data: consent } = await sb.from('consents').select('kind').eq('kind', 'ai_processing').is('revoked_at', null).maybeSingle();
       if (consent) {
-        const r = await claude({ system: SYSTEM, maxTokens: 4000, temperature: 0, tools: [{ name: 'registrar_lectura', description: 'Registra la lectura estructurada del entrenamiento', input_schema: schema }],
+        const r = await claude({ system: SYSTEM, maxTokens: 4000, temperature: 0, fast: true, tools: [{ name: 'registrar_lectura', description: 'Registra la lectura estructurada del entrenamiento', input_schema: schema }],
           toolChoice: { type: 'tool', name: 'registrar_lectura' },
           messages: [{ role: 'user', content: `Estructura este entrenamiento escrito por el atleta. Mi intérprete automático lo leyó así (corrige solo lo que esté mal o falte):\n${JSON.stringify(parsed.sections)}\n\nTexto original:\n${text}` }] });
         const tu = r.content.find((b) => b.type === 'tool_use') as { input: ParsedWorkout } | undefined;

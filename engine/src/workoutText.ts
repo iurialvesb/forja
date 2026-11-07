@@ -100,6 +100,9 @@ export function parseItem(raw: string): ParsedItem | null {
   // Calorías o metros escritos al final: "row 500m", "bike 15 cal"
   if (item.calories == null && (m = s.match(/\s(\d+(?:[.,]\d+)?)\s*(cal|cals)\b/i))) { item.calories = Number(m[1].replace(',', '.')); s = s.replace(m[0], ' '); }
   if (item.distanceM == null && (m = s.match(/\s(\d+(?:[.,]\d+)?)\s*(km|m)\b/i))) { const v = Number(m[1].replace(',', '.')); item.distanceM = /km/i.test(m[2]) ? v * 1000 : v; s = s.replace(m[0], ' '); }
+  // Esquema o series escritos al final: "back squat 5-5-3-3-1", "deadlift 5x5"
+  if (!item.repScheme && (m = s.match(/\s(\d+(?:\s*-\s*\d+)+)\s*$/))) { item.repScheme = m[1].replace(/\s/g, ''); item.reps = undefined; s = s.slice(0, m.index); }
+  else if (!item.repScheme && (m = s.match(/\s(\d+)\s*[x×]\s*(\d+)\s*$/i))) { item.repScheme = Array(Number(m[1])).fill(m[2]).join('-'); item.reps = undefined; s = s.slice(0, m.index); }
   s = s.replace(/\s+/g, ' ').replace(/[.:;,]+$/, '').trim();
   const variants: string[] = [];
   if (/heels? (on|elevated)|talones (en|elevados)/i.test(s)) variants.push('talones elevados');

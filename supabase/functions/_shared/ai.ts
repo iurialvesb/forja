@@ -11,7 +11,7 @@ export const PROVIDER_LABEL = () => PROVIDER() === 'claude' ? 'Anthropic (Claude
 
 export interface GenArgs {
   system: string; messages: Message[]; tools?: Tool[]; toolChoice?: { type: 'auto' | 'any' | 'tool'; name?: string };
-  maxTokens?: number; temperature?: number;
+  maxTokens?: number; temperature?: number; fast?: boolean;
 }
 export interface GenResult { content: ContentBlock[]; stop_reason: string; usage?: unknown }
 
@@ -57,10 +57,16 @@ async function gemini(a: GenArgs): Promise<GenResult> {
     if (a.toolChoice?.type === 'tool' && a.toolChoice.name) body.toolConfig = { functionCallingConfig: { mode: 'ANY', allowedFunctionNames: [a.toolChoice.name] } };
     else if (a.toolChoice?.type === 'any') body.toolConfig = { functionCallingConfig: { mode: 'ANY' } };
   }
+  // Lecturas rápidas (fotos, texto): sin "razonamiento" previo, que en el nivel gratuito añade muchos segundos.
+  if (a.fast) body.generationConfig.thinkingConfig = { thinkingBudget: 0 };
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL()}:generateContent`;
   let res: Response | undefined;
   for (let attempt = 0; attempt < 3; attempt++) {
     res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env('GEMINI_API_KEY') }, body: JSON.stringify(body) });
+    if (res.status === 400 && body.generationConfig.thinkingConfig) {            // modelo que no admite desactivar el razonamiento
+      const t = await res.clone().text();
+      if (/thinking/i.test(t)) { delete body.generationConfig.thinkingConfig; attempt--; continue; }
+    }
     if (res.status !== 429 && res.status !== 503) break;
     await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));      // límites del nivel gratuito
   }

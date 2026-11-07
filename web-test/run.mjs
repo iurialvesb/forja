@@ -58,6 +58,8 @@ const FN = {
   coach: { threadId: 't1', reply: 'Mañana tienes series 5×1000 m. Tu fatiga de piernas estimada tras el WOD de hoy es 260 (umbral 250), así que te propongo cambiarlas por un rodaje suave de 7 km a 5:20–5:45/km y mover las series al jueves.', tools: ['estado_hoy', 'plan'] },
 };
 
+const posted = [];
+REST.session_sets = [...Array(6)].flatMap((_, w) => [1, 2, 3, 4, 5].map((k) => ({ exercise_id: 'front_squat', performed_on: E.addDays(today, -7 * w), reps: k === 5 && w === 0 ? 4 : 6, load_kg: 45 + (5 - w), status: k === 5 && w === 0 ? 'partial' : 'done', set_label: `Min ${k * 2 - 1} · R${k}`, target_reps: 6, session_id: 's1' })));
 const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'es-ES', timezoneId: 'Europe/Madrid' });
 const page = await ctx.newPage();
@@ -76,6 +78,7 @@ await page.route('https://mock.supabase.co/**', (route) => {
   const u = new URL(route.request().url());
   const parts = u.pathname.split('/').filter(Boolean);
   if (parts[0] === 'rest') { const t = parts[2]; return route.fulfill({ contentType: 'application/json', body: JSON.stringify(REST[t] ?? []) }); }
+  if (parts[0] === 'functions' && parts[2] === 'ingest-session') { posted.push(JSON.parse(route.request().postData())); return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ sessionId: 's9', merged: true, prs: ['Front Squat 50 kg × 6'], changes: [] }) }); }
   if (parts[0] === 'functions') { return route.fulfill({ contentType: 'application/json', body: JSON.stringify(FN[parts[2]] ?? { ok: true, changes: [], processed: 0 }) }); }
   if (parts[0] === 'auth') return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ access_token: 'x', refresh_token: 'y', expires_in: 3600, user: { id: 'u1', email: 'iuri@example.com' } }) });
   route.fulfill({ contentType: 'application/json', body: '{}' });
@@ -85,13 +88,41 @@ await page.goto('http://forja.test/index.html');
 await page.waitForTimeout(500);
 await page.screenshot({ path: `${OUT}/00-login.png` });
 await page.evaluate(() => localStorage.setItem('forja.session', JSON.stringify({ access_token: 'x', refresh_token: 'y', expires_at: Math.floor(Date.now() / 1000) + 3600, user: { id: 'u1', email: 'iuri@example.com' } })));
-await page.reload(); await page.waitForTimeout(800);
+await page.reload(); await page.waitForTimeout(800); if (errors.length) console.log('ERR', errors);
 const shot = async (hash, name, fn) => { await page.evaluate(() => { const s = document.getElementById('sheet'); if (!s.hidden) { s.hidden = true; s.innerHTML = ''; } }); await page.goto(`http://forja.test/index.html${hash}`); await page.waitForTimeout(700); if (fn) { await fn(); await page.waitForTimeout(600); } await page.screenshot({ path: `${OUT}/${name}.png`, fullPage: false }); };
 await shot('#/inicio', '01-inicio');
 await shot('#/plan', '02-plan');
-await shot('#/plan', '03-sesion', () => page.locator('#view .card.row').first().click());
+await shot('#/plan', '03-sesion', async () => { await page.locator('.day').first().click(); await page.waitForTimeout(400); await page.locator('#view .card.row').first().click(); });
 await shot('#/entrenos', '04-entrenos');
-await shot('#/entrenos', '05-pegar-wod', async () => { await page.getByText('Pegar entreno (Strava').click(); await page.waitForTimeout(300); await page.fill('#wtext', 'x'); await page.getByRole('button', { name: 'Interpretar' }).click(); });
+const reopen = async () => { await page.goto('http://forja.test/index.html#/inicio'); await page.waitForTimeout(300); await page.goto('http://forja.test/index.html#/entrenos'); await page.waitForTimeout(700); };
+const WOD = `Afternoon Workout\n\nFERZA\nEMOM 10’\n- 6 FRONT SQUATS @ 50 kg\n- 15 HEELS ON PLATE 16KG GOBLET SQUATS\n\nWOD\nEMOM 24’ (4R)\n- 16 CAL ROW\n- 20 DEAD LIFT 50kg\n- 10 BURPEES OVER BAR\n- REST.\n- REST\n- REST.\n\nAMRAP 8\n- 10 wall balls 9kg\n- 10 box jumps`;
+await shot('#/entrenos', '05-pegar-wod', async () => { await page.getByText('Pegar entreno (Strava').click(); await page.waitForTimeout(300); await page.fill('#wtext', WOD); await page.waitForTimeout(400); });
+await shot('#/entrenos', '05b-registro', async () => {
+  await page.getByText('Pegar entreno (Strava').click(); await page.waitForTimeout(300); await page.fill('#wtext', WOD);
+  const t0 = Date.now(); await page.getByRole('button', { name: 'Registrar', exact: true }).click(); await page.waitForSelector('#logger'); console.log(`Hoja de registro en ${Date.now() - t0} ms`);
+  const cks = page.locator('#logger .ck:not(:has-text("·"))');
+  for (let i = 0; i < 9; i++) await cks.nth(i).click();
+  const inp = page.locator('#logger input[data-lf="done"]').nth(8); await inp.fill('4');
+});
+await shot('#/entrenos', '05c-amrap', async () => {
+  await reopen(); await page.getByRole('button', { name: 'Seguir' }).click(); await page.waitForSelector('#logger');
+  await page.getByRole('button', { name: '+ Ronda' }).click(); await page.getByRole('button', { name: '+ Ronda' }).click();
+  await page.locator('#logger button:has-text("Marcar todo como hecho")').nth(2).click();
+  await page.locator('#logger input[data-lf="done"]').last().fill('3');
+  await page.evaluate(() => { const b = [...document.querySelectorAll('#logger .card')].pop(); b.scrollIntoView(); });
+});
+await shot('#/entrenos', '05d-estructura', async () => { await reopen(); await page.getByRole('button', { name: 'Seguir' }).click(); await page.waitForSelector('#logger'); await page.getByRole('button', { name: '✎ Estructura' }).first().click(); });
+await (async () => {
+  await page.evaluate(() => { window.confirm = () => true; });
+  await page.getByRole('button', { name: 'Guardar entreno' }).click(); await page.waitForTimeout(800);
+  const b = posted[0]; const s0 = b?.session;
+  const ok = s0 && s0.blocks.length === 3 && s0.blocks[0].sets.length === 10 && s0.blocks[0].sets[8].status === 'partial' && s0.blocks[0].sets[8].reps === 4 && s0.blocks[2].resultRounds === 2 && s0.blocks[2].resultReps === 13 && b.attachTo === 's1';
+  if (!ok) errors.push(`registro guardado incorrecto: ${JSON.stringify({ attachTo: b?.attachTo, blocks: s0?.blocks?.map((x) => [x.title, x.sets.length, x.resultText]) , s8: s0?.blocks?.[0]?.sets?.[8] })}`);
+  else console.log(`Guardado OK: ${s0.blocks.map((x) => `${x.title} ${x.sets.length} series ${x.resultText ?? ''}`).join(' | ')}`);
+  const left = await page.evaluate(() => localStorage.getItem('forja:draft'));
+  if (left) errors.push('el borrador no se borró tras guardar');
+})();
+await shot('#/entrenos', '05e-historial-ejercicio', async () => { await page.getByRole('button', { name: 'Progreso' }).click(); await page.waitForTimeout(500); await page.getByText('Historial por ejercicio').click(); });
 await shot('#/entrenos', '06-progreso', () => page.getByRole('button', { name: 'Progreso' }).click());
 await shot('#/nutricion', '07-nutricion-hoy');
 await shot('#/nutricion', '08-compra', () => page.getByRole('button', { name: 'Compra', exact: true }).click());

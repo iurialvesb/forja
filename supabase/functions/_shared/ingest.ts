@@ -7,7 +7,7 @@ import { HttpError } from './supabase.ts';
 
 export interface IngestResult { sessionId: string; merged: boolean; duplicateOf?: string; prs: string[]; changes: unknown[] }
 
-export async function ingestSession(sb: SupabaseClient, userId: string, s: Session & { notes?: string; activeKcal?: number; strideM?: number; splits?: { kmIndex: number; durationS: number; avgHr?: number; cadence?: number; elevationDeltaM?: number }[] }, attachTo?: string): Promise<IngestResult> {
+export async function ingestSession(sb: SupabaseClient, userId: string, s: Session & { notes?: string; activeKcal?: number; strideM?: number; splits?: { kmIndex: number; durationS: number; avgHr?: number; cadence?: number; elevationDeltaM?: number }[] }, attachTo?: string, opts: { edit?: boolean } = {}): Promise<IngestResult> {
   if (!s.startedAt || !s.durationS || !s.discipline) throw new HttpError(400, 'Faltan startedAt, durationS o discipline');
   const source = s.source ?? 'manual';
   if (source === 'strava') throw new HttpError(400, 'Las actividades de Strava no se guardan como sesiones (API Policy de Strava). Usa Apple Health como fuente.');
@@ -48,10 +48,15 @@ export async function ingestSession(sb: SupabaseClient, userId: string, s: Sessi
     if (error) throw error;
     sessionId = existing.id; merged = true;
     if (s.blocks?.length) {
-      if (existing.blocks?.length && attachTo) await sb.from('session_blocks').delete().eq('session_id', sessionId);   // el texto/foto sustituye a la estructura previa
+      if (existing.blocks?.length && attachTo) {
+        const { data: prev } = await sb.from('session_sets').select('set_label,exercise_id,reps,load_kg,calories,distance_m,duration_s,status').eq('session_id', sessionId).order('position');
+        await sb.from('session_edits').insert({ user_id: userId, session_id: sessionId, field: 'registro', old_value: prev ?? [], new_value: (s.blocks ?? []).flatMap((b) => b.sets.map((x) => ({ set_label: x.label ?? null, exercise_id: x.exerciseId, reps: x.reps ?? null, load_kg: x.loadKg ?? null, calories: x.calories ?? null, distance_m: x.distanceM ?? null, duration_s: x.durationS ?? null, status: x.status ?? 'done' }))) });
+        await sb.from('session_blocks').delete().eq('session_id', sessionId);
+      }   // el texto/foto sustituye a la estructura previa
       if (!existing.blocks?.length || attachTo) await writeBlocks(sb, userId, sessionId, s);
     }
-    if (s.title && (attachTo || !existing.title)) await sb.from('sessions').update({ title: s.title, rpe: s.rpe ?? existing.rpe ?? null, discipline: s.discipline === 'other' ? existing.discipline : s.discipline }).eq('id', sessionId);
+    if (opts.edit && attachTo) await sb.from('sessions').update({ rpe: s.rpe ?? null, title: s.title ?? existing.title ?? null, duration_s: Math.round(s.durationS), started_at: s.startedAt }).eq('id', sessionId);
+    else if (s.title && (attachTo || !existing.title)) await sb.from('sessions').update({ title: s.title, rpe: s.rpe ?? existing.rpe ?? null, discipline: s.discipline === 'other' ? existing.discipline : s.discipline }).eq('id', sessionId);
   } else {
     const { data, error } = await sb.from('sessions').insert({ user_id: userId, ...base(s), primary_source: source, notes: s.notes ?? null, active_kcal: s.activeKcal ?? null, avg_stride_m: s.strideM ?? null }).select('id').single();
     if (error) throw error;
@@ -75,6 +80,8 @@ async function writeBlocks(sb: SupabaseClient, userId: string, sessionId: string
     const { data: blk, error } = await sb.from('session_blocks').insert({
       user_id: userId, session_id: sessionId, position: i, kind: b.kind, format: b.format ?? null, time_cap_s: b.timeCapS ?? null, rounds: b.rounds ?? null,
       result_text: b.resultText ?? null, result_time_s: b.resultTimeS ?? null, result_rounds: b.resultRounds ?? null, result_reps: b.resultReps ?? null,
+      title: b.title ?? null, part: b.part ?? null, scaling: b.scaling ?? null, duration_min: b.durationMin ?? null, interval_s: b.intervalS ?? null,
+      capped: !!b.capped, prescribed: b.prescribed ?? null, notes: b.notes ?? null,
     }).select('id').single();
     if (error) throw error;
     if (!b.sets.length) continue;
@@ -87,7 +94,9 @@ async function writeBlocks(sb: SupabaseClient, userId: string, sessionId: string
         const { data: ue } = await sb.from('user_exercises').upsert({ user_id: userId, name }, { onConflict: 'user_id,name' }).select('id').single();
         customId = ue?.id ?? null;
       }
-      rows.push({ user_id: userId, session_id: sessionId, block_id: blk.id, position: j, exercise_id: exerciseId, custom_exercise_id: customId, reps: x.reps ?? null, load_kg: x.loadKg ?? null, distance_m: x.distanceM ?? null, duration_s: x.durationS ?? null, calories: x.calories ?? null, rpe: x.rpe ?? null, rir: x.rir ?? null, is_warmup: !!x.isWarmup, performed_on: isoDate(s.startedAt) });
+      rows.push({ user_id: userId, session_id: sessionId, block_id: blk.id, position: j, exercise_id: exerciseId, custom_exercise_id: customId, reps: x.reps ?? null, load_kg: x.loadKg ?? null, distance_m: x.distanceM ?? null, duration_s: x.durationS ?? null, calories: x.calories ?? null, rpe: x.rpe ?? null, rir: x.rir ?? null, is_warmup: !!x.isWarmup, performed_on: isoDate(s.startedAt),
+        round_no: x.roundNo ?? null, set_label: x.label ?? null, unit: x.unit ?? null, target_reps: x.targetReps ?? null, target_load_kg: x.targetLoadKg ?? null,
+        target_pct: x.targetPct ?? null, target_text: x.targetText ?? null, status: x.status ?? 'done', split_s: x.splitS ?? null, origin: x.origin ?? 'manual' });
     }
     const { error: e2 } = await sb.from('session_sets').insert(rows);
     if (e2) throw e2;

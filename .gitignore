@@ -3,3 +3,4 @@ ios/Forja.xcodeproj/
 .DS_Store
 node_modules/
 supabase/.temp/
+web-test/shots/

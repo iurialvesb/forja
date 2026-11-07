@@ -6,6 +6,8 @@ import {
   icon, intensityTag, levelColor, ring, bar, barChart, lineChart, steps, resizeImage, phaseName, slotName,
 } from './ui.js';
 
+import { startFromText, startFromPhoto, startManual, editSession, exerciseHistory, sessionEdits, draftBanner } from './logbook.js';
+
 const uid = () => api.userId();
 const q = (o) => o;
 
@@ -120,9 +122,17 @@ async function sessionDetail(id) {
       ${s.rpe ? html`<div class="stat"><div class="l">RPE</div><div class="v">${s.rpe}</div></div>` : ''}</div>
     ${s.discipline === 'running' && s.distance_m > 0 ? html`<p class="small">Ritmo medio: <b>${pace(s.duration_s / (s.distance_m / 1000))}</b></p>` : ''}
     ${s.internal_load ? html`<p class="small muted">Carga ${n0(s.internal_load)} UA · fatiga de piernas ${n0(s.leg_index)}</p>` : ''}
-    ${blocks.map((b) => html`<div class="card tight"><div class="row"><b class="grow">${({ warmup: 'Calentamiento', strength: 'Fuerza', skill: 'Técnica', wod: 'WOD', accessory: 'Accesorios', cooldown: 'Vuelta a la calma' })[b.kind] ?? b.kind}</b>${b.format ? html`<span class="tag accent">${b.format.replace('_', ' ')}</span>` : ''}${b.rounds ? html` <span class="muted small">×${+b.rounds}</span>` : ''}</div>
-      ${(s.session_sets || []).filter((x) => x.block_id === b.id).sort((a, c) => a.position - c.position).map((x) => html`<div class="row small"><span class="grow">${name[x.exercise_id] ?? x.exercise_id ?? 'Ejercicio'}</span><span class="muted">${[x.reps ? `${x.reps} reps` : '', x.load_kg ? `${+x.load_kg} kg` : '', x.calories ? `${+x.calories} cal` : '', x.distance_m ? `${+x.distance_m} m` : ''].filter(Boolean).join(' · ')}</span></div>`)}
-      ${b.result_text ? html`<div class="ok small">Resultado: ${b.result_text}</div>` : ''}</div>`)}
+    ${blocks.map((b) => {
+      const sets = (s.session_sets || []).filter((x) => x.block_id === b.id).sort((a, c) => a.position - c.position);
+      const groups = []; for (const x of sets) { const k = x.set_label ?? ''; let g = groups.find((y) => y.k === k); if (!g) groups.push(g = { k, rows: [] }); g.rows.push(x); }
+      const qty = (x) => [x.reps != null ? `${x.reps} reps` : '', x.calories != null ? `${+x.calories} cal` : '', x.distance_m != null ? `${+x.distance_m} m` : '', x.duration_s != null ? `${x.duration_s} s` : '', x.load_kg ? `${+x.load_kg} kg` : ''].filter(Boolean).join(' · ');
+      const ico = { done: '✓', partial: '◐', skipped: '✕' };
+      const col = (st) => (st === 'skipped' ? 'var(--red)' : st === 'partial' ? 'var(--amber)' : 'var(--green)');
+      return html`<div class="card tight"><div class="row"><b class="grow">${b.title ?? ({ warmup: 'Calentamiento', strength: 'Fuerza', skill: 'Técnica', wod: 'WOD', accessory: 'Accesorios', cooldown: 'Vuelta a la calma' })[b.kind] ?? b.kind}</b>${b.scaling ? html`<span class="tag ${b.scaling === 'rx' ? 'green' : 'amber'}">${b.scaling === 'rx' ? 'RX' : 'Scaled'}</span> ` : ''}${b.format ? html`<span class="tag accent">${b.format.replace('_', ' ')}</span>` : ''}${b.rounds && !b.prescribed ? html` <span class="muted small">×${+b.rounds}</span>` : ''}</div>
+      ${groups.map((g) => html`${g.k ? html`<div class="xs muted glabel" style="margin-top:6px">${g.k}</div>` : ''}${g.rows.map((x) => html`<div class="row small"><span style="width:18px;color:${col(x.status)}">${x.set_label ? ico[x.status] ?? '' : ''}</span><span class="grow" data-act="${act(() => exerciseHistory(x.exercise_id))}">${name[x.exercise_id] ?? x.exercise_id ?? 'Ejercicio'}</span><span class="muted">${x.status === 'skipped' ? 'no hecho' : qty(x)}${x.status === 'partial' && x.target_reps != null ? ` (obj. ${+x.target_reps})` : ''}</span></div>`)}`)}
+      ${b.result_text ? html`<div class="ok small">Resultado: ${b.result_text}</div>` : ''}</div>`;
+    })}
+    <div class="grid2">${blocks.some((b) => b.prescribed) ? html`<button data-act="${act(() => editSession(id))}">✎ Editar registro</button>` : ''}<button data-act="${act(() => sessionEdits(id))}">Historial de cambios</button></div>
     <button class="block danger" data-act="${act((btn) => busy(btn, async () => { await api.db.update('sessions', { deleted_at: new Date().toISOString() }, { id: `eq.${id}` }); closeSheet(); invalidate('sessions'); render(); toast('Entreno eliminado'); }))}">Eliminar</button>`);
 }
 
@@ -200,72 +210,23 @@ export async function WORKOUTS() {
   return {
     title: 'Entrenos', right,
     body: html`${seg}
-      <button class="primary block" data-act="${act(() => pasteWorkout())}">📋 Pegar entreno (Strava, notas, WhatsApp)</button>
-      <div class="grid2"><button data-act="${act(photoWorkout)}">📷 Foto de pizarra</button><button data-act="${act(manualWorkout)}">✍️ Manual</button></div>
+      ${await draftBanner()}
+      <button class="primary block" data-act="${act(() => startFromText())}">📋 Pegar entreno (Strava, notas, WhatsApp)</button>
+      <div class="grid2"><button data-act="${act(startFromPhoto)}">📷 Foto de pizarra</button><button data-act="${act(manualMenu)}">✍️ Manual</button></div>
       ${Object.keys(byWeek).sort().reverse().map((w) => html`<h2>Semana del ${shortDate(w)} <small>${byWeek[w].length} sesiones</small></h2>${byWeek[w].map(sessionRow)}`)}
       ${!list.length ? html`<div class="card muted">Aún no hay entrenamientos.</div>` : ''}`,
   };
 }
 
 function addWorkoutMenu() {
-  sheet('Registrar entreno', html`<button class="block primary" data-act="${act(() => pasteWorkout())}">📋 Pegar texto</button><button class="block" data-act="${act(photoWorkout)}">📷 Foto de pizarra o captura</button><button class="block" data-act="${act(manualWorkout)}">✍️ Registro manual</button>`);
+  sheet('Registrar entreno', html`<button class="block primary" data-act="${act(() => startFromText())}">📋 Pegar texto</button><button class="block" data-act="${act(startFromPhoto)}">📷 Foto de pizarra o captura</button><button class="block" data-act="${act(startManual)}">🏋️ CrossFit por bloques (fuerza, WOD…)</button><button class="block" data-act="${act(manualWorkout)}">✍️ Otra actividad</button>`);
+}
+function manualMenu() {
+  sheet('Registro manual', html`<button class="block primary" data-act="${act(startManual)}">🏋️ CrossFit por bloques (fuerza, WOD, endurance)</button><button class="block" data-act="${act(manualWorkout)}">✍️ Otra actividad (carrera, pádel, natación…)</button>`);
 }
 
-// --- Pegar texto (p. ej. descripción de Strava) ---
-export async function pasteWorkout(prefill = '') {
-  let text = prefill, date = today(), res = null; const answers = {};
-  const draw = () => setSheet(html`
-    <p class="small muted">En Strava: abre la actividad, mantén pulsada la descripción → Copiar, y pégala aquí. Forja lo interpreta con su motor de CrossFit (sin IA) y lo une a tu sesión del Apple Watch.</p>
-    <textarea class="mono" id="wtext" placeholder="FUERZA&#10;EMOM 10'&#10;- 6 FRONT SQUATS @ 50 kg&#10;…">${text}</textarea>
-    <div class="row"><button class="sm" data-act="${act(async () => { try { text = await navigator.clipboard.readText(); draw(); } catch { toast('Mantén pulsado el cuadro y elige Pegar'); } })}">Pegar del portapapeles</button>
-      <input type="date" id="wdate" value="${date}" style="width:auto" class="grow"></div>
-    <button class="primary block" data-act="${act((b) => busy(b, async () => {
-      text = document.getElementById('wtext').value; date = document.getElementById('wdate').value;
-      res = await api.fn('parse-workout-text', { action: 'parse', text, date }); draw();
-    }))}">Interpretar</button>
-    ${res ? html`
-      <div class="card tight"><b>Lo que he entendido</b>${res.summary.map((l) => html`<div class="small">• ${l}</div>`)}<div class="xs muted">${res.engine === 'motor' ? 'Motor de CrossFit de Forja' : 'Motor + revisión con IA'}</div></div>
-      ${res.questions.map((qq) => html`<label>${qq.question}</label>${qq.options?.length ? html`<select data-q="${qq.id}"><option value="">—</option>${qq.options.map((o) => html`<option>${o}</option>`)}</select>` : html`<input data-q="${qq.id}" value="${answers[qq.id] ?? ''}">`}`)}
-      <label>¿A qué entreno pertenece?</label>
-      <select id="wlink"><option value="">Crear sesión nueva</option>${res.candidates.map((c, i) => html`<option value="${c.id}" ${i === 0 ? 'selected' : ''}>${timeOf(c.startedAt)} · ${c.minutes} min · ${c.title ?? 'Entreno'}${c.avgHr ? ` · ${c.avgHr} ppm` : ''}</option>`)}</select>
-      <label>Duración si es nueva (min)</label><input id="wmin" type="number" value="60">
-      <button class="primary block" data-act="${act((b) => busy(b, async () => {
-        document.querySelectorAll('[data-q]').forEach((el) => { answers[el.dataset.q] = el.value; });
-        const pending = res.questions.filter((qq) => qq.id !== 'rpe' && !answers[qq.id]);
-        if (pending.length) return toast('Responde a las preguntas primero');
-        const link = document.getElementById('wlink').value || null;
-        const r = await api.fn('parse-workout-text', { action: 'confirm', parsed: res.parsed, answers, linkSessionId: link, startedAt: link ? null : `${date}T17:00:00Z`, durationS: link ? null : +document.getElementById('wmin').value * 60, text });
-        closeSheet(); invalidate('sessions', 'planned', 'readiness', 'changes'); render();
-        toast([r.merged ? 'Unido a tu sesión del Watch' : 'Entreno guardado', ...r.prs.map((p) => `🏆 ${p}`), ...r.changes.filter((c) => c.action !== 'mark_done').map((c) => c.reason)].join(' · '), 8000);
-      }))}">Guardar entreno</button>` : ''}`);
-  sheet('Pegar entreno', '');
-  draw();
-  if (!prefill) { try { const c = await navigator.clipboard.readText(); if (c && /\d/.test(c) && c.length < 4000) { text = c; draw(); } } catch { /* sin permiso */ } }
-}
-
-// --- Foto de pizarra ---
-function photoWorkout() {
-  sheet('Foto de entreno', html`<p class="small muted">Pizarra del box, captura de la app de WodBuster, Strava o tu app de gimnasio. La imagen se envía a la IA (Google Gemini) para leerla.</p>
-    <input type="file" accept="image/*" id="wphoto"><div id="wout"></div>`);
-  document.getElementById('wphoto').onchange = async (e) => {
-    const f = e.target.files[0]; if (!f) return;
-    const out = document.getElementById('wout'); out.innerHTML = '<p><span class="spinner"></span> Leyendo…</p>';
-    try {
-      const blob = await resizeImage(f); const path = await api.uploadPhoto(blob);
-      const [row] = await api.db.insert('photo_imports', [{ user_id: uid(), storage_path: path }]);
-      const r = await api.fn('parse-photo', { action: 'parse', importId: row.id });
-      const answers = {};
-      out.innerHTML = html`<div class="card tight"><b>${r.parsed.title ?? 'Lectura'}</b>${(r.parsed.sections || []).map((s) => html`<div class="small"><b>${s.kind}</b> ${s.format ?? ''}: ${(s.items || []).map((i) => i.raw).join(' · ')}</div>`)}</div>
-        ${r.questions.map((qq) => html`<label>${qq.question}</label><input data-pq="${qq.id}">`)}
-        <label>Duración (min)</label><input id="pmin" type="number" value="60">
-        <button class="primary block" data-act="${act((b) => busy(b, async () => {
-          document.querySelectorAll('[data-pq]').forEach((el) => { answers[el.dataset.pq] = el.value; });
-          const res = await api.fn('parse-photo', { action: 'confirm', importId: row.id, answers, durationS: +document.getElementById('pmin').value * 60, allowPending: true });
-          closeSheet(); invalidate('sessions', 'planned', 'readiness'); render(); toast(res.merged ? 'Unido a tu sesión del Watch' : 'Entreno guardado');
-        }))}">Registrar</button>`.s;
-    } catch (err) { out.innerHTML = html`<p class="bad">${err.message}</p>`.s; }
-  };
-}
+/** Compatibilidad: otras pantallas abren el pegado de texto. */
+export const pasteWorkout = (prefill = '') => startFromText(prefill);
 
 // --- Manual ---
 function manualWorkout() {
@@ -299,6 +260,7 @@ async function progress() {
     <div class="card"><h3>Km por semana</h3>${barChart(r.weeks.map((w) => ({ value: w.km, label: shortDate(w.week) })))}</div>
     ${r.runs.length >= 3 ? html`<div class="card"><h3>Evolución del ritmo</h3>${lineChart([{ color: 'var(--blue)', fmt: pace, points: r.runs.slice(-30).map((x) => ({ x: shortDate(x.date), y: x.paceSecPerKm })) }], { invert: true })}</div>` : ''}
     <h2>Fuerza</h2>
+    <button class="block" data-act="${act(() => exerciseHistory())}">📈 Historial por ejercicio (pesos y repeticiones)</button>
     ${d.lifts.length ? d.lifts.map((l) => html`<div class="card"><h3>${l.name}</h3>
       <div class="stats"><div class="stat"><div class="l">1RM real</div><div class="v">${l.bestActual1RM ? l.bestActual1RM.kg : '–'}<span class="u"> kg</span></div></div>
         <div class="stat"><div class="l">Estimado</div><div class="v" style="color:var(--amber)">${l.bestE1RM ? l.bestE1RM.kg.toFixed(1) : '–'}</div></div>

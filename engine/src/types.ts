@@ -23,6 +23,17 @@ export interface SetEntry {
   rpe?: number;                // 1-10
   rir?: number;                // repeticiones en reserva
   isWarmup?: boolean;
+  // Registro desglosado (fase 1 CrossFit)
+  roundNo?: number;            // ronda, serie o minuto
+  label?: string;              // "Serie 2", "Ronda 3", "Min 5"
+  unit?: 'reps' | 'cal' | 'm' | 's';
+  targetReps?: number;         // objetivo en la unidad de la fila
+  targetLoadKg?: number;
+  targetPct?: number;
+  targetText?: string;
+  status?: 'done' | 'partial' | 'skipped';
+  splitS?: number;
+  origin?: 'manual' | 'ai' | 'text' | 'healthkit';
 }
 
 export interface SessionBlock {
@@ -35,6 +46,14 @@ export interface SessionBlock {
   resultTimeS?: number;
   resultRounds?: number;
   resultReps?: number;
+  part?: 'strength' | 'wod' | 'endurance' | 'other';
+  scaling?: 'rx' | 'scaled';
+  title?: string;
+  durationMin?: number;
+  intervalS?: number;
+  capped?: boolean;
+  prescribed?: unknown;        // plantilla completa del registro (para reabrir y editar)
+  notes?: string;
 }
 
 export interface Session {

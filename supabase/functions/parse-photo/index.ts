@@ -1,12 +1,15 @@
 // POST /parse-photo
-//   { action: 'parse', importId }                          → lee la foto y devuelve lectura + preguntas
+//   { action: 'parse', importId }                          → lee la foto y devuelve lectura + preguntas + transcripción
+//     Rápido: primero la IA solo transcribe el texto (respuesta corta) y lo estructura el motor determinista;
+//     si el motor no lo entiende (o es una captura de app con métricas), la IA lo estructura entera.
 //   { action: 'confirm', importId, answers, startedAt, durationS? } → crea la sesión y adapta el plan
 // La foto se sube antes desde la app a Storage: workout-photos/<userId>/<uuid>.jpg
 
 import { encodeBase64 } from 'jsr:@std/encoding@1/base64';
 import { handler, json, requireUser, userClient, HttpError } from '../_shared/supabase.ts';
 import { generate as claude, MODEL, PROVIDER_LABEL } from '../_shared/ai.ts';
-import { collectQuestions, toSession, type ParsedWorkout } from '../_shared/engine/index.ts';
+import { collectQuestions, toSession, parseWorkoutText, type ParsedWorkout } from '../_shared/engine/index.ts';
+import { textOf } from '../_shared/ai.ts';
 import { schema, SYSTEM } from '../_shared/workoutSchema.ts';
 import { ingestSession } from '../_shared/ingest.ts';
 
@@ -25,15 +28,31 @@ Deno.serve(handler(async (req) => {
     if (dl || !blob) throw new HttpError(400, 'No puedo descargar la foto');
     const bytes = new Uint8Array(await blob.arrayBuffer());
     const mediaType = imp.storage_path.endsWith('.png') ? 'image/png' : imp.storage_path.endsWith('.webp') ? 'image/webp' : 'image/jpeg';
+    const image = { type: 'image' as const, source: { type: 'base64' as const, media_type: mediaType, data: encodeBase64(bytes) } };
     try {
+      // 1) Transcripción literal (rápida) + motor de CrossFit
+      let transcript = '';
+      try {
+        const t = await claude({ system: 'Transcribes fotos de pizarras de CrossFit. Devuelve SOLO el texto de la pizarra, línea a línea, tal cual (títulos de sección, formatos, ejercicios con repeticiones y pesos). Sin comentarios. Si una palabra no se lee, escribe [?]. Si la imagen es una captura de una app con métricas (ritmo, FC, km), responde solo: CAPTURA', maxTokens: 800, temperature: 0, fast: true,
+          messages: [{ role: 'user', content: [image, { type: 'text', text: 'Transcribe.' }] }] });
+        transcript = textOf(t.content).replace(/^```\w*\n?|```$/g, '').trim();
+      } catch (e) { console.warn('transcripción', e); }
+      if (transcript && !/^CAPTURA/i.test(transcript) && !transcript.includes('[?]')) {
+        const fast = parseWorkoutText(transcript);
+        if (fast.sections.length && fast.unparsed.length <= 1) {
+          const { unparsed: _u, ...parsed } = fast; void _u;
+          const { data: prof } = await sb.from('profiles').select('sex').eq('id', userId).single();
+          const questions = collectQuestions(parsed, { sex: prof?.sex ?? undefined });
+          await sb.from('photo_imports').update({ status: 'needs_answers', parsed, questions, model: `${MODEL()}+motor` }).eq('id', imp.id);
+          return json({ parsed, questions, transcript, engine: 'motor' });
+        }
+      }
+      // 2) Lectura estructurada completa
       const r = await claude({
-        system: SYSTEM, maxTokens: 4000, temperature: 0,
+        system: SYSTEM, maxTokens: 4000, temperature: 0, fast: true,
         tools: [{ name: 'registrar_lectura', description: 'Registra la lectura estructurada del entrenamiento', input_schema: schema }],
         toolChoice: { type: 'tool', name: 'registrar_lectura' },
-        messages: [{ role: 'user', content: [
-          { type: 'image', source: { type: 'base64', media_type: mediaType, data: encodeBase64(bytes) } },
-          { type: 'text', text: 'Transcribe y estructura este entrenamiento.' },
-        ] }],
+        messages: [{ role: 'user', content: [image, { type: 'text', text: 'Transcribe y estructura este entrenamiento.' }] }],
       });
       const tu = r.content.find((b) => b.type === 'tool_use') as { input: ParsedWorkout } | undefined;
       if (!tu) throw new Error('El modelo no devolvió una lectura estructurada');
@@ -42,7 +61,7 @@ Deno.serve(handler(async (req) => {
       const { data: prof } = await sb.from('profiles').select('sex').eq('id', userId).single();
       const questions = collectQuestions(parsed, { sex: prof?.sex ?? undefined });
       await sb.from('photo_imports').update({ status: 'needs_answers', parsed, questions, model: MODEL() }).eq('id', imp.id);
-      return json({ parsed, questions });
+      return json({ parsed, questions, transcript: /^CAPTURA/i.test(transcript) ? '' : transcript, engine: 'ia' });
     } catch (e) {
       await sb.from('photo_imports').update({ status: 'failed', error: String(e) }).eq('id', imp.id);
       throw e;

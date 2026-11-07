@@ -48,7 +48,7 @@ export function rowToSession(r: any): Session {
     .map((b: any) => ({
       kind: b.kind, format: b.format ?? undefined, timeCapS: b.time_cap_s ?? undefined, rounds: b.rounds ?? undefined,
       resultText: b.result_text ?? undefined, resultTimeS: b.result_time_s ?? undefined, resultRounds: b.result_rounds ?? undefined, resultReps: b.result_reps ?? undefined,
-      sets: (r.session_sets ?? []).filter((s: any) => s.block_id === b.id).sort((a: any, c: any) => a.position - c.position).map((s: any) => ({
+      sets: (r.session_sets ?? []).filter((s: any) => s.block_id === b.id && s.status !== 'skipped').sort((a: any, c: any) => a.position - c.position).map((s: any) => ({
         exerciseId: s.exercise_id ?? `custom:${s.custom_exercise_id}`, reps: s.reps ?? undefined, loadKg: s.load_kg != null ? Number(s.load_kg) : undefined,
         distanceM: s.distance_m != null ? Number(s.distance_m) : undefined, durationS: s.duration_s ?? undefined, calories: s.calories != null ? Number(s.calories) : undefined,
         rpe: s.rpe != null ? Number(s.rpe) : undefined, rir: s.rir ?? undefined, isWarmup: s.is_warmup,

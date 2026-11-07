@@ -94,3 +94,26 @@ details { margin: 8px 0; } summary { color: var(--muted); font-size: 14px; curso
 svg text { fill: var(--muted); font-size: 10px; }
 .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.25); border-top-color: var(--accent); border-radius: 99px; animation: spin .8s linear infinite; vertical-align: -3px; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- Registro de CrossFit por casillas ---------- */
+.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin: 8px 0; }
+.title-in { background: transparent; border: 0; border-bottom: 1px solid transparent; padding: 4px 0; font-weight: 700; font-size: 16px; }
+.title-in:focus { border-bottom-color: var(--accent); outline: none; }
+.title-in.big { font-size: 20px; width: 100%; }
+.seg.mini { margin: 0; padding: 2px; }
+.seg.mini button { padding: 5px 9px; font-size: 12px; flex: none; }
+.lgroup { border-top: 1px solid var(--line); padding-top: 6px; margin-top: 6px; }
+.glabel { text-transform: uppercase; letter-spacing: .3px; margin-bottom: 2px; }
+.lrow { display: flex; align-items: center; gap: 6px; padding: 5px 0; }
+.lrow.rest { opacity: .55; }
+.lrow.skipped .small { text-decoration: line-through; opacity: .6; }
+.ck { width: 40px; height: 40px; min-width: 40px; border-radius: 12px; padding: 0; font-size: 18px; font-weight: 700; background: var(--card2); color: var(--muted); border: 1px solid var(--line); display: inline-flex; align-items: center; justify-content: center; }
+.lrow.rest .ck { background: transparent; border: 0; }
+.ck.done { background: rgba(51,214,135,.18); color: var(--green); border-color: rgba(51,214,135,.4); }
+.ck.partial { background: rgba(255,189,51,.18); color: var(--amber); border-color: rgba(255,189,51,.4); }
+.ck.skipped { background: rgba(255,84,92,.14); color: var(--red); border-color: rgba(255,84,92,.35); }
+input.num { width: 58px; min-width: 0; text-align: center; padding: 8px 4px; }
+.lrow .u { width: 24px; margin-left: -2px; }
+.chip { display: inline-block; padding: 3px 8px; margin: 2px 3px 2px 0; border-radius: 99px; background: var(--card2); font-size: 13px; }
+.chip.warn { background: rgba(255,189,51,.16); color: var(--amber); }
+details summary { cursor: pointer; padding: 6px 0; }
