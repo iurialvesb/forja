@@ -44,7 +44,9 @@ async function hoy() {
 const mealAction = (m, action, extra = {}) => async (b) => busy(b, async () => {
   const r = await api.fn('meal-update', { mealId: m.id, action, ...extra });
   invalidate('nutweek'); render();
-  const msg = [...(r.adjustments || []).map((a) => a.text), ...(r.alerts || []).map((a) => a.message)];
+  const msg = [...(r.pantry?.used?.length ? [`Descontado de casa: ${r.pantry.used.map((u) => `${u.from} ${u.grams} g`).join(', ')}`] : []), ...(r.pantry?.missing?.length ? [`No lo tenías en casa: ${r.pantry.missing.map((x) => x.name).join(', ')}`] : []),
+    ...(r.adjustments || []).map((a) => a.text), ...(r.alerts || []).map((a) => a.message)];
+  if (r.pantry) invalidate('pantry', 'shopping');
   if (msg.length) toast(msg.join(' · '), 8000);
 });
 
@@ -101,7 +103,7 @@ export function logFood(slot, opts = {}) {
     ${questions.map((qq) => html`<p class="alert small">❓ ${qq}</p>`)}
     ${items.length ? html`<h3 style="margin-top:12px">Alimentos</h3>${items.map((i, k) => html`<div class="row"><span class="grow small">${i.name} ${i.gramsConfidence === 'estimado' ? html`<span class="tag amber">estimado</span>` : ''}</span>
         <input style="width:80px" type="number" value="${i.grams}" data-change="${act((el) => { items[k].grams = +el.value; })}"> g <button class="sm ghost danger" data-act="${act(() => { items.splice(k, 1); draw(); })}">✕</button></div>`)}
-      <label class="check"><input type="checkbox" id="lded" checked> Descontar de mi despensa</label>
+      <label class="check"><input type="checkbox" id="lded" ${opts.replace ? '' : 'checked'}> Descontar de mi despensa (si lo has preparado en casa)</label>
       <button class="primary block" data-act="${act((b) => busy(b, async () => {
         sel = document.getElementById('lslot').value;
         const said = document.getElementById('ltext')?.value.trim() || lastText;
@@ -170,6 +172,11 @@ async function batch() {
       }))}">Generar menú y batch cooking</button>
       <button class="block" data-act="${act(describeCooking)}">🍳 Ya he cocinado: te cuento qué y cuándo lo como</button></div>
     ${p ? html`
+      <div class="card tight row">${w.batchCooked ? html`<div class="grow"><b class="ok">✅ Batch hecho</b><div class="xs muted">Ya descontado de tu despensa. Esas comidas no se vuelven a descontar al marcarlas.</div></div><button class="sm ghost" data-act="${act((b) => busy(b, async () => { await api.fn('menu-plan', { action: 'uncooked', weekStart: mon }); invalidate('nutweek', 'pantry', 'shopping'); render(); toast('Devuelto a la despensa'); }))}">Deshacer</button>`
+        : html`<div class="grow small">¿Ya lo has cocinado?</div><button class="sm primary" data-act="${act((b) => busy(b, async () => {
+          const r = await api.fn('menu-plan', { action: 'cooked', weekStart: mon }); invalidate('nutweek', 'pantry', 'shopping'); render();
+          toast([`Descontado de tu despensa: ${r.used?.length ?? 0} productos`, ...(r.missing?.length ? [`No tenías: ${r.missing.map((x) => x.name).join(', ')}`] : [])].join(' · '), 8000);
+        }))}">✅ He hecho el batch</button>`}</div>
       <h2>Plan de cocina <small>≈ ${Math.round(p.totalMinutes)} min · ${dayName(p.cookDate, true)}</small></h2>
       <div class="card tight">${p.tasks.map((t) => html`<div class="row top" style="padding:6px 0"><b style="width:38px;color:var(--accent)" class="small">${Math.round(t.start)}′</b><div class="grow"><div class="small">${t.text}</div><div class="xs muted">${t.recipe}${t.equipment ? ` · ${t.equipment}` : ''} · ${t.hands === 'pasiva' ? 'puedes hacer otra cosa' : 'manos ocupadas'}</div></div></div>`)}</div>
       ${p.warnings.map((x) => html`<p class="alert small">⚠️ ${x}</p>`)}
@@ -184,8 +191,8 @@ function describeCooking() {
     <button class="primary block" data-act="${act((b) => busy(b, async () => {
       const t = document.getElementById('ctext').value.trim(); if (!t) return;
       const r = await api.fn('menu-plan', { action: 'describe', text: t });
-      closeSheet(); invalidate('nutweek', 'shopping'); render();
-      toast([`${r.meals.length} comidas añadidas a tu menú`, ...(r.unresolved?.length ? [`Sin datos nutricionales: ${r.unresolved.join(', ')}`] : []), ...(r.questions || [])].join(' · '), 9000);
+      closeSheet(); invalidate('nutweek', 'shopping', 'pantry'); render();
+      toast([`${r.meals.length} comidas añadidas a tu menú`, ...(r.pantryUsed?.length ? [`Descontado de casa: ${r.pantryUsed.map((u) => u.from).join(', ')}`] : []), ...(r.unresolved?.length ? [`Sin datos nutricionales: ${r.unresolved.join(', ')}`] : []), ...(r.questions || [])].join(' · '), 9000);
     }))}">Añadir a mi menú</button>
     <p class="xs muted">Esas comidas quedan fijadas (🔒): si luego generas el menú, solo se completan las que falten (almuerzos, postres…).</p>`);
 }
@@ -202,7 +209,7 @@ async function despensa() {
   return html`
     ${soon.length ? html`<div class="card tight alert">⏰ Caduca pronto: ${soon.map((i) => `${i.name} (${shortDate(i.expires_on)})`).join(', ')}</div>` : ''}
     <div class="grid2"><button class="primary" data-act="${act(addPantry)}">＋ Añadir</button><button data-act="${act(() => scanToPantry())}">📷 Escanear código</button></div>
-    <p class="xs muted">Arrastra un producto por ⠿ a otro sitio para moverlo. Toca −1 cada vez que gastes una unidad.</p>
+    <p class="xs muted">Arrastra por ⠿ para cambiar de sitio. Lo que comes desde el menú o cocinas en el batch se descuenta solo; −1 y − g son para lo que gastes por tu cuenta.</p>
     ${LOCS.map(([loc, label]) => html`<div data-loc="${loc}" class="ploc"><h2>${label} <small>${items.filter((i) => i.location === loc).length}</small></h2>
       <div class="card tight list">${items.filter((i) => i.location === loc).map((i) => pantryRow(i))}
         ${!items.filter((i) => i.location === loc).length ? html`<div class="item muted small">Vacío · suelta aquí</div>` : ''}</div></div>`)}`;
@@ -216,7 +223,7 @@ function pantryRow(i) {
     <div class="grow" data-act="${act(() => editPantry(i))}"><div class="small" style="font-weight:600">${i.name}${i.brand ? html` <span class="muted xs">${i.brand}</span>` : ''}</div>
       <div class="xs muted">${u != null ? `${u}${pack ? ` de ${pack}` : ''} ud${i.unit_grams ? ` × ${+i.unit_grams} g` : ''}` : i.quantity_g ? `${+i.quantity_g} g` : 'cantidad sin indicar'}${i.expires_on ? ` · caduca ${shortDate(i.expires_on)}` : ''}${!i.food_id ? ' · sin datos nutricionales' : ''}</div>
       ${pack && pack <= 30 ? html`<div class="dots-row">${[...Array(pack)].map((_, k) => html`<i class="${k < (u ?? 0) ? 'on' : ''}"></i>`)}</div>` : ''}</div>
-    ${u != null ? html`<button class="sm" data-act="${act((b) => busy(b, () => useUnit(i)))}">−1</button>` : ''}
+    ${u != null ? html`<button class="sm" data-act="${act((b) => busy(b, () => useUnit(i)))}">−1</button>` : i.quantity_g ? html`<button class="sm" data-act="${act(() => useGrams(i))}">− g</button>` : ''}
   </div>`;
 }
 
@@ -225,6 +232,20 @@ async function useUnit(i, n = 1) {
   if (left === 0) { await api.db.remove('pantry_items', { id: `eq.${i.id}` }); toast(`${i.name}: se ha acabado`); }
   else await api.db.update('pantry_items', { units: left, updated_at: new Date().toISOString() }, { id: `eq.${i.id}` });
   invalidate('pantry', 'shopping'); render();
+}
+
+function useGrams(i) {
+  const left = +i.quantity_g;
+  const go = (g) => busy(null, async () => {
+    const rest = Math.max(0, Math.round(left - g));
+    if (rest <= 0) { await api.db.remove('pantry_items', { id: `eq.${i.id}` }); toast(`${i.name}: se ha acabado`); }
+    else await api.db.update('pantry_items', { quantity_g: rest, updated_at: new Date().toISOString() }, { id: `eq.${i.id}` });
+    closeSheet(); invalidate('pantry', 'shopping'); render();
+  });
+  sheet(`${i.name}: ¿cuánto has usado?`, html`<p class="small muted">Te quedan ${left} g. Lo que cocines desde el menú o el batch se descuenta solo; esto es para lo que gastes por tu cuenta.</p>
+    <div class="grid3">${[50, 100, 150, 200, 250, 500].filter((g) => g < left).map((g) => html`<button data-act="${act(() => go(g))}">${g} g</button>`)}</div>
+    <div class="row" style="gap:8px"><input id="ug" class="grow" type="number" inputmode="numeric" placeholder="gramos"><button class="primary" data-act="${act(() => { const g = +document.getElementById('ug').value; if (g > 0) go(g); })}">Restar</button></div>
+    <button class="block danger" data-act="${act(() => go(left))}">Se ha acabado</button>`);
 }
 
 let dragReady = false;

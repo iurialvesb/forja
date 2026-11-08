@@ -18,6 +18,6 @@ Deno.serve(handler(async (req) => {
     settings: { mode: week.settings.mode, mealSlots: week.settings.mealSlots, optionalSlots: week.settings.optionalSlots },
     days: week.days.map((d) => ({ date: d.date, target: d.target, totals: d.totals, eaten: d.eaten, alerts: d.alerts, adjustments: d.adjustments, adherence: d.adherence,
       meals: d.meals.map((m) => ({ ...m, macros: mealMacros(m, week.foods) })) })),
-    balance: week.balance, supplements: supp, expiringSoon: soon, batchPlan: batch?.plan ?? null, shopping: batch?.shopping ?? [],
+    balance: week.balance, supplements: supp, expiringSoon: soon, batchPlan: batch?.plan ?? null, batchCooked: batch?.cooked_at ?? null, shopping: batch?.shopping ?? [],
   });
 }));

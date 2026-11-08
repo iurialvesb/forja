@@ -46,25 +46,52 @@ export function shoppingList(meals: Pick<PlannedMeal, 'ingredients'>[], pantry: 
   return out.filter((l) => l.buyG > 0).sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** Descuenta de la despensa (primero lo que caduca antes; luego nevera, despensa, congelador). */
-export function consume(pantry: PantryItem[], ingredients: Ingredient[]): { pantry: PantryItem[]; missing: { name: string; grams: number }[] } {
+const STOP = new Set(['de', 'del', 'con', 'sin', 'al', 'a', 'la', 'el', 'en', 'y', 'cocido', 'cocida', 'cocidos', 'cocidas', 'crudo', 'cruda', 'natural', 'hacendado', 'consum', 'mercadona', 'raw', 'cooked', 'extra', 'lata', 'latas', 'bote', 'paquete', 'fresco', 'fresca', 'entero', 'entera']);
+const toks = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w)).map((w) => w.replace(/(es|s)$/, ''));
+/** ¿El ingrediente de la receta es este producto de la despensa? (por nombre, cuando no coincide el alimento de la base de datos) */
+export function nameMatches(ingredient: string, pantryName: string): boolean {
+  const a = toks(ingredient), bl = toks(pantryName), b = new Set(bl);
+  if (!a.length || !b.size) return false;
+  if (a.length >= 2 && a.every((w) => b.has(w))) return true;      // "pechuga de pollo" ↔ "Pollo, pechuga fileteada"
+  return a[0] === bl[0] && a.filter((w) => b.has(w)).length / a.length >= 0.5;   // misma palabra principal ("arroz blanco" ↔ "Arroz basmati")
+}
+
+export interface PantryChange { id: string; before: { quantityG?: number; units?: number }; after: { quantityG?: number; units?: number }; removed: boolean; row?: PantryItem }
+
+/** Descuenta de la despensa (primero lo que caduca antes; luego nevera, despensa, congelador). Devuelve los cambios para poder deshacerlos. */
+export function consume(pantry: PantryItem[], ingredients: Ingredient[]): { pantry: PantryItem[]; missing: { name: string; grams: number }[]; changes: PantryChange[]; used: { name: string; grams: number; from: string }[] } {
   const items = pantry.map((p) => ({ ...p }));
+  const before = new Map(pantry.map((p) => [p.id, { ...p }]));
   const missing: { name: string; grams: number }[] = [];
+  const used: { name: string; grams: number; from: string }[] = [];
   const locRank: Record<Location, number> = { nevera: 0, despensa: 1, congelador: 2 };
   for (const ing of ingredients) {
     let left = ing.grams;
-    const cands = items.filter((p) => p.foodId === ing.foodId && gramsOf(p) > 0)
+    const byId = items.filter((p) => ing.foodId && p.foodId === ing.foodId && (gramsOf(p) > 0 || (p.units ?? 0) > 0));
+    const cands = (byId.length ? byId : items.filter((p) => nameMatches(ing.name, p.name) && (gramsOf(p) > 0 || (p.units ?? 0) > 0)))
       .sort((a, b) => (a.expiresOn ?? '9999').localeCompare(b.expiresOn ?? '9999') || locRank[a.location] - locRank[b.location]);
     for (const c of cands) {
       if (left <= 0) break;
+      if (c.quantityG == null && c.units != null && !c.unitGrams) {           // unidades sin peso (sobres, latas): se gasta una
+        c.units = Math.max(0, c.units - 1); used.push({ name: ing.name, grams: left, from: c.name }); left = 0; break;
+      }
       const g = gramsOf(c); const take = Math.min(g, left);
-      if (c.quantityG != null) c.quantityG = g - take;
+      if (c.quantityG != null) c.quantityG = Math.round(g - take);
       else if (c.units != null && c.unitGrams) c.units = Math.max(0, Math.round(((g - take) / c.unitGrams) * 10) / 10);
+      used.push({ name: ing.name, grams: Math.round(take), from: c.name });
       left -= take;
     }
     if (left > 1) missing.push({ name: ing.name, grams: Math.round(left) });
   }
-  return { pantry: items.filter((p) => gramsOf(p) > 0 || (p.units ?? 0) > 0), missing };
+  const remaining = items.filter((p) => gramsOf(p) > 0 || (p.units ?? 0) > 0);
+  const changes: PantryChange[] = [];
+  for (const p of items) {
+    const b = before.get(p.id)!;
+    if (b.quantityG === p.quantityG && b.units === p.units) continue;
+    const removed = !remaining.includes(p);
+    changes.push({ id: p.id, before: { quantityG: b.quantityG, units: b.units }, after: { quantityG: p.quantityG, units: p.units }, removed, row: removed ? b : undefined });
+  }
+  return { pantry: remaining, missing, changes, used };
 }
 
 // ---------------- Batch cooking ----------------
