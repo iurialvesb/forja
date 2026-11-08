@@ -15,7 +15,8 @@ const schema = { type: 'object', required: ['items'], properties: {
     brand: { type: 'string', description: 'Marca si se dice (Hacendado, Consum, Bonduelle, La Fallera…). Mercadona = Hacendado' },
     queryEn: { type: 'string', description: 'Consulta USDA en inglés ("lentils cooked", "tuna canned in water drained")' },
     location: { type: 'string', enum: ['congelador', 'nevera', 'despensa'], description: 'Lo que diga; si no, el sitio habitual (latas, pasta, arroz, harinas, briks sin abrir → despensa)' },
-    units: { type: 'number', description: 'Nº de envases/unidades (latas, sobres, paquetes, briks)' },
+    units: { type: 'number', description: 'Nº de unidades que quedan (latas, sobres, huevos, yogures, briks)' },
+    packUnits: { type: 'number', description: 'Si es un pack (caja de 4 sobres, docena de huevos), cuántas unidades traía entero' },
     unitGrams: { type: 'number', description: 'Gramos por unidad (peso ESCURRIDO si lo dice)' },
     quantityG: { type: 'number', description: 'Gramos totales solo si se dice un peso total sin unidades (1 kg de arroz → 1000)' },
     expiresOn: { type: 'string', description: 'YYYY-MM-DD solo si se indica' },
@@ -61,7 +62,7 @@ Deno.serve(handler(async (req) => {
     const rows = await pool(body.items ?? [], 6, async (it: any) => {
       const f = it.barcode ? (await resolveFood(sb, it.name, undefined, it.barcode)) : await resolveFood(sb, it.name, it.queryEn).catch(() => null);
       return { user_id: userId, name: it.name, food_id: f?.id ?? null, location: it.location ?? 'despensa', quantity_g: it.quantityG ?? null, units: it.units ?? null, unit_grams: it.unitGrams ?? f?.unitGrams ?? null,
-        expires_on: it.expiresOn ?? null, barcode: it.barcode ?? null, brand: it.brand ?? null, image_url: it.imageUrl ?? null };
+        expires_on: it.expiresOn ?? null, barcode: it.barcode ?? null, brand: it.brand ?? null, image_url: it.imageUrl ?? null, pack_units: it.packUnits ?? (it.units > 1 ? it.units : null) };
     });
     if (rows.length) { const { error } = await sb.from('pantry_items').insert(rows); if (error) throw error; }
     return json({ saved: rows.length, unresolved: rows.filter((r) => !r.food_id).map((r) => r.name) });

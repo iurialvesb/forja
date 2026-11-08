@@ -194,16 +194,76 @@ function describeCooking() {
 const prodImg = (url, alt) => (url ? html`<img src="${url}" alt="${alt ?? ''}" loading="lazy">` : html`<div class="noimg">🥫</div>`);
 const qtyText = (i) => [i.units ? `${i.units} ud${i.unitGrams || i.unit_grams ? ` × ${i.unitGrams ?? i.unit_grams} g` : ''}` : '', i.quantityG ?? i.quantity_g ? `${i.quantityG ?? i.quantity_g} g` : ''].filter(Boolean).join(' · ');
 
+const LOCS = [['congelador', '❄️ Congelador'], ['nevera', '🧊 Nevera'], ['despensa', '🗄 Despensa']];
 async function despensa() {
   const items = await get('pantry', () => api.db.select('pantry_items', { order: 'name' }));
   const soon = items.filter((i) => i.expires_on && i.expires_on <= addDays(today(), 3));
+  setupPantryDrag();
   return html`
     ${soon.length ? html`<div class="card tight alert">⏰ Caduca pronto: ${soon.map((i) => `${i.name} (${shortDate(i.expires_on)})`).join(', ')}</div>` : ''}
     <div class="grid2"><button class="primary" data-act="${act(addPantry)}">＋ Añadir</button><button data-act="${act(() => scanToPantry())}">📷 Escanear código</button></div>
-    ${['congelador', 'nevera', 'despensa'].map((loc) => html`<h2>${loc[0].toUpperCase() + loc.slice(1)} <small>${items.filter((i) => i.location === loc).length}</small></h2>
-      <div class="card tight list">${items.filter((i) => i.location === loc).map((i) => html`<div class="item prod" data-act="${act(() => editPantry(i))}">${prodImg(i.image_url, i.name)}
-        <div class="grow"><div class="small" style="font-weight:600">${i.name}${i.brand ? html` <span class="muted xs">${i.brand}</span>` : ''}</div><div class="xs muted">${qtyText(i) || 'cantidad sin indicar'}${i.expires_on ? ` · caduca ${shortDate(i.expires_on)}` : ''}${!i.food_id ? ' · sin datos nutricionales' : ''}</div></div></div>`)}
-        ${!items.filter((i) => i.location === loc).length ? html`<div class="item muted small">Vacío</div>` : ''}</div>`)}`;
+    <p class="xs muted">Arrastra un producto por ⠿ a otro sitio para moverlo. Toca −1 cada vez que gastes una unidad.</p>
+    ${LOCS.map(([loc, label]) => html`<div data-loc="${loc}" class="ploc"><h2>${label} <small>${items.filter((i) => i.location === loc).length}</small></h2>
+      <div class="card tight list">${items.filter((i) => i.location === loc).map((i) => pantryRow(i))}
+        ${!items.filter((i) => i.location === loc).length ? html`<div class="item muted small">Vacío · suelta aquí</div>` : ''}</div></div>`)}`;
+}
+
+function pantryRow(i) {
+  const u = i.units != null ? +i.units : null; const pack = i.pack_units ? +i.pack_units : null;
+  return html`<div class="item prod pitem" data-pid="${i.id}">
+    <span class="drag" aria-label="Mover">⠿</span>
+    <span data-act="${act(() => editPantry(i))}">${prodImg(i.image_url, i.name)}</span>
+    <div class="grow" data-act="${act(() => editPantry(i))}"><div class="small" style="font-weight:600">${i.name}${i.brand ? html` <span class="muted xs">${i.brand}</span>` : ''}</div>
+      <div class="xs muted">${u != null ? `${u}${pack ? ` de ${pack}` : ''} ud${i.unit_grams ? ` × ${+i.unit_grams} g` : ''}` : i.quantity_g ? `${+i.quantity_g} g` : 'cantidad sin indicar'}${i.expires_on ? ` · caduca ${shortDate(i.expires_on)}` : ''}${!i.food_id ? ' · sin datos nutricionales' : ''}</div>
+      ${pack && pack <= 30 ? html`<div class="dots-row">${[...Array(pack)].map((_, k) => html`<i class="${k < (u ?? 0) ? 'on' : ''}"></i>`)}</div>` : ''}</div>
+    ${u != null ? html`<button class="sm" data-act="${act((b) => busy(b, () => useUnit(i)))}">−1</button>` : ''}
+  </div>`;
+}
+
+async function useUnit(i, n = 1) {
+  const left = Math.max(0, (+i.units || 0) - n);
+  if (left === 0) { await api.db.remove('pantry_items', { id: `eq.${i.id}` }); toast(`${i.name}: se ha acabado`); }
+  else await api.db.update('pantry_items', { units: left, updated_at: new Date().toISOString() }, { id: `eq.${i.id}` });
+  invalidate('pantry', 'shopping'); render();
+}
+
+let dragReady = false;
+/** Arrastrar productos entre congelador, nevera y despensa (con el dedo, desde ⠿). */
+function setupPantryDrag() {
+  if (dragReady) return; dragReady = true;
+  let ghost = null, src = null, over = null, X = 0, Y = 0, timer = 0;
+  const hit = () => {
+    const el = document.elementFromPoint(X, Y)?.closest('.ploc');
+    if (over !== el) { over?.classList.remove('drop'); over = el; over?.classList.add('drop'); }
+  };
+  const move = (e) => {
+    if (!ghost) return; e.preventDefault();
+    X = e.clientX; Y = e.clientY;
+    ghost.style.transform = `translate(${X - 30}px, ${Y - 24}px)`;
+    hit();
+  };
+  const up = async () => {
+    window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); clearInterval(timer);
+    if (!ghost) return;
+    ghost.remove(); ghost = null; src.classList.remove('dragging'); over?.classList.remove('drop');
+    const loc = over?.dataset.loc; const id = src.dataset.pid; over = null;
+    if (loc && id) {
+      const it = (await get('pantry', () => api.db.select('pantry_items', { order: 'name' }))).find((x) => x.id === id);
+      if (it && it.location !== loc) { await api.db.update('pantry_items', { location: loc }, { id: `eq.${id}` }); invalidate('pantry', 'shopping'); render(); toast(`${it.name} → ${loc}`); }
+    }
+  };
+  document.addEventListener('pointerdown', (e) => {
+    const h = e.target.closest?.('.pitem .drag'); if (!h) return;
+    e.preventDefault();
+    src = h.closest('.pitem'); src.classList.add('dragging');
+    ghost = src.cloneNode(true); ghost.className = 'item prod drag-ghost';
+    document.body.appendChild(ghost);
+    ghost.style.transform = `translate(${e.clientX - 30}px, ${e.clientY - 24}px)`;
+    X = e.clientX; Y = e.clientY;
+    window.addEventListener('pointermove', move, { passive: false }); window.addEventListener('pointerup', up);
+    // Si llevas el dedo al borde de la pantalla, se desplaza sola para llegar a otro sitio.
+    timer = setInterval(() => { const d = Y < 110 ? -14 : Y > innerHeight - 140 ? 14 : 0; if (d) { window.scrollBy(0, d); hit(); } }, 30);
+  });
 }
 
 /** Escanear un producto y añadirlo (con foto, marca y tabla nutricional de Open Food Facts). */
@@ -213,12 +273,14 @@ async function scanToPantry(list) {
   const r = await busy(null, () => api.fn('pantry', { action: 'barcode', code }));
   if (!r.product) { toast(r.message, 6000); return; }
   const p = r.product;
-  const item = { name: p.name, brand: p.brand, barcode: p.code, imageUrl: p.imageUrl, location: 'despensa', units: 1, unitGrams: p.packageG, queryEn: p.name };
+  const item = { name: p.name, brand: p.brand, barcode: p.code, imageUrl: p.imageUrl, location: p.location ?? 'despensa', units: p.packUnits ?? 1, matched: true, packUnits: p.packUnits, unitGrams: p.unitG ?? p.packageG, queryEn: p.name };
   if (list) { list.push(item); return item; }
   sheet('Producto escaneado', html`<div class="card tight prod">${prodImg(p.imageUrl, p.name)}<div class="grow"><b>${p.name}</b><div class="xs muted">${p.brand ?? ''} ${p.quantity ?? ''}</div>
       ${p.food ? html`<div class="xs">${Math.round(p.food.per100.kcal)} kcal · P ${p.food.per100.protein} · C ${p.food.per100.carbs} · G ${p.food.per100.fat} (por 100 g)</div>` : html`<div class="xs bad">Sin tabla nutricional en Open Food Facts</div>`}</div></div>
-    <form data-submit="${act((v, f) => busy(f.querySelector('button'), async () => { await api.fn('pantry', { action: 'save', items: [{ ...item, location: v.location, units: +v.u || 1 }] }); closeSheet(); invalidate('pantry', 'shopping'); render(); toast('Añadido'); }))}">
-      <div class="grid2"><div><label>Lugar</label><select name="location"><option>despensa</option><option>nevera</option><option>congelador</option></select></div><div><label>Unidades</label><input name="u" type="number" value="1"></div></div>
+    <form data-submit="${act((v, f) => busy(f.querySelector('button'), async () => { await api.fn('pantry', { action: 'save', items: [{ ...item, location: v.location, units: +v.u || 1, packUnits: +v.pk || undefined, unitGrams: +v.ug || undefined }] }); closeSheet(); invalidate('pantry', 'shopping'); render(); toast('Añadido'); }))}">
+      <label>Lugar</label><select name="location">${LOCS.map(([l, lb]) => html`<option value="${l}" ${item.location === l ? 'selected' : ''}>${lb}</option>`)}</select>
+      <div class="grid3"><div><label>Unidades que tienes</label><input name="u" type="number" value="${item.units}"></div><div><label>Trae el pack</label><input name="pk" type="number" value="${item.packUnits ?? ''}" placeholder="—"></div><div><label>g por unidad</label><input name="ug" type="number" value="${item.unitGrams ?? ''}"></div></div>
+      <p class="xs muted">Caja de sobres, pack de latas, docena de huevos…: pon cuántas trae y luego ve tocando −1 al gastarlas.</p>
       <button class="primary block">Añadir a la despensa</button></form>
     <button class="block" data-act="${act(() => scanToPantry())}">Escanear otro</button>`);
 }
@@ -236,7 +298,7 @@ function addPantry() {
     } catch (e) { toast(`No he podido buscar los productos: ${e.message}`, 6000); }
     status = ''; draw();
   };
-  const choose = (p, prod) => { p.barcode = prod.code; p.imageUrl = prod.imageUrl; p.brandFound = prod.brand; p.prodName = prod.name; if (!p.unitGrams && prod.packageG && !p.quantityG) p.unitGrams = prod.packageG; };
+  const choose = (p, prod) => { p.barcode = prod.code; p.imageUrl = prod.imageUrl; p.brandFound = prod.brand; p.prodName = prod.name; if (!p.unitGrams && !p.quantityG && (prod.unitG || prod.packageG)) p.unitGrams = prod.unitG ?? prod.packageG; if (!p.packUnits && prod.packUnits) p.packUnits = prod.packUnits; };
   const draw = () => setSheet(html`
     <p class="small muted">Díctalo o escríbelo como te salga («dos sobres de puré Hacendado, seis latas de atún de 60 g escurrido…»), escanea los códigos de barras o haz una foto.</p>
     <textarea id="ptext" rows="5" placeholder="En la despensa: 2 sobres de puré de patatas Hacendado, 6 latas de atún claro al natural de 60 g escurrido, 1 kg de arroz La Fallera…"></textarea>
@@ -259,7 +321,7 @@ function addPantry() {
           <input class="num" type="number" placeholder="g" value="${p.unitGrams ?? p.quantityG ?? ''}" data-change="${act((el) => { if (parsed[k].units) parsed[k].unitGrams = el.value ? +el.value : undefined; else parsed[k].quantityG = el.value ? +el.value : undefined; })}"><span class="xs muted">g</span>
           <button class="sm ghost danger" data-act="${act(() => { parsed.splice(k, 1); draw(); })}">✕</button></div></div>`)}
       <button class="primary block" data-act="${act((b) => busy(b, async () => {
-        const items = parsed.map((p) => ({ name: p.prodName && p.barcode ? p.name : p.name, brand: p.brandFound ?? p.brand, barcode: p.barcode, imageUrl: p.imageUrl, location: p.location, units: p.units, unitGrams: p.unitGrams, quantityG: p.quantityG, queryEn: p.queryEn, expiresOn: p.expiresOn }));
+        const items = parsed.map((p) => ({ name: p.prodName && p.barcode ? p.name : p.name, brand: p.brandFound ?? p.brand, barcode: p.barcode, imageUrl: p.imageUrl, location: p.location, units: p.units, packUnits: p.packUnits, unitGrams: p.unitGrams, quantityG: p.quantityG, queryEn: p.queryEn, expiresOn: p.expiresOn }));
         const r = await api.fn('pantry', { action: 'save', items }); closeSheet(); invalidate('pantry', 'shopping'); render();
         toast(r.unresolved.length ? `Guardado. Sin datos nutricionales: ${r.unresolved.join(', ')}` : `${r.saved} artículos guardados`, 6000);
       }))}">Guardar ${parsed.length} artículos</button>` : ''}`);
@@ -275,10 +337,11 @@ function addPantry() {
 function editPantry(i) {
   sheet(i.name, html`${i.image_url ? html`<div class="center"><img src="${i.image_url}" style="max-height:140px;border-radius:12px;background:#fff"></div>` : ''}
     <form data-submit="${act((v, f) => busy(f.querySelector('button'), async () => {
-      await api.db.update('pantry_items', { quantity_g: v.g ? +v.g : null, units: v.u ? +v.u : null, unit_grams: v.ug ? +v.ug : null, location: v.location, expires_on: v.exp || null }, { id: `eq.${i.id}` }); closeSheet(); invalidate('pantry', 'shopping'); render();
+      await api.db.update('pantry_items', { quantity_g: v.g ? +v.g : null, units: v.u ? +v.u : null, pack_units: v.pk ? +v.pk : null, unit_grams: v.ug ? +v.ug : null, location: v.location, expires_on: v.exp || null }, { id: `eq.${i.id}` }); closeSheet(); invalidate('pantry', 'shopping'); render();
     }))}">
-    <label>Lugar</label><select name="location">${['congelador', 'nevera', 'despensa'].map((l) => html`<option ${i.location === l ? 'selected' : ''}>${l}</option>`)}</select>
-    <div class="grid3"><div><label>Unidades</label><input name="u" type="number" value="${i.units ?? ''}"></div><div><label>g/unidad</label><input name="ug" type="number" value="${i.unit_grams ?? ''}"></div><div><label>g totales</label><input name="g" type="number" value="${i.quantity_g ?? ''}"></div></div>
+    <label>Lugar</label><div class="seg">${LOCS.map(([l, lb]) => html`<button type="button" class="${i.location === l ? 'on' : ''}" data-act="${act((b) => busy(b, async () => { await api.db.update('pantry_items', { location: l }, { id: `eq.${i.id}` }); i.location = l; invalidate('pantry', 'shopping'); render(); editPantry(i); }))}">${lb}</button>`)}</div><input type="hidden" name="location" value="${i.location}">
+    <div class="grid3"><div><label>Unidades que quedan</label><input name="u" type="number" value="${i.units ?? ''}"></div><div><label>Trae el pack</label><input name="pk" type="number" value="${i.pack_units ?? ''}"></div><div><label>g/unidad</label><input name="ug" type="number" value="${i.unit_grams ?? ''}"></div></div>
+    <label>g totales (si no va por unidades)</label><input name="g" type="number" value="${i.quantity_g ?? ''}">
     <label>Caduca</label><input name="exp" type="date" value="${i.expires_on ?? ''}"><button class="primary block">Guardar</button></form>
     <button class="block danger" data-act="${act((b) => busy(b, async () => { await api.db.remove('pantry_items', { id: `eq.${i.id}` }); closeSheet(); invalidate('pantry', 'shopping'); render(); }))}">Eliminar (se ha acabado)</button>`);
 }

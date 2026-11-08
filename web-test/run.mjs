@@ -43,7 +43,7 @@ const REST = {
   readiness_daily: [{ date: today, score: 71, level: 'verde', reasons: ['Fatiga de piernas moderada', 'HRV en tu rango alto'], acwr: 1.08, leg_fatigue: 165 }],
   planned_sessions: plannedRows, goals: goals.map((g) => ({ ...g, distance_m: g.distanceM })), phases: phases.map((p, i) => ({ id: `ph${i}`, goal_id: p.goalId, kind: p.kind, start_date: p.start, end_date: p.end, focus: p.focus })),
   sessions, plan_changes: [{ id: 'c1', action: 'downgrade', reason: 'Fatiga de piernas alta (310 sobre umbral 250): el martes cambio las series por un rodaje suave de 7 km.', created_at: new Date().toISOString() }],
-  pantry_items: pantry.map((p) => ({ id: p.id, name: p.name, food_id: p.foodId, location: p.location, quantity_g: p.quantityG, expires_on: p.expiresOn ?? null })),
+  pantry_items: [...pantry.map((p) => ({ id: p.id, name: p.name, food_id: p.foodId, location: p.location, quantity_g: p.quantityG, expires_on: p.expiresOn ?? null })), { id: 'pk1', name: 'Puré de patatas copos', brand: 'Hacendado', food_id: 'x', location: 'despensa', units: 2, pack_units: 4, unit_grams: 115 }, { id: 'pk2', name: 'Yogur natural', brand: 'Hacendado', food_id: 'x', location: 'despensa', units: 5, pack_units: 6, unit_grams: 125 }],
   supplements: [{ id: 'sp1', kind: 'colageno', name: 'Colágeno', dose_text: '15 g', stock: 20 }, { id: 'sp2', kind: 'magnesio', name: 'Magnesio', dose_text: '300 mg', stock: 4 }],
   consents: [{ kind: 'ai_processing' }], recipes: [{ id: 'r1', name: 'Pollo al horno con boniato', tags: ['batch'] }],
   personal_records: [{ id: 'pr1', metric: 'front_squat:6rm', value: 50, unit: 'kg', kind: 'actual', achieved_on: E.addDays(today, -1), detail: 'Front Squat 50 kg × 6' }],
@@ -163,6 +163,20 @@ await shot('#/nutricion', '07-nutricion-hoy');
 await shot('#/nutricion', '08-compra', () => page.getByRole('button', { name: 'Compra', exact: true }).click());
 await shot('#/nutricion', '09-batch', () => page.getByRole('button', { name: 'Batch', exact: true }).click());
 await shot('#/nutricion', '10-despensa', () => page.getByRole('button', { name: 'Despensa', exact: true }).click());
+const patches = [];
+page.on('request', (r) => { if (r.method() === 'PATCH' && r.url().includes('pantry_items')) patches.push(r.postData()); });
+await shot('#/nutricion', '10a-despensa-arrastrar', async () => {
+  await page.getByRole('button', { name: 'Despensa', exact: true }).click(); await page.waitForTimeout(500);
+  const h = page.locator('.pitem[data-pid="pk2"] .drag'); const b = await h.boundingBox();
+  await h.scrollIntoViewIfNeeded(); const b2 = await h.boundingBox();
+  await page.mouse.move(b2.x + 5, b2.y + 5); await page.mouse.down(); await page.mouse.move(60, 60, { steps: 6 });
+  for (let k = 0; k < 40; k++) { const t = await page.locator('.ploc[data-loc="nevera"] h2').boundingBox(); if (t.y > 150) break; await page.waitForTimeout(100); }
+  const t = await page.locator('.ploc[data-loc="nevera"] h2').boundingBox();
+  await page.mouse.move(t.x + 40, t.y + 30, { steps: 4 }); await page.mouse.up(); await page.waitForTimeout(500);
+  console.log('patches', patches, await page.evaluate(() => [document.querySelectorAll('.pitem').length, !!document.querySelector('.drag-ghost')]));
+  if (!patches.some((x) => x.includes('nevera'))) errors.push('arrastrar a nevera no ha actualizado el producto');
+  else console.log('Arrastrar entre lugares OK');
+});
 await shot('#/nutricion', '10b-despensa-anadir', async () => { await page.getByRole('button', { name: 'Despensa', exact: true }).click(); await page.waitForTimeout(400); await page.getByRole('button', { name: '＋ Añadir' }).click(); await page.fill('#ptext', 'dos sobres de puré Hacendado, seis latas de atún de 60 g, un kilo de arroz La Fallera'); await page.getByRole('button', { name: 'Organizar' }).click(); await page.waitForTimeout(900); });
 await shot('#/nutricion', '11-suplementos', () => page.getByRole('button', { name: 'Suplementos', exact: true }).click());
 await shot('#/coach', '12-coach', async () => { await page.getByText('¿Puedo hacer series mañana').click(); });

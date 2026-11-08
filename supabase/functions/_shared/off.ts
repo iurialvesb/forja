@@ -6,7 +6,7 @@ import { adminClient } from './supabase.ts';
 const UA = { 'User-Agent': 'Forja/0.2 (app personal de entrenamiento y nutricion)' };
 const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
 
-export interface OffProduct { code: string; name: string; brand?: string; quantity?: string; packageG?: number; imageUrl?: string; food: Food | null }
+export interface OffProduct { code: string; name: string; brand?: string; quantity?: string; packageG?: number; packUnits?: number; unitG?: number; location?: 'congelador' | 'nevera' | 'despensa'; imageUrl?: string; food: Food | null }
 
 const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : Array.isArray(v) ? (v as unknown[]).filter((x) => typeof x === 'string').join(', ') : v && typeof v === 'object' ? (Object.values(v as Record<string, unknown>).find((x) => typeof x === 'string') as string | undefined) : undefined);
 
@@ -16,6 +16,25 @@ function grams(q?: string): number | undefined {
   if (!m) return undefined;
   const n = Number(m[1]); const u = m[2].toLowerCase();
   return Math.round(u === 'kg' || u === 'l' ? n * 1000 : u === 'cl' ? n * 10 : n);
+}
+
+/** "4 x 115 g", "6x60g", "pack 3 x 80 g", "24 uds", "12 huevos" → unidades del pack y gramos por unidad. */
+export function packOf(q?: string): { packUnits?: number; unitG?: number } {
+  if (!q) return {};
+  const t = q.toLowerCase().replace(',', '.');
+  let m = t.match(/(\d+)\s*[x×]\s*(\d+(?:\.\d+)?)\s*(kg|g|gr|ml|cl|l)\b/);
+  if (m) { const n = Number(m[2]); const u = m[3]; return { packUnits: Number(m[1]), unitG: Math.round(u === 'kg' || u === 'l' ? n * 1000 : u === 'cl' ? n * 10 : n) }; }
+  m = t.match(/(\d+)\s*(uds?|unidades|u\b|huevos|latas|sobres|bricks?|briks?|yogures|piezas)/);
+  if (m) return { packUnits: Number(m[1]) };
+  return {};
+}
+
+/** Dónde se guarda según la categoría del producto. */
+export function locationOf(cats: string[] = [], name = ''): 'congelador' | 'nevera' | 'despensa' {
+  const c = cats.join(' ') + ' ' + name.toLowerCase();
+  if (/frozen|congelad|ice-creams|helado/.test(c)) return 'congelador';
+  if (/yogurt|yogur|dairies|fresh|cheeses|queso|milks|leche fresca|meats|carne|fish|pescado|eggs|huevo|hummus|fresh-pasta|desserts|postres lacteos|kefir|cream|nata|embutido|charcuter|tofu/.test(c) && !/uht|long-life|canned|conserv|latas/.test(c)) return 'nevera';
+  return 'despensa';
 }
 
 export function toProduct(p: any): OffProduct | null {
@@ -32,10 +51,11 @@ export function toProduct(p: any): OffProduct | null {
       vitCMg: n['vitamin-c_100g'] != null ? Number(n['vitamin-c_100g']) * 1000 : 0, magnesiumMg: n['magnesium_100g'] != null ? Number(n['magnesium_100g']) * 1000 : 0 },
   } : null;
   const quantity = str(p.quantity);
-  return { code, name: name || `Producto ${code}`, brand, quantity, packageG: grams(quantity), imageUrl: str(p.image_front_small_url) || str(p.image_small_url) || str(p.image_front_url) || undefined, food };
+  const cats: string[] = Array.isArray(p.categories_tags) ? p.categories_tags : [];
+  return { code, name: name || `Producto ${code}`, brand, quantity, packageG: grams(quantity), ...packOf(quantity), location: locationOf(cats, name), imageUrl: str(p.image_front_small_url) || str(p.image_small_url) || str(p.image_front_url) || undefined, food };
 }
 
-const FIELDS = 'code,product_name,product_name_es,generic_name,generic_name_es,brands,quantity,serving_quantity,image_front_small_url,image_small_url,nutriments';
+const FIELDS = 'categories_tags,code,product_name,product_name_es,generic_name,generic_name_es,brands,quantity,serving_quantity,image_front_small_url,image_small_url,nutriments';
 
 export async function offByCode(code: string): Promise<OffProduct | null> {
   const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=${FIELDS}`, { headers: UA });
