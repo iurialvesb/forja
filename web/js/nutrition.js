@@ -31,8 +31,12 @@ async function hoy() {
     ${d.alerts.map((a) => html`<div class="card tight alert">⚠️ ${a.message}</div>`)}
     ${w.balance?.message ? html`<div class="card tight small">📅 ${w.balance.message}</div>` : ''}
     ${d.adjustments?.length ? html`<div class="card tight"><div class="small" style="color:var(--accent);font-weight:700">🔄 He reajustado lo que te queda hoy</div>${d.adjustments.map((a) => html`<div class="small">• ${a.text}</div>`)}</div>` : ''}
-    ${meals.map((m) => mealCard(m))}
-    ${!meals.length ? html`<div class="card muted small">Sin menú para hoy. Genéralo en <b>Batch</b>.</div>` : ''}
+    ${(() => {
+      const opt = (w.settings.optionalSlots ?? []).filter((x) => !meals.some((m) => m.slot === x));
+      const all = [...meals.map((m) => ({ slot: m.slot, m })), ...opt.map((slot) => ({ slot, m: null }))].sort((a, b) => SLOTS.indexOf(a.slot) - SLOTS.indexOf(b.slot));
+      return all.map(({ slot, m }) => (m ? mealCard(m) : html`<div class="card tight row" style="border-style:dashed;opacity:.8"><div class="grow"><b class="small" style="color:var(--accent)">${slotName(slot)}</b> <span class="xs muted">(opcional)</span><div class="xs muted">Solo si lo haces hoy, p. ej. al volver de correr.</div></div><button class="sm" data-act="${act(() => logFood(slot))}">＋ Añadir</button></div>`));
+    })()}
+    ${!meals.length ? html`<div class="card muted small">Sin menú para hoy. Genéralo en <b>Batch</b> o cuéntame lo que has cocinado.</div>` : ''}
     <button class="primary block" data-act="${act(() => logFood())}">＋ He comido algo (extra o fuera del menú)</button>
     <details><summary>Por qué estos objetivos</summary>${d.target.explanation.map((e) => html`<p class="small muted">${e}</p>`)}</details>`;
 }
@@ -69,6 +73,8 @@ async function editMeal(m) {
   const recipes = await get('recipes', () => api.db.select('recipes', { select: 'id,name,tags', order: 'created_at.desc', limit: 40 }));
   const ing = m.ingredients.map((i) => ({ ...i }));
   sheet(`${slotName(m.slot)} · ${dayName(m.date)}`, html`
+    <button class="block primary" data-act="${act(() => logFood(m.slot, { plannedMealId: m.id, date: m.date, replace: true }))}">🔁 He comido otra cosa en su lugar</button>
+    <p class="xs muted">P. ej. «una coca de tomate de la panadería y un café con leche»: lo calculo y reajusto el resto del día.</p>
     <h3>Cantidades</h3>
     ${ing.map((i, k) => html`<div class="row"><span class="grow small">${i.name}</span><input style="width:90px" type="number" inputmode="numeric" value="${Math.round(i.grams)}" data-change="${act((el) => { ing[k].grams = +el.value; })}"> g
       <button class="sm ghost danger" data-act="${act((b) => { ing.splice(k, 1); b.closest('.row').remove(); })}">✕</button></div>`)}
@@ -82,29 +88,31 @@ async function editMeal(m) {
 }
 
 // Registrar comida (texto, foto o código de barras)
-export function logFood(slot) {
+export function logFood(slot, opts = {}) {
   const now = new Date().getHours();
   let sel = slot ?? (now < 11 ? 'desayuno' : now < 13 ? 'media_manana' : now < 16 ? 'comida' : now < 20 ? 'merienda' : 'cena');
-  let items = [], questions = [], photoPath = null;
+  let items = [], questions = [], photoPath = null, lastText = '';
   const draw = () => setSheet(html`
     <label>Comida</label><select id="lslot">${SLOTS.map((s) => html`<option value="${s}" ${s === sel ? 'selected' : ''}>${slotName(s)}</option>`)}</select>
-    <label>¿Qué has comido?</label><textarea id="ltext" placeholder="Ej.: 200 g de pollo, 80 g de arroz, una cucharada de aceite y una manzana"></textarea>
-    <button class="block" data-act="${act((b) => busy(b, async () => { const t = document.getElementById('ltext').value.trim(); if (!t) return; const r = await api.fn('nutrition-log', { action: 'parse', text: t }); items.push(...r.items); questions = r.questions || []; draw(); }))}">Analizar texto</button>
+    <label>${opts.replace ? '¿Qué has comido en su lugar?' : '¿Qué has comido?'}</label><textarea id="ltext" placeholder="${opts.replace ? 'Ej.: una coca de tomate de la panadería y un café con leche' : 'Ej.: 200 g de pollo, 80 g de arroz, una cucharada de aceite y una manzana'}">${lastText}</textarea>
+    <button class="block" data-act="${act((b) => busy(b, async () => { const t = document.getElementById('ltext').value.trim(); if (!t) return; lastText = t; const r = await api.fn('nutrition-log', { action: 'parse', text: t }); items.push(...r.items); questions = r.questions || []; draw(); }))}">Analizar texto</button>
     <div class="grid2"><label class="btn" style="margin:0">📷 Foto del plato<input type="file" accept="image/*" id="lphoto" hidden></label>
-      <button data-act="${act(() => { const c = prompt('Número del código de barras'); if (c) busy(null, async () => { const r = await api.fn('nutrition-log', { action: 'parse', barcode: c.trim() }); items.push(...r.items); questions = r.questions || []; draw(); }); })}">🔢 Código de barras</button></div>
+      <button data-act="${act(async () => { const { scanBarcode } = await import('./scanner.js'); const c = await scanBarcode(); if (c) busy(null, async () => { const r = await api.fn('nutrition-log', { action: 'parse', barcode: c.trim() }); items.push(...r.items); questions = r.questions || []; draw(); }); })}">📷 Código de barras</button></div>
     ${questions.map((qq) => html`<p class="alert small">❓ ${qq}</p>`)}
     ${items.length ? html`<h3 style="margin-top:12px">Alimentos</h3>${items.map((i, k) => html`<div class="row"><span class="grow small">${i.name} ${i.gramsConfidence === 'estimado' ? html`<span class="tag amber">estimado</span>` : ''}</span>
         <input style="width:80px" type="number" value="${i.grams}" data-change="${act((el) => { items[k].grams = +el.value; })}"> g <button class="sm ghost danger" data-act="${act(() => { items.splice(k, 1); draw(); })}">✕</button></div>`)}
       <label class="check"><input type="checkbox" id="lded" checked> Descontar de mi despensa</label>
       <button class="primary block" data-act="${act((b) => busy(b, async () => {
         sel = document.getElementById('lslot').value;
-        const r = await api.fn('nutrition-log', { action: 'confirm', date: today(), slot: sel, items: items.map(({ foodId, name, grams }) => ({ foodId, name, grams })), source: photoPath ? 'foto' : 'texto', deductPantry: document.getElementById('lded').checked, photoPath });
+        const said = document.getElementById('ltext')?.value.trim() || lastText;
+        const r = await api.fn('nutrition-log', { action: 'confirm', date: opts.date ?? today(), slot: sel, items: items.map(({ foodId, name, grams }) => ({ foodId, name, grams })), source: photoPath ? 'foto' : 'texto', deductPantry: document.getElementById('lded').checked, photoPath,
+          plannedMealId: opts.plannedMealId, title: opts.replace ? (said ? said.charAt(0).toUpperCase() + said.slice(1, 70) : items.map((i) => i.name).join(', ').slice(0, 70)) : undefined });
         closeSheet(); invalidate('nutweek', 'pantry'); render();
         const msgs = [...(r.day?.alerts || []).map((a) => a.message), ...(r.missingInPantry || []).map((x) => `No tenías ${x.name} en la despensa.`)];
         toast(msgs.length ? msgs.join(' · ') : `Registrado: ${n0(r.logged.kcal)} kcal`, 7000);
       }))}">Registrar</button>` : ''}
     <p class="xs muted">Macros de USDA FoodData Central y Open Food Facts (ODbL). La IA (Gemini) solo interpreta qué y cuánto has comido.</p>`);
-  sheet('Registrar comida', '');
+  sheet(opts.replace ? `${slotName(sel)}: lo que comí` : 'Registrar comida', '');
   draw();
   document.getElementById('sheet').onchange = async (e) => {
     if (e.target.id !== 'lphoto' || !e.target.files[0]) return;
@@ -159,7 +167,8 @@ async function batch() {
       <button class="primary block" data-act="${act((b) => busy(b, async () => {
         const r = await api.fn('menu-plan', { weekStart: mon }); invalidate('nutweek', 'shopping', 'recipes'); render();
         toast([`Menú creado: ${r.meals} comidas`, ...(r.unresolved?.length ? [`Sin datos nutricionales: ${r.unresolved.join(', ')}`] : []), ...(r.notes || [])].join(' · '), 9000);
-      }))}">Generar menú y batch cooking</button></div>
+      }))}">Generar menú y batch cooking</button>
+      <button class="block" data-act="${act(describeCooking)}">🍳 Ya he cocinado: te cuento qué y cuándo lo como</button></div>
     ${p ? html`
       <h2>Plan de cocina <small>≈ ${Math.round(p.totalMinutes)} min · ${dayName(p.cookDate, true)}</small></h2>
       <div class="card tight">${p.tasks.map((t) => html`<div class="row top" style="padding:6px 0"><b style="width:38px;color:var(--accent)" class="small">${Math.round(t.start)}′</b><div class="grow"><div class="small">${t.text}</div><div class="xs muted">${t.recipe}${t.equipment ? ` · ${t.equipment}` : ''} · ${t.hands === 'pasiva' ? 'puedes hacer otra cosa' : 'manos ocupadas'}</div></div></div>`)}</div>
@@ -169,53 +178,107 @@ async function batch() {
       : html`<div class="card muted small">Aún no hay plan de batch para esta semana.</div>`}`;
 }
 
+function describeCooking() {
+  sheet('Lo que he cocinado', html`<p class="small muted">Cuéntalo como quieras: qué has cocinado, cuántos táperes y qué día lo comes. Lo pongo en tu menú y reajusto el resto de comidas a tus macros.</p>
+    <textarea id="ctext" rows="7" placeholder="He hecho lentejas con verduras para 3 comidas (lunes, martes y jueves) y pollo al curry con arroz para el miércoles y el viernes. Para las cenas, verduras al horno para 4 días. La ensalada me la hago la noche antes."></textarea>
+    <button class="primary block" data-act="${act((b) => busy(b, async () => {
+      const t = document.getElementById('ctext').value.trim(); if (!t) return;
+      const r = await api.fn('menu-plan', { action: 'describe', text: t });
+      closeSheet(); invalidate('nutweek', 'shopping'); render();
+      toast([`${r.meals.length} comidas añadidas a tu menú`, ...(r.unresolved?.length ? [`Sin datos nutricionales: ${r.unresolved.join(', ')}`] : []), ...(r.questions || [])].join(' · '), 9000);
+    }))}">Añadir a mi menú</button>
+    <p class="xs muted">Esas comidas quedan fijadas (🔒): si luego generas el menú, solo se completan las que falten (almuerzos, postres…).</p>`);
+}
+
 // ---------------- DESPENSA ----------------
+const prodImg = (url, alt) => (url ? html`<img src="${url}" alt="${alt ?? ''}" loading="lazy">` : html`<div class="noimg">🥫</div>`);
+const qtyText = (i) => [i.units ? `${i.units} ud${i.unitGrams || i.unit_grams ? ` × ${i.unitGrams ?? i.unit_grams} g` : ''}` : '', i.quantityG ?? i.quantity_g ? `${i.quantityG ?? i.quantity_g} g` : ''].filter(Boolean).join(' · ');
+
 async function despensa() {
   const items = await get('pantry', () => api.db.select('pantry_items', { order: 'name' }));
-  const soon = addDays(today(), 3);
+  const soon = items.filter((i) => i.expires_on && i.expires_on <= addDays(today(), 3));
   return html`
-    <button class="primary block" data-act="${act(addPantry)}">＋ Añadir lo que tengo en casa</button>
+    ${soon.length ? html`<div class="card tight alert">⏰ Caduca pronto: ${soon.map((i) => `${i.name} (${shortDate(i.expires_on)})`).join(', ')}</div>` : ''}
+    <div class="grid2"><button class="primary" data-act="${act(addPantry)}">＋ Añadir</button><button data-act="${act(() => scanToPantry())}">📷 Escanear código</button></div>
     ${['congelador', 'nevera', 'despensa'].map((loc) => html`<h2>${loc[0].toUpperCase() + loc.slice(1)} <small>${items.filter((i) => i.location === loc).length}</small></h2>
-      <div class="card tight list">${items.filter((i) => i.location === loc).map((i) => html`<div class="item">
-        <div class="grow"><div>${i.name} ${!i.food_id ? html`<span class="tag amber">sin datos</span>` : ''}</div>${i.expires_on ? html`<div class="xs ${i.expires_on <= soon ? 'bad' : 'muted'}">Caduca ${shortDate(i.expires_on)}</div>` : ''}</div>
-        <span class="muted small">${i.quantity_g != null ? `${n0(i.quantity_g)} g` : i.units != null ? `${n0(i.units)} ud` : '—'}</span>
-        <button class="sm ghost" data-act="${act(() => editPantry(i))}">✎</button></div>`)}
+      <div class="card tight list">${items.filter((i) => i.location === loc).map((i) => html`<div class="item prod" data-act="${act(() => editPantry(i))}">${prodImg(i.image_url, i.name)}
+        <div class="grow"><div class="small" style="font-weight:600">${i.name}${i.brand ? html` <span class="muted xs">${i.brand}</span>` : ''}</div><div class="xs muted">${qtyText(i) || 'cantidad sin indicar'}${i.expires_on ? ` · caduca ${shortDate(i.expires_on)}` : ''}${!i.food_id ? ' · sin datos nutricionales' : ''}</div></div></div>`)}
         ${!items.filter((i) => i.location === loc).length ? html`<div class="item muted small">Vacío</div>` : ''}</div>`)}`;
+}
+
+/** Escanear un producto y añadirlo (con foto, marca y tabla nutricional de Open Food Facts). */
+async function scanToPantry(list) {
+  const { scanBarcode } = await import('./scanner.js');
+  const code = await scanBarcode(); if (!code) return;
+  const r = await busy(null, () => api.fn('pantry', { action: 'barcode', code }));
+  if (!r.product) { toast(r.message, 6000); return; }
+  const p = r.product;
+  const item = { name: p.name, brand: p.brand, barcode: p.code, imageUrl: p.imageUrl, location: 'despensa', units: 1, unitGrams: p.packageG, queryEn: p.name };
+  if (list) { list.push(item); return item; }
+  sheet('Producto escaneado', html`<div class="card tight prod">${prodImg(p.imageUrl, p.name)}<div class="grow"><b>${p.name}</b><div class="xs muted">${p.brand ?? ''} ${p.quantity ?? ''}</div>
+      ${p.food ? html`<div class="xs">${Math.round(p.food.per100.kcal)} kcal · P ${p.food.per100.protein} · C ${p.food.per100.carbs} · G ${p.food.per100.fat} (por 100 g)</div>` : html`<div class="xs bad">Sin tabla nutricional en Open Food Facts</div>`}</div></div>
+    <form data-submit="${act((v, f) => busy(f.querySelector('button'), async () => { await api.fn('pantry', { action: 'save', items: [{ ...item, location: v.location, units: +v.u || 1 }] }); closeSheet(); invalidate('pantry', 'shopping'); render(); toast('Añadido'); }))}">
+      <div class="grid2"><div><label>Lugar</label><select name="location"><option>despensa</option><option>nevera</option><option>congelador</option></select></div><div><label>Unidades</label><input name="u" type="number" value="1"></div></div>
+      <button class="primary block">Añadir a la despensa</button></form>
+    <button class="block" data-act="${act(() => scanToPantry())}">Escanear otro</button>`);
 }
 
 function addPantry() {
   let parsed = [];
+  let status = '';
+  const matchAll = async () => {
+    const todo = parsed.map((p, k) => [p, k]).filter(([p]) => !p.matched && !p.barcode);
+    if (!todo.length) return;
+    status = 'Buscando los productos y sus fotos…'; draw();
+    try {
+      const r = await api.fn('pantry', { action: 'match', items: todo.map(([p]) => ({ name: p.name, brand: p.brand })) });
+      r.matches.forEach((m, j) => { const p = todo[j][0]; p.matched = true; p.alts = [m.best, ...m.alternatives].filter(Boolean); if (m.best) choose(p, m.best); });
+    } catch (e) { toast(`No he podido buscar los productos: ${e.message}`, 6000); }
+    status = ''; draw();
+  };
+  const choose = (p, prod) => { p.barcode = prod.code; p.imageUrl = prod.imageUrl; p.brandFound = prod.brand; p.prodName = prod.name; if (!p.unitGrams && prod.packageG && !p.quantityG) p.unitGrams = prod.packageG; };
   const draw = () => setSheet(html`
-    <p class="small muted">Dímelo como quieras (puedes dictarlo con el micrófono del teclado) o haz una foto de la nevera.</p>
-    <textarea id="ptext" placeholder="En el congelador 1 kg de pechuga de pollo y 2 paquetes de salmón; en la nevera 6 huevos, 2 yogures griegos, espinacas; en la despensa arroz, avena y garbanzos"></textarea>
-    <div class="grid2"><button data-act="${act((b) => busy(b, async () => { const t = document.getElementById('ptext').value.trim(); if (!t) return; const r = await api.fn('pantry', { action: 'parse', text: t }); parsed.push(...r.items); draw(); if (r.questions?.length) toast(r.questions.join(' · '), 7000); }))}">Organizar</button>
-      <label class="btn" style="margin:0">📷 Foto<input type="file" accept="image/*" id="pphoto" hidden></label></div>
-    ${parsed.length ? html`<h3 style="margin-top:12px">Revisa</h3>${parsed.map((p, k) => html`<div class="card tight">
-        <input value="${p.name}" data-change="${act((el) => { parsed[k].name = el.value; })}">
-        <div class="row" style="margin-top:6px"><select data-change="${act((el) => { parsed[k].location = el.value; })}">${['congelador', 'nevera', 'despensa'].map((l) => html`<option ${p.location === l ? 'selected' : ''}>${l}</option>`)}</select>
-          <input type="number" placeholder="g" value="${p.quantityG ?? ''}" data-change="${act((el) => { parsed[k].quantityG = el.value ? +el.value : undefined; })}">
-          <input type="number" placeholder="ud" value="${p.units ?? ''}" data-change="${act((el) => { parsed[k].units = el.value ? +el.value : undefined; })}">
+    <p class="small muted">Díctalo o escríbelo como te salga («dos sobres de puré Hacendado, seis latas de atún de 60 g escurrido…»), escanea los códigos de barras o haz una foto.</p>
+    <textarea id="ptext" rows="5" placeholder="En la despensa: 2 sobres de puré de patatas Hacendado, 6 latas de atún claro al natural de 60 g escurrido, 1 kg de arroz La Fallera…"></textarea>
+    <button class="primary block" data-act="${act((b) => busy(b, async () => {
+      const t = document.getElementById('ptext').value.trim(); if (!t) return;
+      status = 'Entendiendo tu lista… (unos segundos)'; draw();
+      try { const r = await api.fn('pantry', { action: 'parse', text: t }); parsed.push(...r.items); if (r.questions?.length) toast(r.questions.join(' · '), 8000); }
+      catch (e) { status = ''; draw(); throw e; }
+      status = ''; draw(); matchAll();
+    }))}">Organizar</button>
+    <div class="grid2"><button data-act="${act(async () => { const it = await scanToPantry(parsed); if (it) { it.matched = true; draw(); } })}">📷 Código de barras</button>
+      <label class="btn" style="margin:0">🖼 Foto<input type="file" accept="image/*" id="pphoto" hidden></label></div>
+    ${status ? html`<p class="small"><span class="spinner"></span> ${status}</p>` : ''}
+    ${parsed.length ? html`<h3 style="margin-top:12px">Revisa (${parsed.length})</h3>${parsed.map((p, k) => html`<div class="card tight">
+        <div class="prod">${prodImg(p.imageUrl, p.name)}<div class="grow"><input value="${p.name}" data-change="${act((el) => { parsed[k].name = el.value; parsed[k].matched = false; })}">
+          <div class="xs muted">${p.prodName ? `${p.prodName}${p.brandFound ? ` · ${p.brandFound}` : ''}` : p.matched ? 'No lo encuentro en Open Food Facts: usaré datos genéricos' : p.brand ?? ''}</div></div></div>
+        ${p.alts?.length > 1 ? html`<div class="row" style="gap:6px;overflow-x:auto;margin-top:6px">${p.alts.map((a) => html`<button class="sm ${a.code === p.barcode ? 'primary' : 'ghost'}" style="padding:2px" title="${a.name}" data-act="${act(() => { choose(p, a); draw(); })}">${a.imageUrl ? html`<img src="${a.imageUrl}" style="width:40px;height:40px;object-fit:contain;background:#fff;border-radius:8px">` : a.name.slice(0, 14)}</button>`)}<button class="sm ghost" data-act="${act(() => { p.barcode = p.imageUrl = p.prodName = p.brandFound = undefined; draw(); })}">Ninguno</button></div>` : ''}
+        <div class="row" style="margin-top:6px;gap:6px"><select style="width:auto" data-change="${act((el) => { parsed[k].location = el.value; })}">${['congelador', 'nevera', 'despensa'].map((l) => html`<option ${p.location === l ? 'selected' : ''}>${l}</option>`)}</select>
+          <input class="num" type="number" placeholder="ud" value="${p.units ?? ''}" data-change="${act((el) => { parsed[k].units = el.value ? +el.value : undefined; })}"><span class="xs muted">ud ×</span>
+          <input class="num" type="number" placeholder="g" value="${p.unitGrams ?? p.quantityG ?? ''}" data-change="${act((el) => { if (parsed[k].units) parsed[k].unitGrams = el.value ? +el.value : undefined; else parsed[k].quantityG = el.value ? +el.value : undefined; })}"><span class="xs muted">g</span>
           <button class="sm ghost danger" data-act="${act(() => { parsed.splice(k, 1); draw(); })}">✕</button></div></div>`)}
-      <button class="primary block" data-act="${act((b) => busy(b, async () => { const r = await api.fn('pantry', { action: 'save', items: parsed }); closeSheet(); invalidate('pantry', 'shopping'); render(); toast(r.unresolved.length ? `Guardado. Sin datos nutricionales: ${r.unresolved.join(', ')}` : `${r.saved} artículos guardados`, 6000); }))}">Guardar ${parsed.length} artículos</button>` : ''}
-    <details><summary>Añadir a mano</summary><form data-submit="${act((v, f) => busy(f.querySelector('button'), async () => { await api.fn('pantry', { action: 'save', items: [{ name: v.name, queryEn: v.name, location: v.location, quantityG: v.g ? +v.g : undefined, units: v.u ? +v.u : undefined, expiresOn: v.exp || undefined }] }); closeSheet(); invalidate('pantry', 'shopping'); render(); }))}">
-      <label>Nombre</label><input name="name" required><label>Lugar</label><select name="location"><option>nevera</option><option>congelador</option><option>despensa</option></select>
-      <div class="grid2"><div><label>Gramos</label><input name="g" type="number"></div><div><label>Unidades</label><input name="u" type="number"></div></div>
-      <label>Caduca</label><input name="exp" type="date"><button class="block">Añadir</button></form></details>`);
+      <button class="primary block" data-act="${act((b) => busy(b, async () => {
+        const items = parsed.map((p) => ({ name: p.prodName && p.barcode ? p.name : p.name, brand: p.brandFound ?? p.brand, barcode: p.barcode, imageUrl: p.imageUrl, location: p.location, units: p.units, unitGrams: p.unitGrams, quantityG: p.quantityG, queryEn: p.queryEn, expiresOn: p.expiresOn }));
+        const r = await api.fn('pantry', { action: 'save', items }); closeSheet(); invalidate('pantry', 'shopping'); render();
+        toast(r.unresolved.length ? `Guardado. Sin datos nutricionales: ${r.unresolved.join(', ')}` : `${r.saved} artículos guardados`, 6000);
+      }))}">Guardar ${parsed.length} artículos</button>` : ''}`);
   sheet('Añadir a la despensa', '');
   draw();
   document.getElementById('sheet').onchange = async (e) => {
     if (e.target.id !== 'pphoto' || !e.target.files[0]) return;
-    try { toast('Analizando la foto…'); const path = await api.uploadPhoto(await resizeImage(e.target.files[0], 1600)); const r = await api.fn('pantry', { action: 'parse', photoPath: path }); parsed.push(...r.items); draw(); }
-    catch (err) { toast(err.message, 6000); }
+    try { status = 'Analizando la foto…'; draw(); const path = await api.uploadPhoto(await resizeImage(e.target.files[0], 1600)); const r = await api.fn('pantry', { action: 'parse', photoPath: path }); parsed.push(...r.items); status = ''; draw(); matchAll(); }
+    catch (err) { status = ''; draw(); toast(err.message, 6000); }
   };
 }
 
 function editPantry(i) {
-  sheet(i.name, html`<form data-submit="${act((v, f) => busy(f.querySelector('button'), async () => {
-      await api.db.update('pantry_items', { quantity_g: v.g ? +v.g : null, units: v.u ? +v.u : null, location: v.location, expires_on: v.exp || null }, { id: `eq.${i.id}` }); closeSheet(); invalidate('pantry', 'shopping'); render();
+  sheet(i.name, html`${i.image_url ? html`<div class="center"><img src="${i.image_url}" style="max-height:140px;border-radius:12px;background:#fff"></div>` : ''}
+    <form data-submit="${act((v, f) => busy(f.querySelector('button'), async () => {
+      await api.db.update('pantry_items', { quantity_g: v.g ? +v.g : null, units: v.u ? +v.u : null, unit_grams: v.ug ? +v.ug : null, location: v.location, expires_on: v.exp || null }, { id: `eq.${i.id}` }); closeSheet(); invalidate('pantry', 'shopping'); render();
     }))}">
     <label>Lugar</label><select name="location">${['congelador', 'nevera', 'despensa'].map((l) => html`<option ${i.location === l ? 'selected' : ''}>${l}</option>`)}</select>
-    <div class="grid2"><div><label>Gramos</label><input name="g" type="number" value="${i.quantity_g ?? ''}"></div><div><label>Unidades</label><input name="u" type="number" value="${i.units ?? ''}"></div></div>
+    <div class="grid3"><div><label>Unidades</label><input name="u" type="number" value="${i.units ?? ''}"></div><div><label>g/unidad</label><input name="ug" type="number" value="${i.unit_grams ?? ''}"></div><div><label>g totales</label><input name="g" type="number" value="${i.quantity_g ?? ''}"></div></div>
     <label>Caduca</label><input name="exp" type="date" value="${i.expires_on ?? ''}"><button class="primary block">Guardar</button></form>
     <button class="block danger" data-act="${act((b) => busy(b, async () => { await api.db.remove('pantry_items', { id: `eq.${i.id}` }); closeSheet(); invalidate('pantry', 'shopping'); render(); }))}">Eliminar (se ha acabado)</button>`);
 }
@@ -224,7 +287,7 @@ function editPantry(i) {
 async function suplementos() {
   const [w, mine, logs] = await Promise.all([week(monday()), get('supps', () => api.db.select('supplements', { active: 'eq.true' })), api.db.select('supplement_logs', { date: `eq.${today()}` })]);
   const taken = new Set(logs.map((l) => l.supplement_id));
-  const KINDS = [['vitamina_c', 'Vitamina C'], ['magnesio', 'Magnesio'], ['colageno', 'Colágeno'], ['creatina', 'Creatina'], ['omega3', 'Omega-3'], ['vitamina_d', 'Vitamina D'], ['otro', 'Otro']];
+  const KINDS = [['creatina', 'Creatina'], ['aminoacidos', 'Aminoácidos (EAA/BCAA)'], ['colageno', 'Colágeno'], ['vitamina_c', 'Vitamina C'], ['magnesio', 'Magnesio'], ['omega3', 'Omega-3'], ['vitamina_d', 'Vitamina D'], ['proteina', 'Proteína en polvo'], ['electrolitos', 'Electrolitos'], ['cafeina', 'Cafeína'], ['otro', 'Otro']];
   return html`
     <h2>Hoy</h2>
     ${w.supplements.recs.map((r) => html`<div class="card tight"><div class="row"><span>${r.take ? '✅' : '➖'}</span><b class="grow">${r.name}</b>
@@ -235,6 +298,9 @@ async function suplementos() {
         }))}">Marcar tomado</button>`) : ''}</div>
       ${r.take && r.when ? html`<div class="small" style="color:var(--accent)">${r.when}</div>` : ''}<div class="small muted">${r.reason}</div></div>`)}
     ${w.supplements.notes.map((n) => html`<p class="xs muted">${n}</p>`)}
+    ${w.supplements.week?.length && mine.length ? html`<h2>Esta semana</h2><div class="card tight">${w.supplements.week.map((d) => html`<div class="row top" style="padding:5px 0;border-bottom:1px solid var(--line)"><b class="small" style="width:70px">${dayName(d.date).split(' ')[0]} ${d.date.slice(8)}</b><div class="grow small">${d.take.length ? d.take.map((t) => html`<span class="chip" title="${t.when ?? ''}">${t.name}</span>`) : html`<span class="muted">Nada</span>`}</div></div>`)}
+      <p class="xs muted">Según los entrenos que tienes ese día: colágeno + vitamina C en días de saltos, series o fuerza; electrolitos en sesiones largas; creatina todos los días.</p></div>` : ''}
+    ${w.supplements.missing?.length ? html`<h2>Te podría faltar</h2>${w.supplements.missing.map((m) => html`<div class="card tight"><b class="small">${m.name}</b><div class="small muted">${m.why}</div></div>`)}` : ''}
     <h2>Los que tengo</h2>
     <div class="card tight list">${mine.map((s) => html`<div class="item"><div class="grow">${s.name}<div class="xs muted">${s.dose_text}${s.stock != null ? ` · quedan ${s.stock}` : ''}</div></div><button class="sm ghost danger" data-act="${act((b) => busy(b, async () => { await api.db.update('supplements', { active: false }, { id: `eq.${s.id}` }); invalidate('supps', 'nutweek'); render(); }))}">Quitar</button></div>`)}${!mine.length ? html`<div class="item muted small">Ninguno todavía.</div>` : ''}</div>
     <form class="card" data-submit="${act((v, f) => busy(f.querySelector('button'), async () => { await api.db.insert('supplements', [{ user_id: uid(), kind: v.kind, name: v.name || KINDS.find((k) => k[0] === v.kind)[1], dose_text: v.dose, stock: v.stock ? +v.stock : null }]); invalidate('supps', 'nutweek'); render(); }))}">
@@ -245,10 +311,10 @@ async function suplementos() {
 
 // ---------------- OBJETIVO NUTRICIONAL ----------------
 async function settings() {
-  const s = (await api.db.select('nutrition_settings', { user_id: `eq.${uid()}` }))[0] ?? { mode: 'mantenimiento', activity_factor: 1.4, meal_slots: ['desayuno', 'comida', 'merienda', 'cena'], batch_day: 7, shopping_day: 6, dislikes: [], intolerances: [], notify: true, compensate: false };
+  const s = (await api.db.select('nutrition_settings', { user_id: `eq.${uid()}` }))[0] ?? { mode: 'mantenimiento', activity_factor: 1.4, meal_slots: ['media_manana', 'comida', 'cena'], optional_slots: ['desayuno', 'merienda'], batch_day: 7, shopping_day: 6, dislikes: [], intolerances: [], notify: true, compensate: false, preferences: '' };
   const DAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
   sheet('Objetivo nutricional', html`<form data-submit="${act((v, f) => busy(f.querySelector('button[type=submit]'), async () => {
-      const row = { user_id: uid(), mode: v.mode, rate_kg_per_week: v.rate ? +v.rate : null, protein_g_per_kg: v.protein ? +v.protein : null, activity_factor: +v.activity, meal_slots: SLOTS.filter((x) => v[`slot_${x}`]), batch_day: +v.batch, shopping_day: +v.shop, dislikes: v.dislikes.split(',').map((x) => x.trim()).filter(Boolean), intolerances: v.intol.split(',').map((x) => x.trim()).filter(Boolean), max_supplements_per_day: v.maxsupp ? +v.maxsupp : null, compensate: !!v.compensate, notify: !!v.notify };
+      const row = { user_id: uid(), mode: v.mode, rate_kg_per_week: v.rate ? +v.rate : null, protein_g_per_kg: v.protein ? +v.protein : null, activity_factor: +v.activity, meal_slots: SLOTS.filter((x) => v[`slot_${x}`]), batch_day: +v.batch, shopping_day: +v.shop, dislikes: v.dislikes.split(',').map((x) => x.trim()).filter(Boolean), intolerances: v.intol.split(',').map((x) => x.trim()).filter(Boolean), max_supplements_per_day: v.maxsupp ? +v.maxsupp : null, compensate: !!v.compensate, notify: !!v.notify, optional_slots: ['desayuno', 'merienda', 'pre_entreno', 'post_entreno', 'recena'].filter((x) => v[`opt_${x}`] && !v[`slot_${x}`]), preferences: v.prefs?.trim() || null };
       await api.db.upsert('nutrition_settings', [row], 'user_id');
       if (v.mode !== s.mode) await api.db.insert('nutrition_goal_history', [{ user_id: uid(), mode: v.mode, from_date: today() }]);
       closeSheet(); refresh(); toast('Objetivos recalculados desde hoy');
@@ -256,7 +322,9 @@ async function settings() {
     <label>Objetivo</label><select name="mode">${GOAL_MODES.map(([k, l]) => html`<option value="${k}" ${s.mode === k ? 'selected' : ''}>${l}</option>`)}</select>
     <div class="grid2"><div><label>Ritmo (kg/semana)</label><input name="rate" type="number" step="0.05" placeholder="auto" value="${s.rate_kg_per_week ?? ''}"></div><div><label>Proteína (g/kg)</label><input name="protein" type="number" step="0.1" placeholder="auto" value="${s.protein_g_per_kg ?? ''}"></div></div>
     <label>Actividad fuera del entreno</label><select name="activity">${[[1.3, 'Sedentaria'], [1.4, 'Ligera'], [1.5, 'Activa'], [1.6, 'Muy activa']].map(([k, l]) => html`<option value="${k}" ${+s.activity_factor === k ? 'selected' : ''}>${l}</option>`)}</select>
-    <label>Comidas que haces</label>${SLOTS.map((x) => html`<label class="check"><input type="checkbox" name="slot_${x}" ${s.meal_slots.includes(x) ? 'checked' : ''}> ${slotName(x)}</label>`)}
+    <label>Comidas que haces siempre</label>${SLOTS.map((x) => html`<label class="check"><input type="checkbox" name="slot_${x}" ${s.meal_slots.includes(x) ? 'checked' : ''}> ${slotName(x)}</label>`)}
+    <label>Comidas opcionales (solo algunos días; aparecen como hueco vacío)</label>${['desayuno', 'merienda', 'pre_entreno', 'post_entreno', 'recena'].map((x) => html`<label class="check"><input type="checkbox" name="opt_${x}" ${(s.optional_slots || []).includes(x) ? 'checked' : ''}> ${slotName(x)}</label>`)}
+    <label>Tus preferencias y costumbres</label><textarea name="prefs" rows="5" placeholder="Ej.: postre de yogur con granola y plátano después de cenar; almuerzo frío tipo wrap en el trabajo; la ensalada la preparo la noche antes…">${s.preferences ?? ''}</textarea>
     <div class="grid2"><div><label>Día de batch</label><select name="batch">${DAYS.map((d, i) => html`<option value="${i + 1}" ${s.batch_day === i + 1 ? 'selected' : ''}>${d}</option>`)}</select></div>
       <div><label>Día de compra</label><select name="shop">${DAYS.map((d, i) => html`<option value="${i + 1}" ${(s.shopping_day ?? 6) === i + 1 ? 'selected' : ''}>${d}</option>`)}</select></div></div>
     <label>No me gusta (separado por comas)</label><input name="dislikes" value="${(s.dislikes || []).join(', ')}">

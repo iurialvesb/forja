@@ -23,7 +23,7 @@ export async function HOME() {
     get('sessions:42', () => api.db.select('sessions', { deleted_at: 'is.null', started_at: `gte.${addDays(t, -42)}`, order: 'started_at.desc' })),
     get(`nutweek:${mon}`, () => api.fn('nutrition-day', { weekStart: mon }).catch(() => null)),
   ]);
-  const todays = week.filter((s) => s.date === t);
+  const todays = (week.filter((s) => s.date === t)).filter((x) => x.status !== 'skipped');
   const thisWeek = sessions.filter((s) => s.started_at.slice(0, 10) >= mon);
   const km = thisWeek.filter((s) => s.discipline === 'running').reduce((a, s) => a + (+s.distance_m || 0), 0) / 1000;
   const plannedKm = week.filter((s) => s.date <= addDays(mon, 6)).reduce((a, s) => a + (+s.planned_km || 0), 0);
@@ -227,12 +227,13 @@ export async function PLAN() {
     body: html`
       <div class="chips">${phases.filter((p) => p.kind !== 'base').map((p) => html`<span class="chip ${p.start_date <= t && t <= p.end_date ? 'on' : ''}">${phaseName(p.kind)} · ${shortDate(p.start_date)}–${shortDate(p.end_date)}</span>`)}</div>
       <div class="row"><button class="sm" data-act="${act(() => { planOffset--; render(); })}">‹</button><b class="grow" style="text-align:center">Semana del ${shortDate(mon)}</b><button class="sm" data-act="${act(() => { planOffset++; render(); })}">›</button></div>
-      <div class="days">${days.map((d) => html`<button class="day ${d === planDay ? 'on' : ''} ${d === t ? 'today' : ''}" data-act="${act(() => { planDay = d; render(); })}"><div class="w">${dayName(d).split(' ')[0]}</div><div class="d">${d.slice(8)}</div><div class="dots">${ses.filter((s) => s.date === d).map((s) => raw(`<i style="background:${DC[s.discipline] ?? 'var(--muted)'}"></i>`))}</div></button>`)}</div>
+      <div class="days">${days.map((d) => html`<button class="day ${d === planDay ? 'on' : ''} ${d === t ? 'today' : ''}" data-act="${act(() => { planDay = d; render(); })}"><div class="w">${dayName(d).split(' ')[0]}</div><div class="d">${d.slice(8)}</div><div class="dots">${ses.filter((s) => s.date === d && s.status !== 'skipped').map((s) => raw(`<i style="background:${DC[s.discipline] ?? 'var(--muted)'}"></i>`))}</div></button>`)}</div>
       ${(() => {
         const dayDone = done.filter((x) => madridDay(x.started_at) === planDay);
         const linked = new Map(daySes.filter((p) => p.status === 'done' && p.completed_session_id).map((p) => [p.completed_session_id, p]));
-        const pending = daySes.filter((p) => !(p.status === 'done' && dayDone.some((x) => x.id === p.completed_session_id)));
-        return html`${pending.length ? pending.map(plannedCard) : !dayDone.length ? html`<div class="card muted">Descanso</div>` : ''}
+        const pending = daySes.filter((p) => p.status !== 'skipped' && !(p.status === 'done' && dayDone.some((x) => x.id === p.completed_session_id)));
+        const restNote = daySes.some((p) => p.status === 'skipped') ? 'Descanso (no hiciste lo previsto; el plan ya se ha reajustado).' : 'Descanso';
+        return html`${pending.length ? pending.map(plannedCard) : !dayDone.length ? html`<div class="card muted">${restNote}</div>` : ''}
           ${dayDone.length ? html`<h2>Realizado</h2>${dayDone.map((x) => html`${sessionRow(x)}${linked.get(x.id) ? html`<div class="xs" style="color:var(--green);margin:-6px 0 10px 6px">✓ Cumple el plan: ${cleanTitle(linked.get(x.id).title)}</div>` : ''}`)}` : ''}`;
       })()}
       <button class="block" data-act="${act((b) => busy(b, async () => { await api.fn('replan', { trigger: 'goal_change' }); invalidate('planned', 'phases', 'changes'); render(); toast('Semanas recalculadas'); }))}">Recalcular semanas</button>`,
@@ -334,7 +335,7 @@ export async function COACH() {
       const r = await api.fn('coach', { threadId, message: t });
       threadId = r.threadId; chat[chat.length - 1] = { role: 'bot', text: r.reply };
       if (r.tools?.includes('ajustar_plan')) invalidate('planned', 'changes');
-    } catch (e) { chat[chat.length - 1] = { role: 'bot', text: `⚠️ ${e.message}` }; }
+    } catch (e) { chat[chat.length - 1] = { role: 'bot', text: `⚠️ ${e.message}`, retry: t }; }
     render();
   };
   return {
@@ -342,7 +343,7 @@ export async function COACH() {
     right: html`<button class="icon-btn" data-act="${act(() => { chat = []; threadId = null; render(); })}">🆕</button>`,
     body: html`<div style="padding-bottom:70px">
       ${!chat.length ? html`<p class="muted">Pregúntame lo que quieras. Respondo con tus datos reales.</p>${SUGG.map((s) => html`<button class="chip" style="margin:4px 4px 0 0" data-act="${act(() => send(s))}">${s}</button>`)}` : ''}
-      ${chat.map((m) => html`<div class="bubble ${m.role === 'user' ? 'me' : 'bot'}">${m.text === '…' ? raw('<span class="spinner"></span>') : m.text}</div>`)}
+      ${chat.map((m, i) => html`<div class="bubble ${m.role === 'user' ? 'me' : 'bot'}">${m.text === '…' ? raw('<span class="spinner"></span>') : m.text}${m.retry ? html`<div><button class="sm" style="margin-top:8px" data-act="${act(() => { chat.splice(i - 1, 2); send(m.retry); })}">↻ Reintentar</button></div>` : ''}</div>`)}
       </div>
       <form class="chatbox" data-submit="${act((v, f) => { send(v.msg); f.reset(); })}"><textarea name="msg" placeholder="Escribe a tu entrenador…"></textarea><button class="primary">↑</button></form>`,
     after: () => window.scrollTo(0, document.body.scrollHeight),

@@ -7,6 +7,7 @@ import { resolveFood, loadFoods } from '../_shared/foods.ts';
 import { requireAIConsent, structured } from '../_shared/vision.ts';
 import { computeWeek } from '../_shared/nutrition.ts';
 import { macrosOf, addMacros, ZERO, roundMacros, consume, type Macros } from '../_shared/engine/index.ts';
+import { offSearch, cacheProduct, pool } from '../_shared/off.ts';
 
 const schema = { type: 'object', required: ['items'], properties: {
   items: { type: 'array', items: { type: 'object', required: ['nameEs', 'queryEn', 'grams', 'gramsConfidence', 'cooked'], properties: {
@@ -15,6 +16,8 @@ const schema = { type: 'object', required: ['items'], properties: {
     grams: { type: 'number', description: 'Gramos (o ml). Convierte unidades caseras: 1 huevo 60 g, 1 cucharada de aceite 10 g, 1 rebanada de pan 30 g' },
     gramsConfidence: { type: 'string', enum: ['dicho', 'estimado'], description: '"dicho" si el usuario lo indicó o se lee en el envase; "estimado" si lo deduces de una foto o una ración típica' },
     cooked: { type: 'boolean' }, barcode: { type: 'string' },
+    brand: { type: 'string', description: 'Marca o sitio si lo dice (Hacendado, Consum, panadería…)' },
+    packaged: { type: 'boolean', description: 'true si es un producto envasado de supermercado' },
   } } },
   questions: { type: 'array', items: { type: 'string' }, description: 'Preguntas si algo no se puede determinar (en español)' },
 } };
@@ -37,13 +40,20 @@ Deno.serve(handler(async (req) => {
       return json({ items: [{ foodId: f.id, name: f.name, grams, gramsConfidence: 'estimado', macros: roundMacros(macrosOf(f, grams)), source: f.source }], questions: ['¿Cuántos gramos has tomado?'] });
     }
     await requireAIConsent(sb);
-    const r = await structured<{ items: any[]; questions?: string[] }>(sb, { system: SYSTEM, text: body.text ?? 'Identifica lo que hay en el plato.', photoPath: body.photoPath, tool: 'registrar_alimentos', schema });
+    const r = await structured<{ items: any[]; questions?: string[] }>(sb, { system: SYSTEM, text: body.text ?? 'Identifica lo que hay en el plato.', photoPath: body.photoPath, tool: 'registrar_alimentos', schema, fast: true });
     const items: Record<string, unknown>[] = [];
     const questions = [...(r.questions ?? [])];
-    for (const it of r.items) {
-      const f = await resolveFood(sb, it.nameEs, it.queryEn, it.barcode, it.cooked);
+    const found = await pool(r.items, 5, async (it: any) => {
+      // Producto de supermercado con marca: primero el producto real (Open Food Facts); si no, base genérica.
+      if ((it.brand || it.packaged) && !it.barcode) {
+        const p = (await offSearch(it.nameEs, it.brand, 3).catch(() => []))[0];
+        if (p?.food) { cacheProduct(p).catch(() => {}); return { it, f: p.food, imageUrl: p.imageUrl }; }
+      }
+      return { it, f: await resolveFood(sb, it.nameEs, it.queryEn, it.barcode, it.cooked).catch(() => null), imageUrl: undefined };
+    });
+    for (const { it, f, imageUrl } of found) {
       if (!f) { questions.push(`No encuentro "${it.nameEs}" en la base de datos de alimentos. ¿Puedes decirme la marca o escanear el código de barras?`); continue; }
-      items.push({ foodId: f.id, name: it.nameEs, grams: Math.round(it.grams), gramsConfidence: it.gramsConfidence, macros: roundMacros(macrosOf(f, it.grams)), source: f.source });
+      items.push({ foodId: f.id, name: it.nameEs, grams: Math.round(it.grams), gramsConfidence: it.gramsConfidence, macros: roundMacros(macrosOf(f, it.grams)), source: f.source, imageUrl });
     }
     return json({ items, questions });
   }
@@ -55,7 +65,7 @@ Deno.serve(handler(async (req) => {
     const tot: Macros = withMacros.reduce((a, i) => addMacros(a, i.macros), { ...ZERO });
     await sb.from('food_logs').insert({ user_id: userId, date: body.date, slot: body.slot ?? null, items: withMacros, kcal: tot.kcal, protein: tot.protein, carbs: tot.carbs, fat: tot.fat,
       fiber: tot.fiber, vit_c_mg: tot.vitCMg, magnesium_mg: tot.magnesiumMg, source: body.source ?? 'manual', planned_meal_id: body.plannedMealId ?? null, photo_path: body.photoPath ?? null });
-    if (body.plannedMealId) await sb.from('planned_meals').update({ status: 'eaten', ingredients: withMacros.map((i) => ({ foodId: i.foodId, name: i.name, grams: i.grams, role: 'other' })) }).eq('id', body.plannedMealId);
+    if (body.plannedMealId) await sb.from('planned_meals').update({ ...(body.title ? { title: body.title } : {}), status: 'eaten', ingredients: withMacros.map((i) => ({ foodId: i.foodId, name: i.name, grams: i.grams, role: 'other' })) }).eq('id', body.plannedMealId);
     let missing: { name: string; grams: number }[] = [];
     if (body.deductPantry) {
       const { data: pantry } = await sb.from('pantry_items').select('*');

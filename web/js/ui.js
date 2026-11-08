@@ -124,6 +124,6 @@ export function resizeImage(file, maxSide = 1800, quality = 0.82) {
 }
 
 export const SLOTS = ['desayuno', 'media_manana', 'pre_entreno', 'comida', 'merienda', 'post_entreno', 'cena', 'recena'];
-export const slotName = (s) => ({ desayuno: 'Desayuno', media_manana: 'Media mañana', pre_entreno: 'Pre-entreno', comida: 'Comida', merienda: 'Merienda', post_entreno: 'Post-entreno', cena: 'Cena', recena: 'Recena' })[s] || s;
+export const slotName = (s) => ({ desayuno: 'Desayuno', media_manana: 'Almuerzo', pre_entreno: 'Pre-entreno', comida: 'Comida', merienda: 'Merienda', post_entreno: 'Post-entreno', cena: 'Cena', recena: 'Recena' })[s] || s;
 export const phaseName = (k) => ({ general: 'Preparación general', development: 'Desarrollo', specific: 'Preparación específica', taper: 'Puesta a punto', competition: 'Competición', recovery: 'Recuperación', base: 'Base' })[k] || k;
 export const GOAL_MODES = [['definicion', 'Definir (perder grasa)'], ['mantenimiento', 'Mantener'], ['volumen', 'Ganar masa muscular'], ['recomposicion', 'Recomposición'], ['rendimiento', 'Rendimiento']];

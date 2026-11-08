@@ -15,7 +15,7 @@ Deno.serve(handler(async (req) => {
   const soon = expiringSoon((pantry ?? []).map((p: any) => ({ id: p.id, name: p.name, location: p.location, quantityG: p.quantity_g ?? undefined, units: p.units ?? undefined, expiresOn: p.expires_on ?? undefined })), ctx.today, 3);
   const { data: batch } = await sb.from('batch_plans').select('*').eq('week_start', body.weekStart ?? mondayOf(ctx.today)).maybeSingle();
   return json({
-    settings: { mode: week.settings.mode, mealSlots: week.settings.mealSlots },
+    settings: { mode: week.settings.mode, mealSlots: week.settings.mealSlots, optionalSlots: week.settings.optionalSlots },
     days: week.days.map((d) => ({ date: d.date, target: d.target, totals: d.totals, eaten: d.eaten, alerts: d.alerts, adjustments: d.adjustments, adherence: d.adherence,
       meals: d.meals.map((m) => ({ ...m, macros: mealMacros(m, week.foods) })) })),
     balance: week.balance, supplements: supp, expiringSoon: soon, batchPlan: batch?.plan ?? null, shopping: batch?.shopping ?? [],

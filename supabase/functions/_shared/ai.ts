@@ -59,21 +59,32 @@ async function gemini(a: GenArgs): Promise<GenResult> {
   }
   // Lecturas rápidas (fotos, texto): sin "razonamiento" previo, que en el nivel gratuito añade muchos segundos.
   if (a.fast) body.generationConfig.thinkingConfig = { thinkingBudget: 0 };
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL()}:generateContent`;
+  // Si el modelo está saturado (503) o sin cupo (429), se reintenta y luego se pasa a otro modelo gratuito.
+  const models = [...new Set([MODEL(), 'gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'])];
   let res: Response | undefined;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env('GEMINI_API_KEY') }, body: JSON.stringify(body) });
-    if (res.status === 400 && body.generationConfig.thinkingConfig) {            // modelo que no admite desactivar el razonamiento
-      const t = await res.clone().text();
-      if (/thinking/i.test(t)) { delete body.generationConfig.thinkingConfig; attempt--; continue; }
+  let lastStatus = 0;
+  outer: for (const model of models) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+    const think = body.generationConfig.thinkingConfig;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env('GEMINI_API_KEY') }, body: JSON.stringify(body) });
+      if (res.status === 400 && body.generationConfig.thinkingConfig) {            // modelo que no admite desactivar el razonamiento
+        const t = await res.clone().text();
+        if (/thinking/i.test(t)) { delete body.generationConfig.thinkingConfig; attempt--; continue; }
+      }
+      if (res.status === 404) break;                                                 // ese modelo no existe en tu cuenta: siguiente
+      if (res.status !== 429 && res.status !== 503 && res.status !== 500) break outer;
+      lastStatus = res.status;
+      await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)));
     }
-    if (res.status !== 429 && res.status !== 503) break;
-    await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));      // límites del nivel gratuito
+    if (think) body.generationConfig.thinkingConfig = think;
   }
   if (!res!.ok) {
     const t = await res!.text();
-    if (res!.status === 429) throw new Error('Has alcanzado el límite gratuito de la IA por hoy o por minuto. Inténtalo un poco más tarde.');
-    throw new Error(`Gemini ${res!.status}: ${t.slice(0, 300)}`);
+    const st = res!.status || lastStatus;
+    if (st === 429) throw new Error('Has llegado al límite gratuito de la IA de Google (por minuto o por día). Prueba en un rato.');
+    if (st === 503 || st === 500) throw new Error('La IA de Google está saturada ahora mismo (lo he intentado con varios modelos). Prueba de nuevo en un minuto.');
+    throw new Error(`La IA ha dado un error (${st}). ${t.slice(0, 160)}`);
   }
   const j = await res!.json();
   const parts: any[] = j.candidates?.[0]?.content?.parts ?? [];

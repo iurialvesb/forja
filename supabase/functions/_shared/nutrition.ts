@@ -4,20 +4,21 @@ import type { SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import type { AthleteContext } from './context.ts';
 import { loadFoods } from './foods.ts';
 import {
-  dayTarget, rebalanceDay, weekBalance, adherence, recommendSupplements, addMacros, ZERO, mondayOf, addDays, daysBetween,
+  dayTarget, rebalanceDay, weekBalance, adherence, recommendSupplements, weeklySupplementPlan, missingSupplements, addMacros, ZERO, mondayOf, addDays, daysBetween,
   type NutritionSettings, type PlannedMeal, type PlannedSession, type DayTarget, type Macros, type Alert, type FoodIndex, type MealSlot, type MealAdjustment,
 } from './engine/index.ts';
 import { rowToPlanned } from './replan.ts';
 
-export async function loadSettings(sb: SupabaseClient, ctx: AthleteContext): Promise<NutritionSettings & { batchDay: number; dislikes: string[]; intolerances: string[]; maxSupplements?: number; compensate: boolean }> {
+export async function loadSettings(sb: SupabaseClient, ctx: AthleteContext): Promise<NutritionSettings & { batchDay: number; dislikes: string[]; intolerances: string[]; maxSupplements?: number; compensate: boolean; optionalSlots: string[]; preferences?: string }> {
   const { data: s } = await sb.from('nutrition_settings').select('*').maybeSingle();
   const { data: p } = await sb.from('profiles').select('height_cm, birth_date').eq('id', ctx.userId).single();
   const age = p?.birth_date ? Math.floor(daysBetween(p.birth_date, ctx.today) / 365.25) : 30;
   return {
     mode: s?.mode ?? 'mantenimiento', rateKgPerWeek: s?.rate_kg_per_week ?? undefined, proteinGPerKg: s?.protein_g_per_kg ?? undefined, fatGPerKg: s?.fat_g_per_kg ?? undefined,
-    activityFactor: s?.activity_factor != null ? Number(s.activity_factor) : 1.4, mealSlots: s?.meal_slots ?? ['desayuno', 'comida', 'merienda', 'cena'],
+    activityFactor: s?.activity_factor != null ? Number(s.activity_factor) : 1.4, mealSlots: s?.meal_slots ?? ['media_manana', 'comida', 'cena'],
     heightCm: p?.height_cm != null ? Number(p.height_cm) : 175, ageYears: age, batchDay: s?.batch_day ?? 7, dislikes: s?.dislikes ?? [], intolerances: s?.intolerances ?? [],
     maxSupplements: s?.max_supplements_per_day ?? undefined, compensate: !!s?.compensate,
+    optionalSlots: s?.optional_slots ?? (s ? [] : ['desayuno', 'merienda']), preferences: s?.preferences ?? undefined,
   };
 }
 
@@ -80,8 +81,19 @@ export async function computeWeek(sb: SupabaseClient, ctx: AthleteContext, weekS
 
 /** Suplementos de hoy según lo comido en los últimos 7 días y el entrenamiento planificado. */
 export async function supplementsToday(sb: SupabaseClient, ctx: AthleteContext, st: { maxSupplements?: number }) {
-  const { data: sup } = await sb.from('supplements').select('*').eq('active', true);
-  if (!sup?.length) return { recs: [], notes: ['Añade los suplementos que tienes en casa para que te diga cuál tomar cada día.'] };
+  const { data: sup0 } = await sb.from('supplements').select('*').eq('active', true);
+  const sup = sup0 ?? [];
+  const { data: pt } = await sb.from('day_targets').select('protein').eq('date', ctx.today).maybeSingle();
+  const { data: pl } = await sb.from('food_logs').select('date, protein').gte('date', addDays(ctx.today, -7)).lt('date', ctx.today);
+  const pDays = new Map<string, number>(); for (const l of pl ?? []) pDays.set(l.date, (pDays.get(l.date) ?? 0) + Number(l.protein));
+  const pVals = [...pDays.values()].filter((x) => x > 40);
+  const proteinAvgG = pVals.length >= 3 ? pVals.reduce((a, b) => a + b, 0) / pVals.length : undefined;
+  const proteinTargetG = pt?.protein != null ? Number(pt.protein) : undefined;
+  const missing = missingSupplements(sup.map((x: any) => x.kind), { proteinAvgG, proteinTargetG, date: ctx.today, longSessionsPerWeek: 1 });
+  const { data: wk } = await sb.from('planned_sessions').select('*').gte('date', ctx.today).lte('date', addDays(ctx.today, 6)).neq('status', 'skipped');
+  const available = sup.map((s: any) => ({ id: s.kind, name: s.name, doseText: s.dose_text, stock: s.stock ?? undefined }));
+  const week = weeklySupplementPlan({ available, days: [...Array(7)].map((_, i) => addDays(ctx.today, i)).map((d) => ({ date: d, sessions: (wk ?? []).filter((x: any) => x.date === d).map(rowToPlanned) })), sex: ctx.profile.sex, maxPerDay: st.maxSupplements, proteinAvgG, proteinTargetG });
+  if (!sup.length) return { recs: [], notes: ['Añade los suplementos que tienes en casa para que te diga cuál tomar cada día.'], week, missing };
   const { data: logs } = await sb.from('food_logs').select('date, kcal, protein, carbs, fat, vit_c_mg, magnesium_mg').gte('date', addDays(ctx.today, -7)).lt('date', ctx.today);
   const byDay = new Map<string, Macros & { micro: boolean }>();
   for (const l of logs ?? []) {
@@ -91,12 +103,12 @@ export async function supplementsToday(sb: SupabaseClient, ctx: AthleteContext, 
   const { data: today } = await sb.from('planned_sessions').select('*').eq('date', ctx.today);
   const sleep = ctx.health.slice(-5).map((h) => h.sleepHours).filter((x): x is number => x != null);
   const r = recommendSupplements({
-    available: sup.map((s: any) => ({ id: s.kind, name: s.name, doseText: s.dose_text, stock: s.stock ?? undefined })),
+    available,
     last7Days: [...byDay.values()], daysWithMicros: [...byDay.values()].filter((d) => d.micro && d.kcal > 1000).length,
     today: (today ?? []).map(rowToPlanned), sex: ctx.profile.sex, sleepHoursAvg: sleep.length ? sleep.reduce((a, b) => a + b, 0) / sleep.length : undefined,
-    maxPerDay: st.maxSupplements,
+    maxPerDay: st.maxSupplements, proteinAvgG, proteinTargetG, date: ctx.today,
   });
-  return { recs: r.recs.map((x) => ({ ...x, supplementId: sup.find((s: any) => s.kind === x.id)?.id })), notes: r.notes };
+  return { recs: r.recs.map((x) => ({ ...x, supplementId: sup.find((s: any) => s.kind === x.id)?.id })), notes: r.notes, week, missing };
 }
 
 export type { MealSlot };

@@ -9,7 +9,7 @@ export async function requireAIConsent(sb: SupabaseClient) {
   if (!data) throw new HttpError(403, 'Necesito tu permiso explícito para usar el servicio de IA (Perfil → Privacidad e IA).');
 }
 
-export async function structured<T>(sb: SupabaseClient, args: { system: string; text?: string; photoPath?: string; tool: string; schema: Record<string, unknown>; maxTokens?: number }): Promise<T> {
+export async function structured<T>(sb: SupabaseClient, args: { system: string; text?: string; photoPath?: string; tool: string; schema: Record<string, unknown>; maxTokens?: number; fast?: boolean }): Promise<T> {
   const content: ContentBlock[] = [];
   if (args.photoPath) {
     const { data: blob, error } = await sb.storage.from('workout-photos').download(args.photoPath);
@@ -18,7 +18,7 @@ export async function structured<T>(sb: SupabaseClient, args: { system: string; 
     content.push({ type: 'image', source: { type: 'base64', media_type: mt, data: encodeBase64(new Uint8Array(await blob.arrayBuffer())) } });
   }
   content.push({ type: 'text', text: args.text ?? 'Analiza la imagen.' });
-  const r = await claude({ system: args.system, maxTokens: args.maxTokens ?? 3000, temperature: 0, messages: [{ role: 'user', content }],
+  const r = await claude({ system: args.system, maxTokens: args.maxTokens ?? 3000, temperature: 0, fast: args.fast, messages: [{ role: 'user', content }],
     tools: [{ name: args.tool, description: 'Devuelve el resultado estructurado', input_schema: args.schema }], toolChoice: { type: 'tool', name: args.tool } });
   const tu = r.content.find((b) => b.type === 'tool_use') as { input: T } | undefined;
   if (!tu) throw new Error('La IA no devolvió un resultado estructurado');

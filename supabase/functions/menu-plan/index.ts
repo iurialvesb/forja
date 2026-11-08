@@ -1,10 +1,12 @@
 // POST /menu-plan { weekStart, cookDate?, slotsByDay?: { 'YYYY-MM-DD': MealSlot[] } }
+//      /menu-plan { action:'describe', text, weekStart? } → "he cocinado lentejas para 4 comidas y arroz para las cenas…" → al menú de esos días
 // Funcionalidad principal: con lo que tienes en casa diseña el batch cooking del domingo y el menú de la semana,
 // ajusta cada ración a tus macros de ese día (según el entreno), genera la lista de la compra y el plan de cocina.
 import { handler, json, requireUser, userClient } from '../_shared/supabase.ts';
 import { loadContext } from '../_shared/context.ts';
 import { computeWeek } from '../_shared/nutrition.ts';
 import { resolveFood } from '../_shared/foods.ts';
+import { pool } from '../_shared/off.ts';
 import { requireAIConsent, structured } from '../_shared/vision.ts';
 import {
   distribute, fitPortions, projectedShoppingList, buildBatchPlan, expiringSoon, addDays, mondayOf,
@@ -34,7 +36,47 @@ Reglas:
 - Respeta lo que no le gusta y sus intolerancias. Recetas españolas, sencillas, que aguanten bien en táper.
 - Las cantidades son orientativas para 1 ración: el sistema las ajustará a sus macros exactos.
 - Seguridad alimentaria: cocinado en nevera 3-4 días; si un plato se come más tarde, que sea congelable.
-- Asigna una receta a CADA comida solicitada (fecha + franja).`;
+- Asigna una receta a CADA comida solicitada (fecha + franja).
+- "media_manana" es el ALMUERZO a media mañana en el trabajo: rápido de preparar por la mañana y que se coma frío, sin calentar (wrap o bocadillo con proteína). No es batch.
+- Si sus preferencias incluyen un postre habitual (p. ej. yogur con granola y plátano), inclúyelo como ingredientes de esa comida para que cuente en los macros.
+- Respeta SIEMPRE sus preferencias escritas.`;
+
+const describeSchema = { type: 'object', required: ['meals'], properties: {
+  meals: { type: 'array', items: { type: 'object', required: ['date', 'slot', 'title', 'ingredients'], properties: {
+    date: { type: 'string', description: 'YYYY-MM-DD' }, slot: { type: 'string', enum: ['desayuno', 'media_manana', 'comida', 'merienda', 'cena'] },
+    title: { type: 'string' },
+    ingredients: { type: 'array', items: { type: 'object', required: ['nameEs', 'queryEn', 'grams', 'role'], properties: {
+      nameEs: { type: 'string' }, queryEn: { type: 'string', description: 'Consulta USDA en inglés con estado ("lentils cooked", "rice white cooked", "chicken breast cooked")' },
+      grams: { type: 'number', description: 'Gramos por ración, en el estado de queryEn' }, role: { type: 'string', enum: ['protein', 'carb', 'fat', 'veg', 'fruit', 'dairy', 'other'] } } } },
+  } } },
+  questions: { type: 'array', items: { type: 'string' } },
+} };
+
+async function describeCooking(sb: any, userId: string, ctx: any, text: string, weekStart: string) {
+  const { data: st } = await sb.from('nutrition_settings').select('preferences').maybeSingle();
+  const days = [...Array(10)].map((_, i) => addDays(ctx.today, i)).map((d) => `${d} (${new Intl.DateTimeFormat('es-ES', { weekday: 'long', timeZone: 'UTC' }).format(new Date(`${d}T12:00:00Z`))})`);
+  const r = await structured<{ meals: any[]; questions?: string[] }>(sb, {
+    system: `Eres dietista deportivo. El usuario cuenta lo que ha cocinado (batch cooking) y qué va a comer cada día. Conviértelo en comidas por día y franja.
+- Usa las fechas reales de la lista (hoy es ${ctx.today}). "mañana", "el lunes", "de lunes a jueves" → fechas concretas.
+- Una comida por fecha y franja. Si reparte un guiso en N táperes, cada ración = total / N. Si no dice cantidades, raciones típicas españolas para un deportista.
+- Gramos en el estado indicado en queryEn (normalmente cocinado).
+- Él solo cocina en batch las comidas y la guarnición de las cenas; la ensalada se la hace el día antes. Si en la cena solo hay guarnición, añade una proteína sencilla a la plancha (pollo, huevos o pescado) y dilo en el título.
+- No inventes platos que no menciona. Pregunta en "questions" lo que no quede claro.
+Preferencias: ${st?.preferences ?? 'sin indicar'}`,
+    text: `Días: ${days.join(', ')}\n\nLo que cuenta:\n${text}`, tool: 'comidas_cocinadas', schema: describeSchema, maxTokens: 6000, fast: true });
+  const cache = new Map<string, any>();
+  const names = [...new Map(r.meals.flatMap((m) => m.ingredients).map((i: any) => [i.nameEs.toLowerCase(), i])).values()];
+  await pool(names, 5, async (i: any) => { cache.set(i.nameEs.toLowerCase(), await resolveFood(sb, i.nameEs, i.queryEn, undefined, /cooked|cocid|asad|plancha/i.test(i.queryEn)).catch(() => null)); });
+  const unresolved: string[] = [];
+  const rows = r.meals.map((m) => ({
+    user_id: userId, date: m.date, slot: m.slot, title: m.title, status: 'planned', locked: true, from_batch: true, updated_at: new Date().toISOString(),
+    ingredients: m.ingredients.flatMap((i: any) => { const f = cache.get(i.nameEs.toLowerCase()); if (!f) { unresolved.push(i.nameEs); return []; } return [{ foodId: f.id, name: i.nameEs, grams: Math.round(i.grams), role: i.role }]; }),
+  }));
+  if (rows.length) { const { error } = await sb.from('planned_meals').upsert(rows, { onConflict: 'user_id,date,slot' }); if (error) throw error; }
+  const weeks = [...new Set(rows.map((x) => mondayOf(x.date)))];
+  for (const w of weeks.length ? weeks : [weekStart]) await computeWeek(sb, ctx, w, true);
+  return { meals: rows.map((x) => ({ date: x.date, slot: x.slot, title: x.title })), questions: r.questions ?? [], unresolved: [...new Set(unresolved)] };
+}
 
 Deno.serve(handler(async (req) => {
   const sb = userClient(req);
@@ -42,10 +84,13 @@ Deno.serve(handler(async (req) => {
   await requireAIConsent(sb);
   const body = await req.json().catch(() => ({}));
   const ctx = await loadContext(sb, userId);
+  if (body.action === 'describe') return json(await describeCooking(sb, userId, ctx, String(body.text ?? ''), body.weekStart ?? mondayOf(ctx.today)));
   const weekStart = body.weekStart ?? mondayOf(addDays(ctx.today, 1));
   const week = await computeWeek(sb, ctx, weekStart, false);
   const st = week.settings;
   const cookDate = body.cookDate ?? addDays(weekStart, -1);   // domingo anterior
+  const { data: prefRow } = await sb.from('nutrition_settings').select('preferences').maybeSingle();
+  const prefs: string | null = prefRow?.preferences ?? null;
   const { data: pRows } = await sb.from('pantry_items').select('*');
   const pantry: PantryItem[] = (pRows ?? []).map((p: any) => ({ id: p.id, name: p.name, foodId: p.food_id ?? undefined, location: p.location, quantityG: p.quantity_g != null ? +p.quantity_g : undefined, units: p.units != null ? +p.units : undefined, unitGrams: p.unit_grams != null ? +p.unit_grams : undefined, expiresOn: p.expires_on ?? undefined }));
   const { data: existing } = await sb.from('planned_meals').select('*').gte('date', weekStart).lte('date', addDays(weekStart, 6));
@@ -60,7 +105,7 @@ Deno.serve(handler(async (req) => {
       despensa: pantry.filter((p) => p.location === 'despensa').map((p) => p.name) },
     caducaPronto: expiringSoon(pantry, cookDate, 5).map((p) => `${p.name} (${p.expiresOn})`),
     dias: week.days.map((d) => ({ fecha: d.date, carga: d.target.load, kcal: d.target.macros.kcal, proteina: d.target.macros.protein, hidratos: d.target.macros.carbs, grasa: d.target.macros.fat })),
-    comidasAPlanificar: requests, objetivo: st.mode, noLeGusta: st.dislikes, intolerancias: st.intolerances,
+    comidasAPlanificar: requests, objetivo: st.mode, noLeGusta: st.dislikes, intolerancias: st.intolerances, preferencias: prefs ?? undefined,
   };
   const r = await structured<{ recipes: any[]; assignments: { date: string; slot: string; recipeKey: string }[]; notes?: string[] }>(sb, {
     system: SYSTEM, text: `Prepara el menú y el batch cooking con estos datos:\n${JSON.stringify(brief, null, 1)}`, tool: 'menu_semanal', schema, maxTokens: 8000 });
