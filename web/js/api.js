@@ -75,7 +75,7 @@ export async function fn(name, body = {}) {
   const r = await fetch(`${URL_}/functions/v1/${name}`, { method: 'POST', headers: await headers({ 'content-type': 'application/json' }), body: JSON.stringify(body) });
   const ct = r.headers.get('content-type') || '';
   const j = ct.includes('json') ? await r.json().catch(() => ({})) : await r.text();
-  if (!r.ok) { const e = new Error(j?.error || `Error ${r.status}`); e.status = r.status; e.data = j; throw e; }
+  if (!r.ok) { const e = new Error(j?.error || (r.status === 504 || r.status === 546 ? 'El servidor ha tardado demasiado (la IA estaba lenta). Vuelve a intentarlo.' : `Error ${r.status}`)); e.status = r.status; e.data = j; throw e; }
   return j;
 }
 export async function fnRaw(name) {

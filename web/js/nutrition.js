@@ -186,14 +186,20 @@ async function batch() {
 }
 
 function describeCooking() {
-  sheet('Lo que he cocinado', html`<p class="small muted">Cuéntalo como quieras: qué has cocinado, cuántos táperes y qué día lo comes. Lo pongo en tu menú y reajusto el resto de comidas a tus macros.</p>
-    <textarea id="ctext" rows="7" placeholder="He hecho lentejas con verduras para 3 comidas (lunes, martes y jueves) y pollo al curry con arroz para el miércoles y el viernes. Para las cenas, verduras al horno para 4 días. La ensalada me la hago la noche antes."></textarea>
-    <button class="primary block" data-act="${act((b) => busy(b, async () => {
+  const saved = (() => { try { return localStorage.getItem('forja:cooked') || ''; } catch { return ''; } })();
+  sheet('Lo que he cocinado', html`<p class="small muted">Cuéntalo como quieras: qué has cocinado, cuántos táperes y qué día lo comes. Lo pongo en tu menú, lo descuento de la despensa y reajusto el resto de comidas a tus macros.</p>
+    <textarea id="ctext" rows="7" placeholder="He hecho lentejas con verduras para 3 comidas (lunes, martes y jueves) y pollo al curry con arroz para el miércoles y el viernes. Para las cenas, verduras al horno para 4 días.">${saved}</textarea>
+    <button class="primary block" data-act="${act(() => {
       const t = document.getElementById('ctext').value.trim(); if (!t) return;
-      const r = await api.fn('menu-plan', { action: 'describe', text: t });
-      closeSheet(); invalidate('nutweek', 'shopping', 'pantry'); render();
-      toast([`${r.meals.length} comidas añadidas a tu menú`, ...(r.pantryUsed?.length ? [`Descontado de casa: ${r.pantryUsed.map((u) => u.from).join(', ')}`] : []), ...(r.unresolved?.length ? [`Sin datos nutricionales: ${r.unresolved.join(', ')}`] : []), ...(r.questions || [])].join(' · '), 9000);
-    }))}">Añadir a mi menú</button>
+      try { localStorage.setItem('forja:cooked', t); } catch { /* */ }
+      closeSheet();
+      toast('🍳 Organizando lo que has cocinado… Puedes seguir usando Forja: te aviso al terminar (suele tardar 20-60 s).', 6000);
+      api.fn('menu-plan', { action: 'describe', text: t }).then((r) => {
+        try { localStorage.removeItem('forja:cooked'); } catch { /* */ }
+        invalidate('nutweek', 'shopping', 'pantry'); render();
+        toast([`✅ ${r.meals.length} comidas añadidas a tu menú`, ...(r.pantryUsed?.length ? [`Descontado de casa: ${[...new Set(r.pantryUsed.map((u) => u.from))].join(', ')}`] : []), ...(r.unresolved?.length ? [`Sin datos nutricionales: ${r.unresolved.join(', ')}`] : []), ...(r.questions || [])].join(' · '), 10000);
+      }).catch((e) => toast(`No he podido organizarlo: ${e.message}. Tu texto está guardado: vuelve a «Ya he cocinado» y pulsa otra vez.`, 10000));
+    })}">Añadir a mi menú</button>
     <p class="xs muted">Esas comidas quedan fijadas (🔒): si luego generas el menú, solo se completan las que falten (almuerzos, postres…).</p>`);
 }
 

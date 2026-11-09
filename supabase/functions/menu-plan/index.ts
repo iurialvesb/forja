@@ -43,31 +43,33 @@ Reglas:
 - Si sus preferencias incluyen un postre habitual (p. ej. yogur con granola y plátano), inclúyelo como ingredientes de esa comida para que cuente en los macros.
 - Respeta SIEMPRE sus preferencias escritas.`;
 
-const describeSchema = { type: 'object', required: ['meals'], properties: {
-  meals: { type: 'array', items: { type: 'object', required: ['date', 'slot', 'title', 'ingredients'], properties: {
+const ING = { type: 'object', required: ['nameEs', 'queryEn', 'grams', 'role'], properties: {
+  nameEs: { type: 'string' }, queryEn: { type: 'string', description: 'USDA en inglés con estado ("lentils cooked", "rice white cooked")' },
+  grams: { type: 'number', description: 'Gramos por ración' }, role: { type: 'string', enum: ['protein', 'carb', 'fat', 'veg', 'fruit', 'dairy', 'other'] } } };
+// Compacto para que la IA responda rápido: cada plato una vez y luego qué día/franja lo comes.
+const describeSchema = { type: 'object', required: ['dishes', 'meals'], properties: {
+  dishes: { type: 'array', items: { type: 'object', required: ['name', 'ingredients'], properties: { name: { type: 'string' }, ingredients: { type: 'array', items: ING } } } },
+  meals: { type: 'array', items: { type: 'object', required: ['date', 'slot', 'dish'], properties: {
     date: { type: 'string', description: 'YYYY-MM-DD' }, slot: { type: 'string', enum: ['desayuno', 'media_manana', 'comida', 'merienda', 'cena'] },
-    title: { type: 'string' },
-    ingredients: { type: 'array', items: { type: 'object', required: ['nameEs', 'queryEn', 'grams', 'role'], properties: {
-      nameEs: { type: 'string' }, queryEn: { type: 'string', description: 'Consulta USDA en inglés con estado ("lentils cooked", "rice white cooked", "chicken breast cooked")' },
-      grams: { type: 'number', description: 'Gramos por ración, en el estado de queryEn' }, role: { type: 'string', enum: ['protein', 'carb', 'fat', 'veg', 'fruit', 'dairy', 'other'] } } } },
-  } } },
-  usedFromPantry: { type: 'array', description: 'Lo que ha gastado de casa al cocinar, en el estado en que lo guarda (normalmente crudo/seco): "lentejas secas 300 g", "pechuga de pollo 800 g", "arroz 250 g"', items: { type: 'object', required: ['nameEs', 'grams'], properties: { nameEs: { type: 'string' }, grams: { type: 'number' } } } },
+    dish: { type: 'number', description: 'Índice (desde 0) del plato en dishes' }, extra: { type: 'string', description: 'Solo si a ese plato se le añade algo ese día (p. ej. proteína a la plancha en la cena)' } } } },
+  usedFromPantry: { type: 'array', description: 'Lo gastado de casa al cocinar, total y como lo guarda (seco/crudo)', items: { type: 'object', required: ['nameEs', 'grams'], properties: { nameEs: { type: 'string' }, grams: { type: 'number' } } } },
   questions: { type: 'array', items: { type: 'string' } },
 } };
 
 async function describeCooking(sb: any, userId: string, ctx: any, text: string, weekStart: string) {
   const { data: st } = await sb.from('nutrition_settings').select('preferences').maybeSingle();
   const days = [...Array(10)].map((_, i) => addDays(ctx.today, i)).map((d) => `${d} (${new Intl.DateTimeFormat('es-ES', { weekday: 'long', timeZone: 'UTC' }).format(new Date(`${d}T12:00:00Z`))})`);
-  const r = await structured<{ meals: any[]; usedFromPantry?: { nameEs: string; grams: number }[]; questions?: string[] }>(sb, {
+  const r0 = await structured<{ dishes: any[]; meals: any[]; usedFromPantry?: { nameEs: string; grams: number }[]; questions?: string[] }>(sb, {
     system: `Eres dietista deportivo. El usuario cuenta lo que ha cocinado (batch cooking) y qué va a comer cada día. Conviértelo en comidas por día y franja.
 - Usa las fechas reales de la lista (hoy es ${ctx.today}). "mañana", "el lunes", "de lunes a jueves" → fechas concretas.
-- Una comida por fecha y franja. Si reparte un guiso en N táperes, cada ración = total / N. Si no dice cantidades, raciones típicas españolas para un deportista.
+- Cada plato UNA vez en dishes (ingredientes por ración) y en meals qué fecha y franja lo comes. Si reparte un guiso en N táperes, cada ración = total / N. Si no dice cantidades, raciones típicas españolas para un deportista.
 - Gramos en el estado indicado en queryEn (normalmente cocinado).
-- Él solo cocina en batch las comidas y la guarnición de las cenas; la ensalada se la hace el día antes. Si en la cena solo hay guarnición, añade una proteína sencilla a la plancha (pollo, huevos o pescado) y dilo en el título.
+- Él solo cocina en batch las comidas y la guarnición de las cenas; la ensalada se la hace el día antes. Si en la cena solo hay guarnición, crea un plato «guarnición + proteína a la plancha» con una proteína sencilla (pollo, huevos o pescado).
 - No inventes platos que no menciona. Pregunta en "questions" lo que no quede claro.
 - En usedFromPantry pon lo que ha gastado de casa (total, no por ración), tal como lo tiene guardado (en seco/crudo).
 Preferencias: ${st?.preferences ?? 'sin indicar'}`,
-    text: `Días: ${days.join(', ')}\n\nLo que cuenta:\n${text}`, tool: 'comidas_cocinadas', schema: describeSchema, maxTokens: 6000, fast: true });
+    text: `Días: ${days.join(', ')}\n\nLo que cuenta:\n${text}`, tool: 'comidas_cocinadas', schema: describeSchema, maxTokens: 3500, fast: true });
+  const r = { ...r0, meals: r0.meals.filter((m) => r0.dishes[m.dish]).map((m) => ({ date: m.date, slot: m.slot, title: m.extra ? `${r0.dishes[m.dish].name} + ${m.extra}` : r0.dishes[m.dish].name, ingredients: r0.dishes[m.dish].ingredients })) };
   const cache = new Map<string, any>();
   const names = [...new Map(r.meals.flatMap((m) => m.ingredients).map((i: any) => [i.nameEs.toLowerCase(), i])).values()];
   await pool(names, 5, async (i: any) => { cache.set(i.nameEs.toLowerCase(), await resolveFood(sb, i.nameEs, i.queryEn, undefined, /cooked|cocid|asad|plancha/i.test(i.queryEn)).catch(() => null)); });

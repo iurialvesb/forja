@@ -68,8 +68,14 @@ async function gemini(a: GenArgs): Promise<GenResult> {
     const think = body.generationConfig.thinkingConfig;
     for (let attempt = 0; attempt < 2; attempt++) {
       res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env('GEMINI_API_KEY') }, body: JSON.stringify(body) });
-      // Los modelos nuevos no admiten «thinkingBudget: 0» y responden 400 «invalid argument»: se reintenta sin él.
-      if (res.status === 400 && body.generationConfig.thinkingConfig) { delete body.generationConfig.thinkingConfig; attempt--; continue; }
+      // Gemini 3 no admite «thinkingBudget: 0» (400): se prueba con razonamiento mínimo y, si tampoco, sin indicarlo.
+      if (res.status === 400 && body.generationConfig.thinkingConfig) {
+        const tc = body.generationConfig.thinkingConfig;
+        if (tc.thinkingBudget === 0) body.generationConfig.thinkingConfig = { thinkingLevel: 'minimal' };
+        else if (tc.thinkingLevel === 'minimal') body.generationConfig.thinkingConfig = { thinkingLevel: 'low' };
+        else delete body.generationConfig.thinkingConfig;
+        attempt--; continue;
+      }
       if (res.status === 404) break;                                                 // ese modelo no existe en tu cuenta: siguiente
       if (res.status !== 429 && res.status !== 503 && res.status !== 500) break outer;
       lastStatus = res.status;
