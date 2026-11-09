@@ -159,7 +159,7 @@ async function compra() {
     ${l.coveredByStock?.length ? html`<details><summary>Ya lo tienes en casa (${l.coveredByStock.length})</summary>${l.coveredByStock.map((c) => html`<div class="small muted">${c.name} · ${c.grams} g</div>`)}</details>` : ''}
     ${l.items.length ? html`
       <button class="primary block" data-act="${act((b) => busy(b, async () => { const r = await api.fn('shopping-list', { action: 'bought', weekStart: mon }); invalidate('shopping', 'pantry'); render(); toast(`${r.addedToPantry} artículos añadidos a tu despensa`); }))}">Pasar lo marcado a la despensa</button>
-      <button class="block" data-act="${act(async () => { if (navigator.share) await navigator.share({ title: 'Lista de la compra', text: share }).catch(() => {}); else { await navigator.clipboard.writeText(share); toast('Lista copiada'); } })}">Compartir lista</button>
+      <button class="block" data-act="${act(async () => { if (navigator.share) { await navigator.share({ title: 'Lista de la compra', text: share }).catch(() => {}); return; } try { await navigator.clipboard.writeText(share); toast('Lista copiada'); } catch { const ta = document.createElement('textarea'); ta.value = share; ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta); ta.select(); let ok = false; try { ok = document.execCommand('copy'); } catch {} ta.remove(); toast(ok ? 'Lista copiada' : 'No se pudo copiar'); } })}">Compartir lista</button>
       <p class="xs muted">La carne y el pescado de los 2 próximos días van a la nevera; el resto, al congelador.</p>` : ''}
     <button class="block" data-act="${act(() => { invalidate('shopping'); render(); })}">Recalcular</button>`;
 }

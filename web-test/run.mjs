@@ -50,7 +50,7 @@ const REST = {
 };
 const FN = {
   'nutrition-day': { settings: { mode: 'definicion', mealSlots: st.mealSlots, optionalSlots: ['desayuno', 'merienda'] }, days, balance: E.weekBalance(days.map((d) => ({ date: d.date, target: d.target.macros, totals: d.totals, past: d.date < today }))), supplements: { recs: supp.recs.map((r) => ({ ...r, supplementId: r.id === 'colageno' ? 'sp1' : r.id === 'magnesio' ? 'sp2' : undefined })), notes: supp.notes, week: E.weeklySupplementPlan({ available: [{ id: 'creatina', name: 'Creatina', doseText: '5 g' }, { id: 'colageno', name: 'Colágeno', doseText: '10 g' }, { id: 'vitamina_c', name: 'Vitamina C', doseText: '500 mg' }, { id: 'aminoacidos', name: 'Aminoácidos', doseText: '10 g' }], days: [...Array(7)].map((_, i) => ({ date: E.addDays(today, i), sessions: plannedRows.filter((x) => x.date === E.addDays(today, i)).map((x) => ({ ...x, estMinutes: x.est_minutes })) })) }), missing: E.missingSupplements(['colageno', 'vitamina_c'], { date: today }) }, expiringSoon: [], batchPlan: batch, shopping: shopping.items },
-  'shopping-list': { weekStart: mon, ...shopping, checked: [] },
+  'shopping-list': { weekStart: mon, ...shopping, checked: [], addedToPantry: 4 },
   insights: { running: { vdot: 47, vdotNote: 'Basado en 10 km en 45:10 (competición).', paces, zones: E.hrZones(profile), predictions: E.predictions(47), weeks: [...Array(12)].map((_, i) => ({ week: E.addDays(mon, -7 * (11 - i)), km: [18, 22, 25, 19, 27, 30, 21, 31, 33, 24, 35, 26][i] })), runs: [...Array(12)].map((_, i) => ({ date: E.addDays(today, -7 * (12 - i)), km: 8, paceSecPerKm: 330 - i * 2 })), distribution28d: { low: 0.74, mid: 0.12, high: 0.14, totalS: 40000 } },
     lifts: [{ exerciseId: 'back_squat', name: 'Back Squat', bestActual1RM: { kg: 100, date: '2026-06-01' }, bestE1RM: { kg: 101.3, date: '2026-10-28' }, workingE1RM: { kg: 99.5, basis: 'mejor estimación de las últimas 6 semanas' }, history: [{ date: '2026-09-01', e1rm: 92 }, { date: '2026-10-01', e1rm: 96 }, { date: '2026-10-28', e1rm: 99.5 }], suggestion: { loadKg: 80, explanation: '1RM de trabajo 99,5 kg. 5×5 dejando 2 en reserva ≈ 81 % → 80 kg.' } }],
     fitness: [...Array(60)].map((_, i) => ({ date: E.addDays(today, i - 60), ctl: 40 + i * 0.3, atl: 45 + 10 * Math.sin(i / 4), tsb: 0, acwr: 1 + 0.2 * Math.sin(i / 5) })) },
@@ -185,5 +185,45 @@ await shot('#/perfil', '14b-watch', () => page.getByText('Apple Watch automátic
 await shot('#/perfil', '14-atajo', () => page.getByText('Apple Salud (Atajo)').click());
 await shot('#/inicio', '15-checkin', () => page.locator('#view .card.row').first().click());
 await shot('#/nutricion', '16-editar-comida', async () => { await page.getByRole('button', { name: 'Hoy', exact: true }).click(); await page.waitForTimeout(500); await page.getByRole('button', { name: '✎ Cambiar' }).first().click(); });
+// ---------- Recorrido automático: pulsa TODOS los botones de cada pantalla (y los de las hojas que abren) ----------
+if (process.env.MONKEY) {
+  page.on('dialog', (d) => d.accept(d.type() === 'prompt' ? 'Prueba' : undefined).catch(() => {}));
+  const screens = [['#/inicio'], ['#/plan'], ['#/entrenos'], ['#/entrenos', 'Historial'], ['#/entrenos', 'Progreso'], ['#/nutricion', 'Hoy'], ['#/nutricion', 'Menú'], ['#/nutricion', 'Compra'], ['#/nutricion', 'Batch'], ['#/nutricion', 'Despensa'], ['#/nutricion', 'Suplementos'], ['#/coach'], ['#/perfil']];
+  let clicks = 0; const seen = new Set();
+  const go = async (route, tab) => {
+    await page.evaluate(() => { const sh = document.getElementById('sheet'); if (sh) sh.hidden = true; document.querySelectorAll('.scan-ov').forEach((x) => x.remove()); });
+    await page.goto(`http://forja.test/index.html${route === '#/inicio' ? '#/plan' : '#/inicio'}`); await page.waitForTimeout(150);
+    await page.goto(`http://forja.test/index.html${route}`); await page.waitForTimeout(450);
+    if (tab) { await page.getByRole('button', { name: tab, exact: true }).first().click().catch(() => {}); await page.waitForTimeout(350); }
+  };
+  for (const [route, tab] of screens) {
+    await go(route, tab);
+    const n = await page.locator('#view [data-act]').count();
+    for (let i = 0; i < n; i++) {
+      await go(route, tab);
+      const el = page.locator('#view [data-act]').nth(i);
+      const label = ((await el.innerText().catch(() => '')) || '').trim().slice(0, 40).replace(/\s+/g, ' ');
+      const key = `${route}${tab ?? ''}:${label}`; if (seen.has(key) || /^(Plan|Inicio|Entrenos|Nutrición|Coach)$/.test(label)) continue; seen.add(key);
+      const before = errors.length;
+      await el.click({ timeout: 2000 }).catch(() => {}); clicks++; await page.waitForTimeout(350);
+      // un nivel dentro de la hoja que se abra
+      const sheetOpen = await page.evaluate(() => !document.getElementById('sheet')?.hidden);
+      if (sheetOpen) {
+        const m = await page.locator('#sheet [data-act]').count();
+        for (let j = 0; j < Math.min(m, 14); j++) {
+          const b = page.locator('#sheet [data-act]').nth(j);
+          const lb = ((await b.innerText().catch(() => '')) || '').trim().slice(0, 30);
+          if (/Eliminar|Desconectar|Descartar|Borrar|Cerrar sesi/i.test(lb)) continue;
+          await b.click({ timeout: 1500 }).catch(() => {}); clicks++; await page.waitForTimeout(250);
+          if (await page.evaluate(() => document.getElementById('sheet')?.hidden)) break;
+        }
+      }
+      for (const e of errors.slice(before)) console.log(`  ✗ ${key} → ${e}`);
+      const bad = await page.evaluate(() => { const t = document.body.innerText; const m = t.match(/.{0,40}\b(undefined|NaN|\[object Object\]|Invalid Date)\b.{0,30}/); return m ? m[0].replace(/\s+/g, ' ') : null; });
+      if (bad && !seen.has('txt:' + bad)) { seen.add('txt:' + bad); console.log(`  ⚠ texto raro tras ${key}: «${bad}»`); }
+    }
+  }
+  console.log(`Recorrido: ${clicks} pulsaciones en ${screens.length} pantallas`);
+}
 await browser.close();
 console.log(errors.length ? errors.join('\n') : 'Sin errores de JavaScript');
