@@ -83,7 +83,7 @@ input[type=range] { padding: 0; accent-color: var(--accent); }
 #sheet .grab { width: 40px; height: 5px; border-radius: 9px; background: rgba(255,255,255,.2); margin: 0 auto 10px; }
 #sheet .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 #sheet .head h3 { margin: 0; font-size: 18px; }
-#toast { position: fixed; z-index: 30; left: 50%; transform: translateX(-50%); top: calc(var(--safe-top) + 12px); background: rgba(40,40,48,.96); padding: 10px 16px; border-radius: 99px; font-size: 14px; max-width: 90vw; box-shadow: 0 8px 30px rgba(0,0,0,.4); }
+#toast { position: fixed; z-index: 30; left: 50%; transform: translateX(-50%); bottom: calc(var(--safe-bottom) + 78px); background: rgba(40,40,48,.96); padding: 10px 16px; border-radius: 99px; font-size: 14px; max-width: 90vw; box-shadow: 0 8px 30px rgba(0,0,0,.4); }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .days { display: flex; gap: 6px; margin: 8px 0; }
 .day { flex: 1; min-width: 0; display: block; text-align: center; padding: 8px 0; border-radius: 13px; background: var(--card); border: 1px solid transparent; color: var(--text); }
