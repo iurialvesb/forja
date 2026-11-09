@@ -32,9 +32,10 @@ async function hoy() {
     ${w.balance?.message ? html`<div class="card tight small">📅 ${w.balance.message}</div>` : ''}
     ${d.adjustments?.length ? html`<div class="card tight"><div class="small" style="color:var(--accent);font-weight:700">🔄 He reajustado lo que te queda hoy</div>${d.adjustments.map((a) => html`<div class="small">• ${a.text}</div>`)}</div>` : ''}
     ${(() => {
-      const opt = (w.settings.optionalSlots ?? []).filter((x) => !meals.some((m) => m.slot === x));
-      const all = [...meals.map((m) => ({ slot: m.slot, m })), ...opt.map((slot) => ({ slot, m: null }))].sort((a, b) => SLOTS.indexOf(a.slot) - SLOTS.indexOf(b.slot));
-      return all.map(({ slot, m }) => (m ? mealCard(m) : html`<div class="card tight row" style="border-style:dashed;opacity:.8"><div class="grow"><b class="small" style="color:var(--accent)">${slotName(slot)}</b> <span class="xs muted">(opcional)</span><div class="xs muted">Solo si lo haces hoy, p. ej. al volver de correr.</div></div><button class="sm" data-act="${act(() => logFood(slot))}">＋ Añadir</button></div>`));
+      const fixed = (w.settings.mealSlots ?? []).filter((x) => !meals.some((m) => m.slot === x));
+      const opt = (w.settings.optionalSlots ?? []).filter((x) => !meals.some((m) => m.slot === x) && !fixed.includes(x));
+      const all = [...meals.map((m) => ({ slot: m.slot, m })), ...fixed.map((slot) => ({ slot, m: null, fixed: true })), ...opt.map((slot) => ({ slot, m: null }))].sort((a, b) => SLOTS.indexOf(a.slot) - SLOTS.indexOf(b.slot));
+      return all.map(({ slot, m, fixed: fx }) => (m ? mealCard(m) : html`<div class="card tight row" style="border-style:dashed;opacity:${fx ? 1 : 0.8}"><div class="grow"><b class="small" style="color:var(--accent)">${slotName(slot)}</b> <span class="xs muted">${fx ? '(sin planificar)' : '(opcional)'}</span><div class="xs muted">${fx ? 'Aún no está en tu menú: genera el menú en Batch o apunta lo que comas.' : 'Solo si lo haces hoy, p. ej. al volver de correr.'}</div></div><button class="sm" data-act="${act(() => logFood(slot))}">＋ Añadir</button></div>`));
     })()}
     ${!meals.length ? html`<div class="card muted small">Sin menú para hoy. Genéralo en <b>Batch</b> o cuéntame lo que has cocinado.</div>` : ''}
     <button class="primary block" data-act="${act(() => logFood())}">＋ He comido algo (extra o fuera del menú)</button>
@@ -130,7 +131,13 @@ async function menu() {
   return html`
     <div class="row"><button class="sm" data-act="${act(() => { menuWeek -= 7; render(); })}">‹</button><b class="grow" style="text-align:center">Semana del ${shortDate(mon)}</b><button class="sm" data-act="${act(() => { menuWeek += 7; render(); })}">›</button></div>
     ${w.days.map((d) => html`<h2>${dayName(d.date)} <small>${n0(d.totals.kcal)}/${n0(d.target.macros.kcal)} kcal · P ${n0(d.totals.protein)}/${n0(d.target.macros.protein)}</small></h2>
-      ${d.meals.length ? [...d.meals].sort((a, b) => SLOTS.indexOf(a.slot) - SLOTS.indexOf(b.slot)).map((m) => html`<div class="card tight row" data-act="${act(() => editMeal(m))}"><div class="grow"><div class="xs" style="color:var(--accent)">${slotName(m.slot)}</div><div class="small" style="font-weight:600">${m.title}</div></div><span class="xs muted">${n0(m.macros.kcal)} kcal</span>${m.status !== 'planned' ? ' ✎' : ''}</div>`) : html`<div class="card tight muted small">Sin menú.</div>`}
+      ${(() => {
+        const fixed = w.settings.mealSlots ?? [], opt = w.settings.optionalSlots ?? [];
+        const slots = [...new Set([...fixed, ...opt, ...d.meals.map((m) => m.slot)])].sort((a, b) => SLOTS.indexOf(a) - SLOTS.indexOf(b));
+        return slots.map((sl) => { const m = d.meals.find((x) => x.slot === sl);
+          if (m) return html`<div class="card tight row" data-act="${act(() => editMeal(m))}"><div class="grow"><div class="xs" style="color:var(--accent)">${slotName(m.slot)}</div><div class="small" style="font-weight:600">${m.title}</div></div><span class="xs muted">${n0(m.macros.kcal)} kcal</span>${m.status !== 'planned' ? ' ✎' : ''}</div>`;
+          return html`<div class="card tight row" style="border-style:dashed;opacity:.75"><div class="grow"><div class="xs" style="color:var(--accent)">${slotName(sl)}</div><div class="small muted">${fixed.includes(sl) ? 'Sin planificar' : 'Opcional'}</div></div><button class="sm ghost" data-act="${act(() => logFood(sl, { date: d.date }))}">＋</button></div>`; });
+      })()}
       ${d.alerts.map((a) => html`<div class="small alert">⚠️ ${a.message}</div>`)}`)}`;
 }
 
