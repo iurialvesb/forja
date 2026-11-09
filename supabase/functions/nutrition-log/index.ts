@@ -2,10 +2,8 @@
 //  { action:'parse', text?|photoPath?|barcode? } → alimentos detectados con gramos y macros de la base de datos
 //  { action:'confirm', date, slot, items:[{foodId,name,grams}], source, plannedMealId?, deductPantry? } → guarda y reequilibra
 import { handler, json, requireUser, userClient, HttpError } from '../_shared/supabase.ts';
-import { loadContext } from '../_shared/context.ts';
 import { resolveFood, loadFoods } from '../_shared/foods.ts';
 import { requireAIConsent, structured } from '../_shared/vision.ts';
-import { computeWeek } from '../_shared/nutrition.ts';
 import { macrosOf, addMacros, ZERO, roundMacros, consume, type Macros } from '../_shared/engine/index.ts';
 import { offSearch, cacheProduct, pool } from '../_shared/off.ts';
 
@@ -40,13 +38,13 @@ Deno.serve(handler(async (req) => {
       return json({ items: [{ foodId: f.id, name: f.name, grams, gramsConfidence: 'estimado', macros: roundMacros(macrosOf(f, grams)), source: f.source }], questions: ['¿Cuántos gramos has tomado?'] });
     }
     await requireAIConsent(sb);
-    const r = await structured<{ items: any[]; questions?: string[] }>(sb, { system: SYSTEM, text: body.text ?? 'Identifica lo que hay en el plato.', photoPath: body.photoPath, tool: 'registrar_alimentos', schema, fast: true });
+    const r = await structured<{ items: any[]; questions?: string[] }>(sb, { system: SYSTEM, text: body.text ?? 'Identifica lo que hay en el plato.', photoPath: body.photoPath, tool: 'registrar_alimentos', schema, fast: true, lite: true });
     const items: Record<string, unknown>[] = [];
     const questions = [...(r.questions ?? [])];
     const found = await pool(r.items, 5, async (it: any) => {
       // Producto de supermercado con marca: primero el producto real (Open Food Facts); si no, base genérica.
       if ((it.brand || it.packaged) && !it.barcode) {
-        const p = (await offSearch(it.nameEs, it.brand, 3).catch(() => []))[0];
+        const p = (await offSearch(it.nameEs, it.brand, 3, true).catch(() => []))[0];
         if (p?.food) { cacheProduct(p).catch(() => {}); return { it, f: p.food, imageUrl: p.imageUrl }; }
       }
       return { it, f: await resolveFood(sb, it.nameEs, it.queryEn, it.barcode, it.cooked).catch(() => null), imageUrl: undefined };
@@ -78,10 +76,8 @@ Deno.serve(handler(async (req) => {
         else if (a.quantityG !== b.quantityG || a.units !== b.units) await sb.from('pantry_items').update({ quantity_g: a.quantityG ?? null, units: a.units ?? null }).eq('id', b.id);
       }
     }
-    const ctx = await loadContext(sb, userId);
-    const week = await computeWeek(sb, ctx);
-    const day = week.days.find((d) => d.date === body.date);
-    return json({ logged: roundMacros(tot), day: day ? { target: day.target.macros, totals: day.totals, alerts: day.alerts } : null, missingInPantry: missing });
+    // El reequilibrio del día lo recalcula la app al volver a pintar (nutrition-day): así guardar es inmediato.
+    return json({ logged: roundMacros(tot), day: null, missingInPantry: missing });
   }
   throw new HttpError(400, 'Acción desconocida');
 }));

@@ -31,8 +31,9 @@ async function usdaSearch(queryEn: string): Promise<Food | null> {
   if (!key) return null;
   const res = await fetch(`https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${key}`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ query: queryEn, dataType: ['Foundation', 'SR Legacy'], pageSize: 5 }),
-  });
+    body: JSON.stringify({ query: queryEn, dataType: ['Foundation', 'SR Legacy'], pageSize: 5 }), signal: AbortSignal.timeout(5000),
+  }).catch(() => null);
+  if (!res) return null;
   if (!res.ok) return null;
   const j = await res.json();
   const f = j.foods?.[0];
@@ -45,8 +46,8 @@ async function usdaSearch(queryEn: string): Promise<Food | null> {
 }
 
 export async function offBarcode(code: string): Promise<Food | null> {
-  const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,nutriments,serving_quantity`, { headers: { 'User-Agent': 'Forja/0.1 (app personal de entrenamiento)' } });
-  if (!res.ok) return null;
+  const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,nutriments,serving_quantity`, { headers: { 'User-Agent': 'Forja/0.1 (app personal de entrenamiento)' }, signal: AbortSignal.timeout(6000) }).catch(() => null);
+  if (!res?.ok) return null;
   const j = await res.json();
   if (j.status !== 1 || !j.product?.nutriments) return null;     // OFF responde 200 aunque no exista
   const n = j.product.nutriments;

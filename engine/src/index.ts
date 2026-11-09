@@ -24,3 +24,4 @@ export * from './activityImport.ts';
 export * from './hyrox.ts';
 export * from './goals.ts';
 export * from './weekly.ts';
+export * from './foodText.ts';

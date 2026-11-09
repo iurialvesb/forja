@@ -1,6 +1,7 @@
 // Nutrición: hoy (chequeo diario), menú semanal, compra, batch cooking, despensa y suplementos.
 import * as api from './api.js';
 import { get, invalidate, render } from './app.js';
+import { parseFoodText, matchFood } from './engine/foodText.js';
 import { html, act, toast, sheet, setSheet, closeSheet, busy, today, addDays, monday, dayName, shortDate, n0, bar, resizeImage, SLOTS, slotName, GOAL_MODES } from './ui.js';
 
 const uid = () => api.userId();
@@ -94,35 +95,90 @@ async function editMeal(m) {
 }
 
 // Registrar comida (texto, foto o código de barras)
+// Catálogo de alimentos (tus productos + los de referencia) para interpretar al instante en el móvil.
+const foodCatalog = () => get('foodcat', async () => {
+  const rows = await api.db.select('foods', { select: 'id,name,kcal,protein,carbs,fat,unit_grams,source,brand,search_terms', limit: 5000 }).catch(() => []);
+  return rows.map((r) => ({ id: r.id, name: r.name, terms: r.search_terms ?? [], unitGrams: r.unit_grams != null ? +r.unit_grams : undefined, brand: r.brand, source: r.source, per100: { kcal: +r.kcal, protein: +r.protein, carbs: +r.carbs, fat: +r.fat } }));
+}, 6 * 3600_000);
+const macrosFor = (f, g) => ({ kcal: (f.per100.kcal * g) / 100, protein: (f.per100.protein * g) / 100, carbs: (f.per100.carbs * g) / 100, fat: (f.per100.fat * g) / 100 });
+
 export function logFood(slot, opts = {}) {
   const now = new Date().getHours();
   let sel = slot ?? (now < 11 ? 'desayuno' : now < 13 ? 'media_manana' : now < 16 ? 'comida' : now < 20 ? 'merienda' : 'cena');
-  let items = [], questions = [], photoPath = null, lastText = opts.prefill ?? '';
-  const draw = () => setSheet(html`
-    <label>Comida</label><select id="lslot">${SLOTS.map((s) => html`<option value="${s}" ${s === sel ? 'selected' : ''}>${slotName(s)}</option>`)}</select>
-    <label>${opts.replace ? '¿Qué has comido en su lugar?' : '¿Qué has comido?'}</label><textarea id="ltext" placeholder="${opts.replace ? 'Ej.: una coca de tomate de la panadería y un café con leche' : 'Ej.: 200 g de pollo, 80 g de arroz, una cucharada de aceite y una manzana'}">${lastText}</textarea>
-    <button class="block" data-act="${act((b) => busy(b, async () => { const t = document.getElementById('ltext').value.trim(); if (!t) return; lastText = t; const r = await api.fn('nutrition-log', { action: 'parse', text: t }); items.push(...r.items); questions = r.questions || []; draw(); }))}">Analizar texto</button>
+  let slotTouched = !!slot;
+  let items = [], extra = [], questions = [], photoPath = null, lastText = opts.prefill ?? '', pending = [], seq = 0;
+  let catalog = null;
+  foodCatalog().then((c) => { catalog = c; if (lastText) interpret(lastText); }).catch(() => { catalog = []; });
+  // Interpreta en el móvil (instantáneo); lo que no reconoce lo busca el servidor en segundo plano, solo esas partes.
+  const interpret = (text) => {
+    lastText = text;
+    if (!catalog) return;
+    const r = parseFoodText(text);
+    if (r.slot && !slotTouched) sel = r.slot;
+    const prev = new Map(items.map((i) => [i.raw, i]));
+    items = []; const unknown = [];
+    for (const it of r.items) {
+      const old = prev.get(it.raw);
+      if (old && old.fromServer) { items.push(old); continue; }
+      const f = matchFood(it.name, catalog, it.brand, it.cooked);
+      if (f) items.push({ raw: it.raw, foodId: f.id, name: f.name, grams: it.grams, gramsConfidence: it.gramsConfidence, macros: macrosFor(f, it.grams) });
+      else unknown.push(it.raw);
+    }
+    pending = unknown;
+    draw();
+    clearTimeout(interpret.t);
+    if (unknown.length) interpret.t = setTimeout(() => lookup(unknown), 900);
+  };
+  const lookup = async (raws) => {
+    const my = ++seq;
+    try {
+      const r = await api.fn('nutrition-log', { action: 'parse', text: raws.join(', ') });
+      if (my !== seq) return;
+      const got = r.items || [];
+      // Cada parte que no entendí, con lo que ha encontrado el servidor (puede ser más de un alimento por parte).
+      for (const it of got) items.push({ ...it, raw: raws.length === 1 ? raws[0] : `srv:${it.name}`, fromServer: true });
+      questions = r.questions || []; pending = [];
+      catalog = null; invalidate('foodcat'); foodCatalog().then((c) => { catalog = c; });
+      draw();
+    } catch (e) { if (my === seq) { pending = []; questions = [`No he podido buscar: ${raws.join(', ')} (${e.message})`]; draw(); } }
+  };
+  const total = () => [...items, ...extra].reduce((a, i) => ({ kcal: a.kcal + (i.macros?.kcal ?? 0), protein: a.protein + (i.macros?.protein ?? 0) }), { kcal: 0, protein: 0 });
+  // Arriba (comida, cuadro de texto, foto, código) se pinta una vez para no cerrar el teclado; los resultados, en #lres.
+  const drawStatic = () => setSheet(html`
+    <label>Comida</label><select id="lslot" data-change="${act((el) => { sel = el.value; slotTouched = true; })}">${SLOTS.map((s) => html`<option value="${s}" ${s === sel ? 'selected' : ''}>${slotName(s)}</option>`)}</select>
+    <label>${opts.replace ? '¿Qué has comido en su lugar?' : '¿Qué has comido?'}</label><textarea id="ltext" placeholder="${opts.replace ? 'Ej.: una coca de tomate de la panadería y un café con leche' : 'Ej.: wrap de avena Hacendado, canónigos, un huevo revuelto y medio aguacate'}">${lastText}</textarea>
     <div class="grid2"><label class="btn" style="margin:0">📷 Foto del plato<input type="file" accept="image/*" id="lphoto" hidden></label>
-      <button data-act="${act(async () => { const { scanBarcode } = await import('./scanner.js'); const c = await scanBarcode(); if (c) busy(null, async () => { const r = await api.fn('nutrition-log', { action: 'parse', barcode: c.trim() }); items.push(...r.items); questions = r.questions || []; draw(); }); })}">📷 Código de barras</button></div>
+      <button data-act="${act(async () => { const { scanBarcode } = await import('./scanner.js'); const c = await scanBarcode(); if (c) busy(null, async () => { const r = await api.fn('nutrition-log', { action: 'parse', barcode: c.trim() }); extra.push(...r.items); questions = r.questions || []; draw(); }); })}">📷 Código de barras</button></div>
+    <div id="lres"></div>
+    <p class="xs muted">Se interpreta al instante en el móvil. Lo que no conozco lo busco en USDA y Open Food Facts (la IA solo traduce qué y cuánto).</p>`);
+  const draw = () => {
+    const el = document.getElementById('lres'); if (!el) return;
+    const sl = document.getElementById('lslot'); if (sl && sl.value !== sel) sl.value = sel;
+    const all = [...items, ...extra];
+    el.innerHTML = html`
+    ${pending.length ? html`<p class="small muted"><span class="spinner"></span> Buscando: ${pending.join(' · ')}</p>` : ''}
     ${questions.map((qq) => html`<p class="alert small">❓ ${qq}</p>`)}
-    ${items.length ? html`<h3 style="margin-top:12px">Alimentos</h3>${items.map((i, k) => html`<div class="row"><span class="grow small">${i.name} ${i.gramsConfidence === 'estimado' ? html`<span class="tag amber">estimado</span>` : ''}</span>
-        <input style="width:80px" type="number" value="${i.grams}" data-change="${act((el) => { items[k].grams = +el.value; })}"> g <button class="sm ghost danger" data-act="${act(() => { items.splice(k, 1); draw(); })}">✕</button></div>`)}
+    ${all.length ? html`<h3 style="margin-top:12px">Alimentos <small class="muted">${n0(total().kcal)} kcal · P ${n0(total().protein)} g</small></h3>${all.map((i) => html`<div class="row"><span class="grow small">${i.name} ${i.gramsConfidence === 'estimado' ? html`<span class="tag amber">estimado</span>` : ''}</span>
+        <input style="width:80px" type="number" inputmode="decimal" value="${Math.round(i.grams)}" data-change="${act((inp) => { const g = +inp.value; if (i.macros && i.grams) { const k = g / i.grams; i.macros = { kcal: i.macros.kcal * k, protein: i.macros.protein * k, carbs: i.macros.carbs * k, fat: i.macros.fat * k }; } i.grams = g; i.gramsConfidence = 'dicho'; draw(); })}"> g <button class="sm ghost danger" data-act="${act(() => { const k = items.indexOf(i); if (k >= 0) items.splice(k, 1); else extra.splice(extra.indexOf(i), 1); draw(); })}">✕</button></div>`)}
       <label class="check"><input type="checkbox" id="lded" ${opts.replace ? '' : 'checked'}> Descontar de mi despensa (si lo has preparado en casa)</label>
       <button class="primary block" data-act="${act((b) => busy(b, async () => {
         sel = document.getElementById('lslot').value;
         const said = document.getElementById('ltext')?.value.trim() || lastText;
-        const r = await api.fn('nutrition-log', { action: 'confirm', date: opts.date ?? today(), slot: sel, items: items.map(({ foodId, name, grams }) => ({ foodId, name, grams })), source: photoPath ? 'foto' : 'texto', deductPantry: document.getElementById('lded').checked, photoPath,
-          plannedMealId: opts.plannedMealId, title: opts.replace ? (said ? said.charAt(0).toUpperCase() + said.slice(1, 70) : items.map((i) => i.name).join(', ').slice(0, 70)) : undefined });
+        const list = [...items, ...extra].filter((i) => i.foodId);
+        const r = await api.fnQueued('nutrition-log', { action: 'confirm', date: opts.date ?? today(), slot: sel, items: list.map(({ foodId, name, grams }) => ({ foodId, name, grams })), source: photoPath ? 'foto' : 'texto', deductPantry: document.getElementById('lded').checked, photoPath,
+          plannedMealId: opts.plannedMealId, title: opts.replace ? (said ? said.charAt(0).toUpperCase() + said.slice(1, 70) : list.map((i) => i.name).join(', ').slice(0, 70)) : undefined });
         closeSheet(); invalidate('nutweek', 'pantry'); render();
-        const msgs = [...(r.day?.alerts || []).map((a) => a.message), ...(r.missingInPantry || []).map((x) => `No tenías ${x.name} en la despensa.`)];
-        toast(msgs.length ? msgs.join(' · ') : `Registrado: ${n0(r.logged.kcal)} kcal`, 7000);
-      }))}">Registrar</button>` : ''}
-    <p class="xs muted">Macros de USDA FoodData Central y Open Food Facts (ODbL). La IA (Gemini) solo interpreta qué y cuánto has comido.</p>`);
+        if (r.queued) return toast('Sin conexión: lo apunto y lo subo al volver la cobertura');
+        const msgs = (r.missingInPantry || []).map((x) => `No tenías ${x.name} en la despensa.`);
+        toast([`Registrado: ${n0(r.logged.kcal)} kcal`, ...msgs].join(' · '), 6000);
+      }))}">Registrar${pending.length ? ' lo reconocido' : ''}</button>` : lastText.trim() && !pending.length && catalog ? html`<p class="small muted">No reconozco nada todavía: escribe alimentos separados por comas.</p>` : ''}`.s;
+  };
   sheet(opts.replace ? `${slotName(sel)}: lo que comí` : 'Registrar comida', '');
-  draw();
+  drawStatic(); draw();
+  document.getElementById('ltext').addEventListener('input', (e) => { clearTimeout(drawStatic.t); const v = e.target.value; drawStatic.t = setTimeout(() => interpret(v), 200); });
   document.getElementById('sheet').onchange = async (e) => {
     if (e.target.id !== 'lphoto' || !e.target.files[0]) return;
-    try { toast('Analizando la foto…'); photoPath = await api.uploadPhoto(await resizeImage(e.target.files[0], 1400)); const r = await api.fn('nutrition-log', { action: 'parse', photoPath }); items.push(...r.items); questions = r.questions || []; draw(); }
+    try { toast('Analizando la foto…'); photoPath = await api.uploadPhoto(await resizeImage(e.target.files[0], 1400)); const r = await api.fn('nutrition-log', { action: 'parse', photoPath }); extra.push(...r.items); questions = r.questions || []; draw(); }
     catch (err) { toast(err.message, 6000); }
   };
 }

@@ -35,7 +35,7 @@ Deno.serve(handler(async (req) => {
   const body = await req.json();
   if (body.action === 'parse') {
     await requireAIConsent(sb);
-    const r = await structured<{ items: any[]; questions?: string[] }>(sb, { system: SYSTEM, text: body.text, photoPath: body.photoPath, tool: 'despensa', schema, maxTokens: 4000, fast: true });
+    const r = await structured<{ items: any[]; questions?: string[] }>(sb, { system: SYSTEM, text: body.text, photoPath: body.photoPath, tool: 'despensa', schema, maxTokens: 4000, fast: true, lite: true });
     return json(r);
   }
   if (body.action === 'recipe') {

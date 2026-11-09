@@ -66,15 +66,15 @@ export async function offByCode(code: string): Promise<OffProduct | null> {
 }
 
 /** Búsqueda por texto: primero el buscador nuevo (rápido), si falla el clásico. Prioriza la marca pedida y productos de España. */
-export async function offSearch(q: string, brand?: string, size = 6): Promise<OffProduct[]> {
+export async function offSearch(q: string, brand?: string, size = 6, quick = false): Promise<OffProduct[]> {
   const query = [q, brand].filter(Boolean).join(' ');
   let hits: any[] = [];
   try {
-    const ctl = AbortSignal.timeout(6000);
+    const ctl = AbortSignal.timeout(quick ? 3500 : 6000);
     const r = await fetch(`https://search.openfoodfacts.org/search?q=${encodeURIComponent(query)}&langs=es&page_size=${size * 2}&fields=${FIELDS},countries_tags`, { headers: UA, signal: ctl });
     if (r.ok) hits = (await r.json()).hits ?? [];
   } catch { /* siguiente */ }
-  if (!hits.length) {
+  if (!hits.length && !quick) {
     try {
       const r = await fetch(`https://es.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=${size * 2}&fields=${FIELDS}`, { headers: UA, signal: AbortSignal.timeout(8000) });
       if (r.ok) hits = (await r.json()).products ?? [];

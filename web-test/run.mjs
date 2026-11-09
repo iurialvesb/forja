@@ -74,6 +74,8 @@ const FN = {
   FN.pantry.recipe = { title: 'Tortilla de patata y espinacas', servings: 2, minutes: 20, ingredients: [{ name: 'Huevos', grams: 240, fromPantry: true }, { name: 'Espinacas', grams: 120, fromPantry: true }, { name: 'Patata', grams: 300, fromPantry: true }], steps: ['Cuece la patata en el micro 6 min.', 'Saltea las espinacas.', 'Cuaja con el huevo batido.'], tip: 'Media para la cena y media para el almuerzo de mañana.' };
   FN.pantry.uses = ['Espinacas', 'Huevos'];
 }
+REST.foods = E.REFERENCE_FOODS.map((f) => ({ id: f.id, name: f.name, kcal: f.per100.kcal, protein: f.per100.protein, carbs: f.per100.carbs, fat: f.per100.fat, unit_grams: f.unitGrams ?? null, source: f.source, brand: null, search_terms: [] }));
+FN['nutrition-log'] = (b) => (b.action === 'confirm' ? { logged: { kcal: 512 }, day: null, missingInPantry: [] } : { items: [{ foodId: 'off_1', name: 'Coca de tomate', grams: 150, gramsConfidence: 'estimado', macros: { kcal: 400, protein: 9, carbs: 60, fat: 14 } }], questions: [] });
 const posted = [];
 REST.planned_sessions.push({ id: 'pcf', date: E.addDays(today, -1), slot: 'pm', type: 'crossfit_box', discipline: 'crossfit', title: 'CrossFit (pendiente de reserva)', objective: 'Mantener fuerza', intensity: 'alta', est_minutes: 60, status: 'done', completed_session_id: 's1', steps: [] },
   { id: 'pcf2', date: E.addDays(today, -1), slot: 'am', type: 'run_easy', discipline: 'running', title: 'Rodaje suave', objective: 'Aeróbico', intensity: 'baja', est_minutes: 40, status: 'planned', steps: [] },
@@ -217,6 +219,21 @@ await page.evaluate(() => { localStorage.removeItem('forja:draft'); });
 await shot('#/nutricion/despensa', '21-despensa-receta', async () => { await page.getByText('Proponme una receta').click(); await page.waitForTimeout(500); });
 await shot('#/coach', '22-coach-resumen');
 await shot('#/inicio', '23-inicio-abajo', async () => { await page.evaluate(() => window.scrollTo(0, 900)); });
+{ // Registrar comida: interpretación instantánea en el móvil
+  await page.goto('http://forja.test/index.html#/inicio'); await page.waitForTimeout(200); await page.goto('http://forja.test/index.html#/nutricion/hoy'); await page.waitForTimeout(700);
+  await page.getByText('He comido algo').click(); await page.waitForTimeout(400);
+  let calls = 0; page.on('request', (r) => { if (r.url().includes('/functions/v1/nutrition-log')) calls++; });
+  const t0 = Date.now();
+  await page.locator('#ltext').pressSequentially('wrap de avena de hacendado, canonigos, un huevo revuelto y medio aguacate como almuerzo', { delay: 5 });
+  await page.waitForFunction(() => document.querySelectorAll('#lres .row').length >= 4, null, { timeout: 3000 }).catch(() => {});
+  const n = await page.locator('#lres .row').count(); const slot = await page.locator('#lslot').inputValue();
+  const focused = await page.evaluate(() => document.activeElement?.id);
+  console.log(n === 4 && slot === 'media_manana' && calls === 0 && focused === 'ltext' ? `Comida al instante OK (${Date.now() - t0} ms, sin servidor, teclado sin cerrarse)` : `✗ comida instantánea: ${n} alimentos, comida ${slot}, ${calls} llamadas, foco ${focused}`);
+  await page.screenshot({ path: `${OUT}/24-comida-instantanea.png` });
+  await page.locator('#ltext').pressSequentially(', una coca de tomate', { delay: 5 }); await page.waitForTimeout(1600);
+  const n2 = await page.locator('#lres .row').count(); console.log(n2 === 5 && calls === 1 ? 'Lo desconocido se busca aparte OK' : `✗ búsqueda aparte: ${n2} alimentos, ${calls} llamadas`);
+  await page.screenshot({ path: `${OUT}/24b-comida-busqueda.png` });
+}
 // ---------- Recorrido automático: pulsa TODOS los botones de cada pantalla (y los de las hojas que abren) ----------
 if (process.env.MONKEY) {
   page.on('dialog', (d) => d.accept(d.type() === 'prompt' ? 'Prueba' : undefined).catch(() => {}));

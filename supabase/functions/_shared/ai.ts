@@ -11,7 +11,7 @@ export const PROVIDER_LABEL = () => PROVIDER() === 'claude' ? 'Anthropic (Claude
 
 export interface GenArgs {
   system: string; messages: Message[]; tools?: Tool[]; toolChoice?: { type: 'auto' | 'any' | 'tool'; name?: string };
-  maxTokens?: number; temperature?: number; fast?: boolean; smart?: boolean;
+  maxTokens?: number; temperature?: number; fast?: boolean; smart?: boolean; lite?: boolean;
 }
 export interface GenResult { content: ContentBlock[]; stop_reason: string; usage?: unknown }
 
@@ -61,14 +61,19 @@ async function gemini(a: GenArgs): Promise<GenResult> {
   if (a.fast) body.generationConfig.thinkingConfig = { thinkingBudget: 0 };
   else if (a.smart) body.generationConfig.thinkingConfig = { thinkingLevel: 'low' };   // razona, pero sin pasarse de tiempo
   // Si el modelo está saturado (503) o sin cupo (429), se reintenta y luego se pasa al siguiente modelo.
-  const models = [...new Set([...(a.smart && !a.fast ? [Deno.env.get('GEMINI_SMART_MODEL') ?? 'gemini-pro-latest'] : []), MODEL(), 'gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'])];
+  // lite: textos sencillos (comidas, despensa) primero con Flash-Lite (≈1 s); smart: primero Pro.
+  const models = [...new Set([...(a.smart && !a.fast ? [Deno.env.get('GEMINI_SMART_MODEL') ?? 'gemini-pro-latest'] : []), ...(a.lite ? ['gemini-flash-lite-latest'] : []), MODEL(), 'gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'])];
   let res: Response | undefined;
   let lastStatus = 0;
+  const deadline = Date.now() + (a.fast ? 30_000 : 110_000);       // nunca más que esto en total (la función corta a los 150 s)
   outer: for (const model of models) {
+    if (Date.now() > deadline && res) break;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
     const think = body.generationConfig.thinkingConfig;
     for (let attempt = 0; attempt < 2; attempt++) {
-      res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env('GEMINI_API_KEY') }, body: JSON.stringify(body) });
+      try {
+        res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env('GEMINI_API_KEY') }, body: JSON.stringify(body), signal: AbortSignal.timeout(a.fast ? 20_000 : 60_000) });
+      } catch { lastStatus = 504; res = new Response('timeout', { status: 504 }); break; }      // colgado: siguiente modelo
       // Gemini 3 no admite «thinkingBudget: 0» (400): se prueba con razonamiento mínimo y, si tampoco, sin indicarlo.
       if (res.status === 400 && body.generationConfig.thinkingConfig) {
         const tc = body.generationConfig.thinkingConfig;
@@ -88,7 +93,7 @@ async function gemini(a: GenArgs): Promise<GenResult> {
     const t = await res!.text();
     const st = res!.status || lastStatus;
     if (st === 429) throw new Error('Has llegado al límite de uso de la IA de Google (por minuto o por día). Prueba en un rato.');
-    if (st === 503 || st === 500) throw new Error('La IA de Google está saturada ahora mismo (lo he intentado con varios modelos). Prueba de nuevo en un minuto.');
+    if (st === 503 || st === 500 || st === 504) throw new Error('La IA de Google está saturada o tarda demasiado (lo he intentado con varios modelos). Prueba de nuevo en un minuto.');
     throw new Error(`La IA ha dado un error (${st}). ${t.slice(0, 160)}`);
   }
   const j = await res!.json();

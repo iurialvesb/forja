@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-09 (tarde) · Registrar comida al instante
+- Intérprete de comidas en el móvil (`engine/src/foodText.ts`): cantidades («un», «medio», «200 g», «dos tostadas», «una cucharada»), marcas, cocinado/crudo y la comida («como almuerzo»). Sin esperar al servidor.
+- Solo lo que no reconoce va al servidor, y en segundo plano. El teclado no se cierra mientras escribes.
+- Servidor: Flash-Lite primero para textos sencillos, límites de tiempo en Gemini (20 s), USDA (5 s) y Open Food Facts (3,5 s); guardar ya no recalcula la semana entera.
+- 20 alimentos de diario nuevos (canónigos, wrap de avena Hacendado, pan, arroz cocido, jamón, café…): migración `0016_foods_diario`.
+
 ## 2026-11-09 · Revisión completa y mejoras
 - Tarjeta «Hoy» en Inicio con checks de entreno, comidas y suplementos; aviso «Añadir WOD» para entrenos del Watch sin pizarra.
 - «🎟 Reservé»: marca la clase de CrossFit como reservada y el plan ya no la mueve (`planned_sessions.reserved` + `locked`).
