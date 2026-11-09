@@ -110,8 +110,8 @@ await page.reload(); await page.waitForTimeout(800); if (errors.length) console.
 const shot = async (hash, name, fn) => { await page.evaluate(() => { const s = document.getElementById('sheet'); if (!s.hidden) { s.hidden = true; s.innerHTML = ''; } }); await page.goto(`http://forja.test/index.html${hash}`); await page.waitForTimeout(700); if (fn) { await fn(); await page.waitForTimeout(600); } await page.screenshot({ path: `${OUT}/${name}.png`, fullPage: false }); };
 await shot('#/inicio', '01-inicio');
 await shot('#/plan', '02-plan');
-await shot('#/plan', '02b-plan-ayer', async () => { const n = new Date(Date.parse(today + 'T12:00:00Z') - 864e5).getUTCDate(); await page.locator('.day', { hasText: String(n).padStart(2, '0') }).first().click(); });
-await shot('#/plan', '03-sesion', async () => { await page.locator('.day').first().click(); await page.waitForTimeout(400); await page.locator('#view .card.row').first().click(); });
+await shot('#/plan', '02b-plan-ayer', async () => { if (new Date(today + 'T12:00:00Z').getUTCDay() === 1) { await page.getByRole('button', { name: '‹' }).click(); await page.waitForTimeout(500); } const n = new Date(Date.parse(today + 'T12:00:00Z') - 864e5).getUTCDate(); await page.locator('.day', { hasText: String(n).padStart(2, '0') }).first().click(); });
+await shot('#/plan', '03-sesion', async () => { if (new Date(today + 'T12:00:00Z').getUTCDay() === 1) { await page.getByRole('button', { name: '›' }).click(); await page.waitForTimeout(500); } await page.locator('.day').first().click(); await page.waitForTimeout(400); await page.locator('#view .card.row').first().click(); });
 await shot('#/entrenos', '04-entrenos');
 const reopen = async () => { await page.goto('http://forja.test/index.html#/inicio'); await page.waitForTimeout(300); await page.goto('http://forja.test/index.html#/entrenos'); await page.waitForTimeout(700); };
 const WOD = `Afternoon Workout\n\nFERZA\nEMOM 10’\n- 6 FRONT SQUATS @ 50 kg\n- 15 HEELS ON PLATE 16KG GOBLET SQUATS\n\nWOD\nEMOM 24’ (4R)\n- 16 CAL ROW\n- 20 DEAD LIFT 50kg\n- 10 BURPEES OVER BAR\n- REST.\n- REST\n- REST.\n\nAMRAP 8\n- 10 wall balls 9kg\n- 10 box jumps`;
