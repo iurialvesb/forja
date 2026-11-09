@@ -1,0 +1,21 @@
+name: Diagnóstico (registros del servidor)
+on:
+  workflow_dispatch:
+    inputs:
+      hours: { description: 'Horas hacia atrás', default: '12' }
+jobs:
+  logs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Errores y tiempos de las funciones
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          REF: ${{ secrets.SUPABASE_PROJECT_ID }}
+          HOURS: ${{ inputs.hours }}
+        run: |
+          START=$(date -u -d "-${HOURS} hours" +%Y-%m-%dT%H:%M:%SZ); END=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          q() { curl -sS -G "https://api.supabase.com/v1/projects/$REF/analytics/endpoints/logs.all" -H "Authorization: Bearer $TOKEN" --data-urlencode "sql=$1" --data-urlencode "iso_timestamp_start=$START" --data-urlencode "iso_timestamp_end=$END"; echo; }
+          echo "=== Llamadas a funciones (estado y duración) ==="
+          q "select timestamp, m.function_id, r.method, resp.status_code, m.execution_time_ms from function_edge_logs cross join unnest(metadata) as m cross join unnest(m.request) as r cross join unnest(m.response) as resp order by timestamp desc limit 60"
+          echo "=== Mensajes de las funciones (errores y avisos) ==="
+          q "select timestamp, event_message, m.function_id, m.level from function_logs cross join unnest(metadata) as m where m.level in ('error','warning') or event_message ilike '%error%' order by timestamp desc limit 60"
