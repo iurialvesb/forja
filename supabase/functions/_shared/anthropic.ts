@@ -7,7 +7,7 @@ export interface Tool { name: string; description: string; input_schema: Record<
 export type ContentBlock =
   | { type: 'text'; text: string }
   | { type: 'image'; source: { type: 'base64'; media_type: string; data: string } }
-  | { type: 'tool_use'; id: string; name: string; input: any }
+  | { type: 'tool_use'; id: string; name: string; input: any; signature?: string }
   | { type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean };
 export interface Message { role: 'user' | 'assistant'; content: string | ContentBlock[] }
 

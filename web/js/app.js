@@ -4,6 +4,7 @@ import { html, act, toast, busy, today, addDays, closeSheet } from './ui.js';
 import { HOME, PLAN, WORKOUTS, COACH } from './screens.js';
 import { NUTRITION } from './nutrition.js';
 import { PROFILE, ONBOARDING } from './profile.js';
+import { GOAL } from './goals.js';
 
 // ---------- Caché de datos ----------
 const cache = new Map();
@@ -16,7 +17,7 @@ export function invalidate(...prefixes) { for (const k of [...cache.keys()]) if 
 
 // ---------- Navegación ----------
 const TABS = [['inicio', '🏠', 'Inicio'], ['plan', '📅', 'Plan'], ['entrenos', '🏃', 'Entrenos'], ['nutricion', '🥗', 'Nutrición'], ['coach', '💬', 'Coach']];
-const ROUTES = { inicio: HOME, plan: PLAN, entrenos: WORKOUTS, nutricion: NUTRITION, coach: COACH, perfil: PROFILE, onboarding: ONBOARDING };
+const ROUTES = { inicio: HOME, plan: PLAN, entrenos: WORKOUTS, nutricion: NUTRITION, coach: COACH, perfil: PROFILE, onboarding: ONBOARDING, objetivo: GOAL };
 
 export const go = (path) => { if (location.hash !== `#/${path}`) location.hash = `#/${path}`; else render(); };
 const route = () => { const [name = 'inicio', ...rest] = location.hash.replace(/^#\/?/, '').split('/'); return { name, params: rest }; };
@@ -74,6 +75,8 @@ export async function backgroundSync(force = false) {
   if (!api.user() || (!force && Date.now() - lastSync < 3 * 60_000)) return;
   lastSync = Date.now();
   try {
+    const sent = await api.flushOutbox().catch(() => 0);
+    if (sent) { invalidate(); render(); toast(`Sincronizado lo que apuntaste sin conexión (${sent})`); }
     const icu = await api.fn('intervals-sync', { action: 'pull' }).catch(() => null);   // Apple Watch vía HealthFit + Intervals.icu
     if (icu?.activities) { invalidate('sessions', 'planned', 'readiness', 'changes', 'insights'); toast(`⌚ ${icu.activities} entreno${icu.activities > 1 ? 's' : ''} nuevo${icu.activities > 1 ? 's' : ''} del Apple Watch`, 5000); }
     if (icu?.prs?.length) toast(`🏆 Nuevo récord: ${icu.prs[0]}`, 6000);
@@ -85,6 +88,7 @@ export async function backgroundSync(force = false) {
     if (inbox.processed || cal?.replanned) { invalidate(); render(); }
   } catch (e) { console.warn('sync', e); }
 }
+window.addEventListener('online', () => backgroundSync(true));
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') backgroundSync(); });
 
 // ---------- Arranque ----------

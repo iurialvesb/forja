@@ -3,8 +3,9 @@ import * as api from './api.js';
 import { get, invalidate, go, render } from './app.js';
 import {
   html, raw, act, toast, sheet, setSheet, closeSheet, busy, today, addDays, monday, dayName, shortDate, timeOf, daysUntil, pace, dur, n0,
-  icon, intensityTag, levelColor, ring, bar, barChart, lineChart, steps, resizeImage, phaseName, slotName,
+  icon, intensityTag, levelColor, ring, bar, barChart, lineChart, steps, resizeImage, phaseName, slotName, SLOTS,
 } from './ui.js';
+import { goalCard } from './goals.js';
 
 import { activityExtras } from './activity.js';
 import { startFromText, startFromPhoto, startManual, editSession, exerciseHistory, sessionEdits, draftBanner, addWodTo, joinWithWatch } from './logbook.js';
@@ -15,13 +16,16 @@ const q = (o) => o;
 // ======================= INICIO =======================
 export async function HOME() {
   const t = today(), mon = monday();
-  const [readiness, week, goals, phases, sessions, nut] = await Promise.all([
+  const [readiness, week, goals, phases, sessions, nut, fresh, weekly, supLogs] = await Promise.all([
     get('readiness', async () => (await api.db.select('readiness_daily', { date: `eq.${t}` }))[0]),
     get(`planned:${mon}`, () => api.db.select('planned_sessions', { date: `gte.${mon}`, and: `(date.lte.${addDays(mon, 13)})`, order: 'date,slot' })),
     get('goals', () => api.db.select('goals', { status: 'eq.active', order: 'date' })),
     get('phases', () => api.db.select('phases', { order: 'start_date' })),
     get('sessions:42', () => api.db.select('sessions', { deleted_at: 'is.null', started_at: `gte.${addDays(t, -42)}`, order: 'started_at.desc' })),
     get(`nutweek:${mon}`, () => api.fn('nutrition-day', { weekStart: mon }).catch(() => null)),
+    get('sessions:fresh', () => api.db.select('sessions', { select: 'id,started_at,duration_s,title,discipline,primary_source,session_blocks(id)', deleted_at: 'is.null', started_at: `gte.${addDays(t, -1)}T00:00:00Z`, discipline: 'in.(crossfit,hyrox)', order: 'started_at.desc' }).catch(() => [])),
+    get('weekly', () => api.fn('weekly', {}).catch(() => null), 1_800_000),
+    get(`suplog:${t}`, () => api.db.select('supplement_logs', { date: `eq.${t}` }).catch(() => [])),
   ]);
   const todays = (week.filter((s) => s.date === t)).filter((x) => x.status !== 'skipped');
   const thisWeek = sessions.filter((s) => s.started_at.slice(0, 10) >= mon);
@@ -31,6 +35,8 @@ export async function HOME() {
   const changes = await get('changes', () => api.db.select('plan_changes', { order: 'created_at.desc', limit: 5 }));
   const last = changes.find((c) => c.action !== 'mark_done');
   const h = new Date().getHours();
+  const noWod = fresh.filter((s) => s.primary_source === 'healthkit' && !(s.session_blocks || []).length);
+  const rep = weekly?.reports?.find((r) => r.week_start === weekly.current && !r.seen_at);
   return {
     title: h < 14 ? 'Buenos días' : h < 21 ? 'Buenas tardes' : 'Buenas noches',
     right: html`<button class="icon-btn" data-act="${act(() => go('perfil'))}">👤</button>`,
@@ -41,19 +47,9 @@ export async function HOME() {
           <div style="font-size:20px;font-weight:700;color:${levelColor(readiness?.level)}">${{ verde: 'Listo para entrenar', ambar: 'Con precaución', rojo: 'Prioriza recuperar' }[readiness?.level] ?? 'Haz el check-in'}</div>
           <div class="small muted">${readiness?.reasons?.[0] ?? 'Toca para contarme cómo estás hoy.'}</div></div>
       </div>
-      <h2>Hoy <small>${dayName(t, true)}</small></h2>
-      ${todays.length ? todays.map(plannedCard) : html`<div class="card muted">${week.length ? 'Descanso. Camina, duerme bien y come suficiente.' : 'Aún no hay plan: completa tu perfil y objetivos.'}</div>`}
-      <div class="card">
-        <div class="row"><h3 class="grow">Nutrición de hoy</h3>${nd ? html`<span class="tag accent">día ${nd.target.load}</span>` : ''}</div>
-        ${nd ? html`<div class="stats">
-            <div class="stat"><div class="l">kcal</div><div class="v">${n0(nd.totals.kcal)}<span class="u"> / ${n0(nd.target.macros.kcal)}</span></div></div>
-            <div class="stat"><div class="l">Proteína</div><div class="v" style="color:var(--red)">${n0(nd.totals.protein)}<span class="u"> / ${n0(nd.target.macros.protein)} g</span></div></div>
-            <div class="stat"><div class="l">Hidratos</div><div class="v" style="color:var(--blue)">${n0(nd.totals.carbs)}<span class="u"> / ${n0(nd.target.macros.carbs)} g</span></div></div></div>
-            ${nd.alerts[0] ? html`<p class="alert">⚠️ ${nd.alerts[0].message}</p>` : ''}
-            ${nut.supplements?.recs?.filter((r) => r.take).length ? html`<p class="small">💊 Hoy: ${nut.supplements.recs.filter((r) => r.take).map((r) => r.name).join(' · ')}</p>` : ''}`
-          : html`<p class="muted small">Elige tu objetivo en Nutrición y genera tu menú.</p>`}
-        <button class="sm" data-act="${act(() => go('nutricion'))}">Abrir nutrición</button>
-      </div>
+      ${noWod.map((s) => html`<div class="card tight row" style="border-color:var(--accent)"><span style="font-size:22px">⌚</span><div class="grow"><b class="small">${s.title ?? 'CrossFit'} · ${timeOf(s.started_at)}</b><div class="xs muted">Del Apple Watch, sin el WOD. Pega la pizarra y queda todo junto.</div></div><button class="sm primary" data-act="${act(() => addWodTo(s))}">Añadir WOD</button></div>`)}
+      ${rep ? html`<div class="card"><div class="row"><div class="small grow" style="color:var(--accent);font-weight:700">📋 Tu semana (${shortDate(rep.week_start)})</div><button class="sm ghost" data-act="${act(async () => { await api.fn('weekly', { action: 'seen', weekStart: rep.week_start }).catch(() => {}); invalidate('weekly'); render(); })}">Leído</button></div><p class="small" style="white-space:pre-line">${rep.text}</p></div>` : ''}
+      ${todayCard(t, todays, nd, nut, supLogs)}
       <div class="card">
         <h3>Carga semanal</h3>
         <div class="stats">
@@ -64,19 +60,65 @@ export async function HOME() {
         ${readiness?.leg_fatigue != null ? html`<div class="small muted" style="margin-top:10px">Fatiga de piernas</div>${bar(+readiness.leg_fatigue, 350, +readiness.leg_fatigue >= 250 ? 'var(--red)' : +readiness.leg_fatigue >= 140 ? 'var(--amber)' : 'var(--green)')}` : ''}
       </div>
       <h2>Objetivos</h2>
-      ${goals.length ? goals.map((g) => {
-        const ph = phases.find((p) => p.goal_id === g.id && p.start_date <= t && t <= p.end_date);
-        const first = phases.find((p) => p.goal_id === g.id);
-        const total = first ? Math.max(1, daysUntil(g.date) - daysUntil(first.start_date)) : 1;
-        const done = first ? -daysUntil(first.start_date) : 0;
-        return html`<div class="card"><div class="row"><h3 class="grow">${g.name}</h3><span class="tag accent">${daysUntil(g.date)} días</span></div>
-          <p class="small muted">${ph ? `${phaseName(ph.kind)} · ${ph.focus}` : 'Preparación pendiente'}</p>${bar(Math.max(0, done), total)}</div>`;
-      }) : html`<div class="card muted">Añade tu próxima competición en Perfil → Objetivos.</div>`}
+      ${goals.length ? goals.map((g) => goalCard(g, phases, t)) : html`<div class="card muted">Añade tu próxima competición en Perfil → Objetivos.</div>`}
       ${last ? html`<div class="card"><div class="small" style="color:var(--accent);font-weight:700">✨ Tu entrenador</div><p>${last.reason}</p></div>` : ''}
       <h2>Última actividad</h2>
       ${sessions.slice(0, 3).map(sessionRow)}
-      ${!sessions.length ? html`<div class="card muted small">Conecta Apple Salud con el Atajo (Perfil → Apple Salud) o registra un entreno en Entrenos.</div>` : ''}`,
+      ${!sessions.length ? html`<div class="card muted small">Conecta el Apple Watch (Perfil → Apple Watch) o registra un entreno en Entrenos.</div>` : ''}`,
   };
+}
+
+/** Tarjeta «Hoy»: entrenos, comidas y suplementos del día, cada uno con su check. */
+function todayCard(t, todays, nd, nut, supLogs) {
+  const taken = new Set((supLogs || []).map((l) => l.supplement_id));
+  const meals = (nd?.meals ?? []).slice().sort((a, b) => SLOTS.indexOf(a.slot) - SLOTS.indexOf(b.slot));
+  const supps = (nut?.supplements?.recs ?? []).filter((r) => r.take && r.supplementId);
+  const items = [
+    ...todays.map((s) => ({ done: s.status === 'done' })),
+    ...meals.map((m) => ({ done: m.status === 'eaten' || m.status === 'edited' })),
+    ...supps.filter((r) => r.supplementId).map((r) => ({ done: taken.has(r.supplementId) })),
+  ];
+  const doneN = items.filter((x) => x.done).length;
+  const ck = (on, fn, label) => html`<button class="ck ${on ? 'done' : 'pending'}" aria-label="${label}" data-act="${act(fn)}">${on ? '✓' : '○'}</button>`;
+  const mealCk = (m) => async (b) => busy(b, async () => {
+    const r = await api.fnQueued('meal-update', { mealId: m.id, action: m.status === 'eaten' ? 'reset' : 'eaten' });
+    if (r.queued) toast('Sin conexión: se sincroniza al volver la cobertura'); invalidate('nutweek', 'pantry'); render();
+  });
+  const supCk = (r) => async (b) => busy(b, async () => {
+    const mine = await get('supps', () => api.db.select('supplements', { active: 'eq.true' }));
+    const sup = mine.find((x) => x.id === r.supplementId);
+    if (taken.has(r.supplementId)) {
+      await api.db.remove('supplement_logs', { date: `eq.${t}`, supplement_id: `eq.${r.supplementId}` });
+      if (sup?.stock != null) await api.db.update('supplements', { stock: sup.stock + 1 }, { id: `eq.${sup.id}` });
+    } else {
+      await api.db.upsert('supplement_logs', [{ user_id: uid(), date: t, supplement_id: r.supplementId, taken: true }], 'user_id,date,supplement_id');
+      if (sup?.stock > 0) await api.db.update('supplements', { stock: sup.stock - 1 }, { id: `eq.${sup.id}` });
+    }
+    invalidate('suplog', 'supps'); render();
+  });
+  return html`<div class="card">
+    <div class="row"><h3 class="grow">Hoy <small class="muted" style="font-weight:400">${dayName(t, true)}</small></h3>${items.length ? html`<span class="tag ${doneN === items.length ? 'green' : 'accent'}">${doneN}/${items.length}</span>` : ''}</div>
+    ${items.length ? bar(doneN, items.length, 'var(--green)') : ''}
+    <div class="xs muted" style="margin-top:8px">ENTRENO</div>
+    ${todays.length ? todays.map((s) => { const st = planState(s); const rec = !s.from_calendar && !s.reserved && s.discipline === 'crossfit' && s.status !== 'done';
+      return html`<div class="lrow ${s.status === 'done' ? 'done' : ''}">${ck(s.status === 'done', () => (s.status === 'done' ? plannedDetail(s) : markDone(s)), 'Hecho')}
+        <div class="grow" data-act="${act(() => plannedDetail(s))}"><div class="small" style="font-weight:600">${cleanTitle(s.title)}</div><div class="xs muted">${[s.start_local ?? (s.slot === 'am' ? 'Mañana' : 'Tarde'), s.est_minutes ? `${s.est_minutes} min` : null, s.planned_km ? `${(+s.planned_km).toFixed(1)} km` : null].filter(Boolean).join(' · ')}</div></div>
+        ${rec ? html`<button class="sm" title="Ya la he reservado en WodBuster" data-act="${act(() => toggleReserved(s))}">🎟 Reservé</button>` : st.tag}</div>`; })
+      : html`<div class="small muted">Descanso. Camina, duerme bien y come suficiente.</div>`}
+    ${nd ? html`<div class="row xs muted" style="margin-top:10px"><span class="grow">COMIDAS</span><span>${n0(nd.totals.kcal)} / ${n0(nd.target.macros.kcal)} kcal · P ${n0(nd.totals.protein)}/${n0(nd.target.macros.protein)} g</span></div>
+      ${meals.length ? meals.map((m) => html`<div class="lrow ${m.status === 'eaten' ? 'done' : m.status === 'skipped' ? 'skipped' : ''}">${ck(m.status === 'eaten' || m.status === 'edited', mealCk(m), 'Comido')}
+        <div class="grow" data-act="${act(() => go('nutricion/hoy'))}"><div class="small"><b style="color:var(--accent)">${slotName(m.slot)}</b> · ${m.title}</div></div></div>`) : html`<div class="small muted">Sin menú para hoy. <a href="#/nutricion/batch">Genéralo</a>.</div>`}
+      ${nd.alerts?.[0] && !nd.adjustments?.length ? html`<div class="xs alert">⚠️ ${nd.alerts[0].message}</div>` : ''}` : ''}
+    ${supps.length ? html`<div class="xs muted" style="margin-top:10px">SUPLEMENTOS</div>${supps.map((r) => html`<div class="lrow ${taken.has(r.supplementId) ? 'done' : ''}">${r.supplementId ? ck(taken.has(r.supplementId), supCk(r), 'Tomado') : html`<span class="ck">·</span>`}
+      <div class="grow"><div class="small">${r.name}</div>${r.when ? html`<div class="xs muted">${r.when}</div>` : ''}</div></div>`)}` : ''}
+  </div>`;
+}
+
+async function toggleReserved(s) {
+  const on = !s.reserved;
+  await api.db.update('planned_sessions', { reserved: on, locked: on }, { id: `eq.${s.id}` });
+  invalidate('planned'); render();
+  toast(on ? 'Marcada como reservada: el plan ya no la moverá' : 'Quitada la reserva');
 }
 
 const cleanTitle = (t) => String(t ?? '').replace(/\s*\(pendiente de reserva\)/i, ' recomendado');
@@ -86,7 +128,7 @@ function planState(s) {
   if (s.status === 'done') return { tag: html`<span class="tag green">Hecha ✓</span>`, dim: false };
   if (s.status === 'skipped') return { tag: html`<span class="tag">No la hiciste</span>`, dim: true };
   if (past) return { tag: html`<span class="tag">No registrada</span>`, dim: true };
-  if (s.from_calendar) return { tag: html`<span class="tag blue">Reservada</span>`, dim: false };
+  if (s.from_calendar || s.reserved) return { tag: html`<span class="tag blue">Reservada</span>`, dim: false };
   return { tag: html`<span class="tag accent">Recomendada</span>`, dim: false };
 }
 export const plannedCard = (s) => { const st = planState(s); return html`
@@ -94,7 +136,7 @@ export const plannedCard = (s) => { const st = planState(s); return html`
     ${icon(s.discipline)}
     <div class="grow"><div style="font-weight:700">${cleanTitle(s.title)} ${s.status === 'modified' ? '🔄' : ''}</div>
       <div class="small muted">${[s.start_local ?? (s.slot === 'am' ? 'Mañana' : 'Tarde'), s.est_minutes ? `${s.est_minutes} min` : null, s.planned_km ? `${(+s.planned_km).toFixed(1)} km` : null].filter(Boolean).join(' · ')}</div>
-      ${/pendiente de reserva|recomendado/i.test(s.title ?? '') && !s.from_calendar && s.status !== 'done' ? html`<div class="xs muted">Aún no tienes clase reservada en WodBuster ese día: es la que te recomienda el plan.</div>` : s.objective ? html`<div class="small muted">${s.objective}</div>` : ''}
+      ${/pendiente de reserva|recomendado/i.test(s.title ?? '') && !s.from_calendar && !s.reserved && s.status !== 'done' ? html`<div class="xs muted">Aún no tienes clase reservada en WodBuster ese día: es la que te recomienda el plan.</div>` : s.objective ? html`<div class="small muted">${s.objective}</div>` : ''}
       <div class="row" style="gap:6px;margin-top:4px">${st.tag}${s.status !== 'done' ? intensityTag(s.intensity) : ''}</div></div>
   </div>`; };
 
@@ -117,6 +159,7 @@ function plannedDetail(s) {
     <div class="card tight"><div class="small" style="color:var(--accent);font-weight:700">💡 Por qué esta sesión</div><div class="small">${s.rationale ?? ''}</div></div>
     <h3>Sesión</h3>${steps(s.steps)}
     ${s.status === 'planned' || s.status === 'modified' ? html`<button class="block primary" data-act="${act(() => markDone(s))}">✓ La he hecho</button>` : ''}
+    ${s.discipline === 'crossfit' && !s.from_calendar && s.status !== 'done' && s.date >= today() ? html`<button class="block" data-act="${act(async () => { await toggleReserved(s); closeSheet(); })}">${s.reserved ? 'Quitar «reservada»' : '🎟 Ya la he reservado en WodBuster'}</button>` : ''}
     ${s.status === 'done' ? html`<button class="block" data-act="${act((b) => busy(b, async () => { await api.fn('replan', { trigger: 'undone', plannedId: s.id }); closeSheet(); invalidate('planned'); render(); }))}">Desmarcar como hecha</button>` : ''}
     ${(s.status === 'planned' || s.status === 'modified') && s.date >= today() ? html`<button class="block danger" data-act="${act((b) => busy(b, async () => {
       const r = await api.fn('replan', { trigger: 'missed', plannedId: s.id }); closeSheet(); toast(r.changes?.[0]?.reason ?? 'Plan recolocado', 6000); invalidate('planned', 'changes'); render();
@@ -296,7 +339,12 @@ async function progress() {
   const r = d.running; const p = r.paces;
   const recs = await get('records', () => api.db.select('personal_records', { order: 'achieved_on' }));
   const latest = Object.values(recs.reduce((a, x) => { a[`${x.metric}|${x.kind}`] = x; return a; }, {}));
+  const [bm, ns] = await Promise.all([
+    get('body', () => api.db.select('body_metrics', { date: `gte.${addDays(today(), -180)}`, order: 'date' }).catch(() => []), 300_000),
+    get('nutset', async () => (await api.db.select('nutrition_settings', { user_id: `eq.${uid()}` }).catch(() => []))[0], 300_000),
+  ]);
   return html`
+    ${bodyCard(bm, ns)}
     <div class="card"><div class="row"><h3 class="grow">Tus ritmos</h3>${r.vdot ? html`<span class="tag blue">VDOT ${r.vdot.toFixed(1)}</span>` : ''}</div>
       ${p ? html`<div class="small">${[['Suave', `${pace(p.easy[0])}–${pace(p.easy[1])}`], ['Maratón', pace(p.marathon)], ['Media', pace(p.halfMarathon)], ['Umbral', pace(p.threshold)], ['Series', pace(p.interval)], ['Repeticiones', pace(p.repetition)]].map(([a, b]) => html`<div class="row"><span class="grow muted">${a}</span><b>${b}</b></div>`)}</div><p class="xs muted">${r.vdotNote}</p>`
         : html`<p class="small muted">Registra una competición o un test (márcalo como test) para calcular tus ritmos reales.</p>`}</div>
@@ -318,6 +366,42 @@ async function progress() {
     ${latest.length ? latest.map((x) => html`<div class="card tight row"><div class="grow"><b>${x.detail ?? x.metric}</b><div class="xs muted">${shortDate(x.achieved_on)}</div></div><span class="tag ${x.kind === 'actual' ? 'green' : 'amber'}">${x.kind === 'actual' ? 'Real' : 'Estimado'}</span></div>`) : html`<div class="card muted small">Se guardan solos al registrar entrenamientos.</div>`}`;
 }
 
+/** Peso y cintura frente a tu objetivo nutricional (tendencia de 4 semanas). */
+function bodyCard(rows, ns) {
+  const f = (x, d = 1) => (+x).toLocaleString('es-ES', { minimumFractionDigits: d, maximumFractionDigits: d });
+  const byDay = {}; for (const r of rows) { const x = (byDay[r.date] ??= { date: r.date }); if (r.weight_kg != null) x.kg = +r.weight_kg; if (r.waist_cm != null) x.waist = +r.waist_cm; }
+  const days = Object.values(byDay).sort((a, b) => a.date.localeCompare(b.date));
+  const w = days.filter((d) => d.kg != null), wa = days.filter((d) => d.waist != null);
+  // Tendencia: pendiente por mínimos cuadrados de las 4 últimas semanas (kg/semana).
+  const recent = w.filter((d) => d.date >= addDays(today(), -28));
+  let slope = null;
+  if (recent.length >= 3) { const xs = recent.map((d) => (Date.parse(d.date) - Date.parse(recent[0].date)) / 864e5), ys = recent.map((d) => d.kg); const mx = xs.reduce((a, b) => a + b) / xs.length, my = ys.reduce((a, b) => a + b) / ys.length; const den = xs.reduce((a, x) => a + (x - mx) ** 2, 0); slope = den ? (xs.reduce((a, x, i) => a + (x - mx) * (ys[i] - my), 0) / den) * 7 : null; }
+  const mode = ns?.mode; const rate = ns?.rate_kg_per_week != null ? +ns.rate_kg_per_week : mode === 'definicion' ? -0.4 : mode === 'volumen' ? 0.25 : 0;
+  const verdict = slope == null ? 'Pésate 2-3 veces por semana (mismo momento, en ayunas) para ver la tendencia.'
+    : mode === 'definicion' ? (slope <= -0.15 ? `Bajando ${f(Math.abs(slope), 2)} kg/semana: vas bien${slope < -0.8 ? ', aunque algo rápido: cuidado con el rendimiento' : ''}.` : 'Peso estable: si la cintura tampoco baja, te ajusto las calorías.')
+    : mode === 'volumen' ? (slope >= 0.1 ? `Subiendo ${f(slope, 2)} kg/semana: en rango.` : 'No estás subiendo: conviene comer algo más.')
+    : `Tendencia ${slope >= 0 ? '+' : ''}${f(slope, 2)} kg/semana.`;
+  return html`<div class="card"><div class="row"><h3 class="grow">Cuerpo</h3><button class="sm" data-act="${act(addBody)}">＋ Peso / cintura</button></div>
+    <div class="stats"><div class="stat"><div class="l">Peso</div><div class="v">${w.length ? f(w[w.length - 1].kg) : '–'}<span class="u"> kg</span></div></div>
+      <div class="stat"><div class="l">Cintura</div><div class="v">${wa.length ? f(wa[wa.length - 1].waist) : '–'}<span class="u"> cm</span></div></div>
+      <div class="stat"><div class="l">Tendencia</div><div class="v" style="font-size:16px">${slope == null ? '–' : `${slope >= 0 ? '+' : ''}${f(slope, 2)}`}<span class="u"> kg/sem</span></div><div class="xs muted">objetivo ${rate > 0 ? '+' : ''}${f(rate, 2)}</div></div></div>
+    ${w.length >= 2 ? lineChart([{ color: 'var(--accent)', fmt: (v) => f(v), points: w.map((d) => ({ x: shortDate(d.date), y: d.kg })) }], { height: 110 }) : ''}
+    ${wa.length >= 2 ? html`<div class="xs muted">Cintura (cm)</div>${lineChart([{ color: 'var(--purple, #a78bfa)', fmt: (v) => f(v), points: wa.map((d) => ({ x: shortDate(d.date), y: d.waist })) }], { height: 90 })}` : ''}
+    <p class="small">${verdict}</p></div>`;
+}
+function addBody() {
+  sheet('Peso y cintura', html`<form data-submit="${act((v, f) => busy(f.querySelector('button'), async () => {
+      const row = { user_id: uid(), date: v.date, source: 'manual', weight_kg: v.kg ? +String(v.kg).replace(',', '.') : null, waist_cm: v.waist ? +String(v.waist).replace(',', '.') : null };
+      if (row.weight_kg == null && row.waist_cm == null) return toast('Escribe el peso o la cintura');
+      await api.db.upsert('body_metrics', [row], 'user_id,date,source');
+      closeSheet(); invalidate('body', 'insights', 'weekly'); render();
+    }))}">
+    <label>Fecha</label><input type="date" name="date" value="${today()}">
+    <div class="grid2"><div><label>Peso (kg)</label><input name="kg" inputmode="decimal" placeholder="78,4"></div><div><label>Cintura (cm)</label><input name="waist" inputmode="decimal" placeholder="84"></div></div>
+    <p class="xs muted">En ayunas, después del baño. La cintura, a la altura del ombligo, sin apretar.</p>
+    <button class="block primary">Guardar</button></form>`);
+}
+
 // ======================= COACH =======================
 let chat = [], threadId = null;
 const SUGG = ['¿Qué entrenamiento me toca hoy?', '¿Puedo hacer series mañana después del WOD de hoy?', '¿Qué peso debería usar en back squat?', '¿Estoy progresando en running?', '¿Estoy entrenando demasiado?', 'Hoy no puedo entrenar, ¿qué hago?', '¿Qué me falta comer hoy?', '¿Qué suplemento tomo hoy?', '¿Qué debo mejorar para HYROX?'];
@@ -325,9 +409,11 @@ export async function COACH() {
   const consent = await get('consent', async () => (await api.db.select('consents', { kind: 'eq.ai_processing', revoked_at: 'is.null' })).length > 0, 300_000);
   if (!consent) return {
     title: 'Coach',
-    body: html`<div class="card"><h3>Activar el entrenador IA</h3><p class="small">El coach envía a <b>Google Gemini</b> (nivel gratuito) los datos necesarios de tu perfil, entrenos, recuperación y nutrición para responderte. En el nivel gratuito, <b>Google puede usar ese contenido para mejorar sus productos</b> y revisores humanos podrían leerlo. El plan, los cálculos y el registro funcionan sin IA.</p>
+    body: html`<div class="card"><h3>Activar el entrenador IA</h3><p class="small">El coach envía a <b>Google Gemini</b> (tu cuenta de pago) los datos necesarios de tu perfil, entrenos, recuperación y nutrición para responderte. En las cuentas de pago Google no usa ese contenido para entrenar sus modelos. El plan, los cálculos y el registro funcionan sin IA.</p>
       <button class="primary block" data-act="${act((b) => busy(b, async () => { await api.db.upsert('consents', [{ user_id: uid(), kind: 'ai_processing', version: '2026-11-gemini', provider: 'gemini', granted_at: new Date().toISOString(), revoked_at: null }], 'user_id,kind,version'); invalidate('consent'); render(); }))}">Acepto y activo el coach</button></div>`,
   };
+  const wk = await get('weekly', () => api.fn('weekly', {}).catch(() => null), 1_800_000);
+  const reports = wk?.reports ?? [];
   const send = async (text) => {
     const t = text.trim(); if (!t) return;
     chat.push({ role: 'user', text: t }, { role: 'bot', text: '…' }); render();
@@ -342,7 +428,11 @@ export async function COACH() {
     title: 'Coach',
     right: html`<button class="icon-btn" data-act="${act(() => { chat = []; threadId = null; render(); })}">🆕</button>`,
     body: html`<div style="padding-bottom:70px">
-      ${!chat.length ? html`<p class="muted">Pregúntame lo que quieras. Respondo con tus datos reales.</p>${SUGG.map((s) => html`<button class="chip" style="margin:4px 4px 0 0" data-act="${act(() => send(s))}">${s}</button>`)}` : ''}
+      ${!chat.length ? html`<p class="muted">Pregúntame lo que quieras. Respondo con tus datos reales.</p>${SUGG.map((s) => html`<button class="chip" style="margin:4px 4px 0 0" data-act="${act(() => send(s))}">${s}</button>`)}
+        <h2>Resúmenes semanales</h2>
+        ${reports.slice(0, 3).map((r) => html`<div class="card tight"><div class="small" style="color:var(--accent);font-weight:700">Semana del ${shortDate(r.week_start)}</div><p class="small" style="white-space:pre-line;margin:4px 0 0">${r.text}</p></div>`)}
+        ${!reports.length ? html`<p class="xs muted">Cada domingo a las 20:00 te dejo aquí el resumen de la semana (y te aviso).</p>` : ''}
+        <button class="block sm" data-act="${act((b) => busy(b, async () => { await api.fn('weekly', { action: 'build' }); invalidate('weekly'); render(); }))}">Hacer el resumen ${reports.some((r) => r.week_start === wk?.current) ? 'otra vez' : 'ahora'}</button>` : ''}
       ${chat.map((m, i) => html`<div class="bubble ${m.role === 'user' ? 'me' : 'bot'}">${m.text === '…' ? raw('<span class="spinner"></span>') : m.text}${m.retry ? html`<div><button class="sm" style="margin-top:8px" data-act="${act(() => { chat.splice(i - 1, 2); send(m.retry); })}">↻ Reintentar</button></div>` : ''}</div>`)}
       </div>
       <form class="chatbox" data-submit="${act((v, f) => { send(v.msg); f.reset(); })}"><textarea name="msg" placeholder="Escribe a tu entrenador…"></textarea><button class="primary">↑</button></form>`,

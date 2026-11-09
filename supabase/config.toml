@@ -50,3 +50,7 @@ verify_jwt = false          # el código valida al usuario con requireUser
 verify_jwt = false
 [functions.intervals-sync]
 verify_jwt = false          # lo llama pg_cron (x-cron-secret) y el usuario (requireUser)
+[functions.goal]
+verify_jwt = false          # el código valida al usuario con requireUser
+[functions.weekly]
+verify_jwt = false          # el código valida al usuario con requireUser

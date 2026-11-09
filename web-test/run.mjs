@@ -9,7 +9,7 @@ const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).fo
 const mon = E.mondayOf(today);
 const profile = { sex: 'male', weightKg: 78, hrRest: 52, hrMax: 192, allowDoubles: true, crossfitPerWeek: 3, hyroxDivision: 'open_men',
   availability: [1, 2, 3, 4, 5, 6, 7].map((d) => ({ weekday: d, am: d >= 6, pm: d <= 5, maxMinutes: d >= 6 ? 120 : 75, boxClass: [1, 3, 5].includes(d) })) };
-const goals = [{ id: 'g1', name: 'Media Maratón de Castellón', type: 'half_marathon', date: '2027-01-31', priority: 'A', distanceM: 21097.5 }, { id: 'g2', name: 'HYROX', type: 'hyrox', date: '2027-04-16', priority: 'A' }];
+const goals = [{ id: 'g1', name: 'Media Maratón de Castellón', type: 'half_marathon', date: '2027-01-31', priority: 'A', distanceM: 21097.5, target_time_s: 5400 }, { id: 'g2', name: 'HYROX', type: 'hyrox', date: '2027-04-16', priority: 'A', target_time_s: 4800 }];
 const phases = E.buildMacrocycle(goals, today);
 const paces = E.trainingPaces(47);
 const plan = [0, 7].flatMap((o) => E.planWeek({ weekStart: E.addDays(mon, o), profile, goals, phases, history: [], paces, zones: E.hrZones(profile), lifts: {} }).sessions);
@@ -43,7 +43,7 @@ const REST = {
   readiness_daily: [{ date: today, score: 71, level: 'verde', reasons: ['Fatiga de piernas moderada', 'HRV en tu rango alto'], acwr: 1.08, leg_fatigue: 165 }],
   planned_sessions: plannedRows, goals: goals.map((g) => ({ ...g, distance_m: g.distanceM })), phases: phases.map((p, i) => ({ id: `ph${i}`, goal_id: p.goalId, kind: p.kind, start_date: p.start, end_date: p.end, focus: p.focus })),
   sessions, plan_changes: [{ id: 'c1', action: 'downgrade', reason: 'Fatiga de piernas alta (310 sobre umbral 250): el martes cambio las series por un rodaje suave de 7 km.', created_at: new Date().toISOString() }],
-  pantry_items: [...pantry.map((p) => ({ id: p.id, name: p.name, food_id: p.foodId, location: p.location, quantity_g: p.quantityG, expires_on: p.expiresOn ?? null })), { id: 'pk1', name: 'Puré de patatas copos', brand: 'Hacendado', food_id: 'x', location: 'despensa', units: 2, pack_units: 4, unit_grams: 115 }, { id: 'pk2', name: 'Yogur natural', brand: 'Hacendado', food_id: 'x', location: 'despensa', units: 5, pack_units: 6, unit_grams: 125 }],
+  pantry_items: [...pantry.map((p) => ({ id: p.id, name: p.name, food_id: p.foodId, location: p.location, quantity_g: p.quantityG, expires_on: p.expiresOn ?? null })), { id: 'pk1', name: 'Puré de patatas copos', brand: 'Hacendado', food_id: 'x', location: 'despensa', units: 2, pack_units: 4, unit_grams: 115 }, { id: 'pk2', name: 'Yogur natural', brand: 'Hacendado', food_id: 'x', location: 'despensa', units: 5, pack_units: 6, unit_grams: 125, expires_on: E.addDays(today, 1) }],
   supplements: [{ id: 'sp1', kind: 'colageno', name: 'Colágeno', dose_text: '15 g', stock: 20 }, { id: 'sp2', kind: 'magnesio', name: 'Magnesio', dose_text: '300 mg', stock: 4 }],
   consents: [{ kind: 'ai_processing' }], recipes: [{ id: 'r1', name: 'Pollo al horno con boniato', tags: ['batch'] }],
   personal_records: [{ id: 'pr1', metric: 'front_squat:6rm', value: 50, unit: 'kg', kind: 'actual', achieved_on: E.addDays(today, -1), detail: 'Front Squat 50 kg × 6' }],
@@ -60,6 +60,20 @@ const FN = {
   coach: { threadId: 't1', reply: 'Mañana tienes series 5×1000 m. Tu fatiga de piernas estimada tras el WOD de hoy es 260 (umbral 250), así que te propongo cambiarlas por un rodaje suave de 7 km a 5:20–5:45/km y mover las series al jueves.', tools: ['estado_hoy', 'plan'] },
 };
 
+{ // Paneles de objetivo y resumen semanal (motor real)
+  const sess = sessions.map((x) => ({ id: x.id, startedAt: x.started_at, durationS: x.duration_s, discipline: x.discipline, distanceM: x.distance_m != null ? +x.distance_m : undefined }));
+  const pl = plannedRows.map((p) => ({ date: p.date, type: p.type, title: p.title, plannedKm: p.planned_km, key: p.key, status: p.status }));
+  const recs = [1, 2, 3, 4].flatMap((k) => [{ date: E.addDays(today, -10), sessionId: 'hx', key: `run${k}`, exerciseId: 'run', label: `Carrera ${k}`, splitS: 290 + k * 6 }, { date: E.addDays(today, -10), sessionId: 'hx', key: E.hyroxStations()[k - 1].key, exerciseId: E.hyroxStations()[k - 1].exerciseId, label: `Estación ${k}`, splitS: [300, 210, 290, 330][k - 1] }]);
+  FN.goal = (b) => { const g = goals.find((x) => x.id === b.goalId) ?? goals[0]; const goal = { id: g.id, name: g.name, type: g.type, date: g.date, distanceM: g.distanceM, targetTimeS: g.target_time_s };
+    return g.type === 'hyrox' ? { goal, outlook: E.hyroxOutlook({ goal, today, vdot: 47, records: recs, sessions: sess, planned: pl, simulations: [{ date: E.addDays(today, -40), totalS: 2700, sessionId: 'a', stations: 4 }, { date: E.addDays(today, -10), totalS: 2560, sessionId: 'hx', stations: 4 }] }), splits: E.hyroxSplits(4800) }
+      : { goal, outlook: E.raceOutlook({ goal, today, vdot: 47, sessions: sess, planned: pl }) }; };
+  const lastMon = E.addDays(mon, -7);
+  FN.weekly = { current: lastMon, reports: [{ week_start: lastMon, text: 'Buena semana: 4 entrenos y 31 km. Te faltó la tirada larga del domingo. Prioridades: tirada de 16 km y proteína en la cena.', seen_at: null, summary: {} }] };
+  REST.body_metrics = [...Array(10)].map((_, i) => ({ date: E.addDays(today, -3 * (9 - i)), weight_kg: 80 - i * 0.15, waist_cm: i % 3 === 0 ? 86 - i * 0.2 : null, source: 'manual' }));
+  REST.nutrition_settings = [{ user_id: 'u1', mode: 'definicion', rate_kg_per_week: -0.4 }];
+  FN.pantry.recipe = { title: 'Tortilla de patata y espinacas', servings: 2, minutes: 20, ingredients: [{ name: 'Huevos', grams: 240, fromPantry: true }, { name: 'Espinacas', grams: 120, fromPantry: true }, { name: 'Patata', grams: 300, fromPantry: true }], steps: ['Cuece la patata en el micro 6 min.', 'Saltea las espinacas.', 'Cuaja con el huevo batido.'], tip: 'Media para la cena y media para el almuerzo de mañana.' };
+  FN.pantry.uses = ['Espinacas', 'Huevos'];
+}
 const posted = [];
 REST.planned_sessions.push({ id: 'pcf', date: E.addDays(today, -1), slot: 'pm', type: 'crossfit_box', discipline: 'crossfit', title: 'CrossFit (pendiente de reserva)', objective: 'Mantener fuerza', intensity: 'alta', est_minutes: 60, status: 'done', completed_session_id: 's1', steps: [] },
   { id: 'pcf2', date: E.addDays(today, -1), slot: 'am', type: 'run_easy', discipline: 'running', title: 'Rodaje suave', objective: 'Aeróbico', intensity: 'baja', est_minutes: 40, status: 'planned', steps: [] },
@@ -95,9 +109,10 @@ await page.route('http://forja.test/**', (route) => {
 await page.route('https://mock.supabase.co/**', (route) => {
   const u = new URL(route.request().url());
   const parts = u.pathname.split('/').filter(Boolean);
-  if (parts[0] === 'rest') { const t = parts[2]; let rows = REST[t] ?? []; const idq = u.searchParams.get('id'); if (idq?.startsWith('eq.') && route.request().method() === 'GET') rows = rows.filter((r) => r.id === idq.slice(3)); return route.fulfill({ contentType: 'application/json', body: JSON.stringify(rows) }); }
+  if (parts[0] === 'rest') { const t = parts[2]; let rows = REST[t] ?? [];
+    const dq = u.searchParams.get('discipline'); if (dq?.startsWith('in.(') && route.request().method() === 'GET') { const set = dq.slice(4, -1).split(','); rows = rows.filter((r) => set.includes(r.discipline)); } const idq = u.searchParams.get('id'); if (idq?.startsWith('eq.') && route.request().method() === 'GET') rows = rows.filter((r) => r.id === idq.slice(3)); return route.fulfill({ contentType: 'application/json', body: JSON.stringify(rows) }); }
   if (parts[0] === 'functions' && parts[2] === 'ingest-session') { posted.push(JSON.parse(route.request().postData())); return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ sessionId: 's9', merged: true, prs: ['Front Squat 50 kg × 6'], changes: [] }) }); }
-  if (parts[0] === 'functions') { return route.fulfill({ contentType: 'application/json', body: JSON.stringify(FN[parts[2]] ?? { ok: true, changes: [], processed: 0 }) }); }
+  if (parts[0] === 'functions') { const f = FN[parts[2]]; const b = (() => { try { return JSON.parse(route.request().postData() || '{}'); } catch { return {}; } })(); return route.fulfill({ contentType: f === undefined && parts[2] === 'export-data' ? 'text/csv' : 'application/json', body: JSON.stringify(typeof f === 'function' ? f(b) : f ?? { ok: true, changes: [], processed: 0 }) }); }
   if (parts[0] === 'auth') return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ access_token: 'x', refresh_token: 'y', expires_in: 3600, user: { id: 'u1', email: 'iuri@example.com' } }) });
   route.fulfill({ contentType: 'application/json', body: '{}' });
 });
@@ -185,10 +200,27 @@ await shot('#/perfil', '14b-watch', () => page.getByText('Apple Watch automátic
 await shot('#/perfil', '14-atajo', () => page.getByText('Apple Salud (Atajo)').click());
 await shot('#/inicio', '15-checkin', () => page.locator('#view .card.row').first().click());
 await shot('#/nutricion', '16-editar-comida', async () => { await page.getByRole('button', { name: 'Hoy', exact: true }).click(); await page.waitForTimeout(500); await page.getByRole('button', { name: '✎ Cambiar' }).first().click(); });
+await shot('#/objetivo/g1', '17-objetivo-media');
+await shot('#/objetivo/g2', '18-objetivo-hyrox');
+await page.evaluate(() => window.scrollTo(0, 700)); await page.screenshot({ path: `${OUT}/18b-objetivo-hyrox-estaciones.png` });
+await shot('#/objetivo/g2', '19-hyrox-registro', async () => { await page.getByRole('button', { name: 'Simulación completa' }).click(); await page.waitForSelector('#logger'); await page.locator('input[data-lf="split"]').first().fill('4:55'); await page.locator('input[data-lf="split"]').nth(1).fill('5:10'); });
+await page.evaluate(() => { const p = document.querySelector('#sheet .panel'); if (p) p.scrollTop = 1500; }); await page.screenshot({ path: `${OUT}/19b-hyrox-registro-2.png` });
+{ const sum = await page.locator('[id^="hx-"]').first().innerText(); if (!/10:05/.test(sum)) console.log('✗ suma HYROX', sum); else console.log('Suma de parciales HYROX OK:', sum); }
+await page.getByRole('button', { name: '⏱' }).first().click(); await page.waitForTimeout(300); await page.screenshot({ path: `${OUT}/20-temporizador.png` });
+// Cronómetro por tramos: 16 «Siguiente tramo» de 5:00 → la suma de parciales debe dar 1:20:00.
+await page.evaluate(() => { const o = performance.now.bind(performance); let add = 0; performance.now = () => o() + add; window.__adv = (s) => { add += s * 1000; }; });
+await page.locator('#timer [data-t="go"]').click(); await page.evaluate(() => window.__adv(10)); await page.waitForTimeout(150);
+for (let k = 0; k < 16; k++) { await page.evaluate(() => window.__adv(300)); await page.waitForTimeout(60); if (k === 2) await page.screenshot({ path: `${OUT}/20b-temporizador-tramos.png` }); await page.locator('#timer [data-t="lap"]').click(); }
+await page.waitForTimeout(300);
+{ const sum = await page.locator('[id^="hx-"]').first().innerText(); console.log(/1:20:00/.test(sum) ? `Tramos del cronómetro OK: ${sum}` : `✗ tramos del cronómetro: ${sum}`); }
+await page.evaluate(() => { localStorage.removeItem('forja:draft'); });
+await shot('#/nutricion/despensa', '21-despensa-receta', async () => { await page.getByText('Proponme una receta').click(); await page.waitForTimeout(500); });
+await shot('#/coach', '22-coach-resumen');
+await shot('#/inicio', '23-inicio-abajo', async () => { await page.evaluate(() => window.scrollTo(0, 900)); });
 // ---------- Recorrido automático: pulsa TODOS los botones de cada pantalla (y los de las hojas que abren) ----------
 if (process.env.MONKEY) {
   page.on('dialog', (d) => d.accept(d.type() === 'prompt' ? 'Prueba' : undefined).catch(() => {}));
-  const screens = [['#/inicio'], ['#/plan'], ['#/entrenos'], ['#/entrenos', 'Historial'], ['#/entrenos', 'Progreso'], ['#/nutricion', 'Hoy'], ['#/nutricion', 'Menú'], ['#/nutricion', 'Compra'], ['#/nutricion', 'Batch'], ['#/nutricion', 'Despensa'], ['#/nutricion', 'Suplementos'], ['#/coach'], ['#/perfil']];
+  const screens = [['#/inicio'], ['#/objetivo/g1'], ['#/objetivo/g2'], ['#/plan'], ['#/entrenos'], ['#/entrenos', 'Historial'], ['#/entrenos', 'Progreso'], ['#/nutricion', 'Hoy'], ['#/nutricion', 'Menú'], ['#/nutricion', 'Compra'], ['#/nutricion', 'Batch'], ['#/nutricion', 'Despensa'], ['#/nutricion', 'Suplementos'], ['#/coach'], ['#/perfil']];
   let clicks = 0; const seen = new Set();
   const go = async (route, tab) => {
     await page.evaluate(() => { const sh = document.getElementById('sheet'); if (sh) sh.hidden = true; document.querySelectorAll('.scan-ov').forEach((x) => x.remove()); });

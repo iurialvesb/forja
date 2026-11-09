@@ -6,6 +6,7 @@
                                                                            
                                                                                                       
 import { resolveExercise, getExercise } from './exercises.js';
+import { hyroxStations,                    } from './hyrox.js';
 
                                                  
                                                                    
@@ -24,6 +25,7 @@ import { resolveExercise, getExercise } from './exercises.js';
                     
                                                                                           
                  
+                                                                    
  
                                                                        
                                                                                                                                                                                                    
@@ -44,6 +46,7 @@ import { resolveExercise, getExercise } from './exercises.js';
                                   
                                                                                               
                  
+                                                                                            
  
                            
              
@@ -203,10 +206,11 @@ export function amrapResult(b          )                                   {
   return { rounds, reps };
 }
 
-export const fmtClock = (s         ) => (s == null ? '' : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`);
+export const fmtClock = (s         ) => (s == null ? '' : s >= 3600 ? `${Math.floor(s / 3600)}:${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}:${String(Math.round(s % 60)).padStart(2, '0')}` : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`);
 export function parseClock(s        )                     {
   const t = s.trim();
-  let m = t.match(/^(\d+):(\d{1,2})$/); if (m) return Number(m[1]) * 60 + Number(m[2]);
+  let m = t.match(/^(\d+):(\d{1,2}):(\d{1,2})$/); if (m) return Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]);
+  m = t.match(/^(\d+):(\d{1,2})$/); if (m) return Number(m[1]) * 60 + Number(m[2]);
   m = t.match(/^(\d+(?:[.,]\d+)?)\s*(?:'|min)?$/); if (m) return Math.round(Number(m[1].replace(',', '.')) * 60);
   return undefined;
 }
@@ -232,6 +236,22 @@ export function newBlock(part         )           {
   return b;
 }
 
+/** Simulación HYROX: 8 × (1 km de carrera + estación), cada tramo con su tiempo parcial. `stations` = cuántas (media sim = 4). */
+export function hyroxBlock(division                = 'open_men', stations = 8, runM = 1000)           {
+  const st = hyroxStations(division).slice(0, Math.max(1, Math.min(8, stations)));
+  const b           = { id: nid('b'), part: 'wod', kind: 'station', format: 'for_time', title: stations >= 8 ? 'Simulación HYROX' : `HYROX ${stations} estaciones`, scaling: 'rx',
+    template: [], groups: [], addable: null, result: {}, hyrox: division };
+  st.forEach((s, i) => {
+    const run         = { id: nid('r'), exercise: 'Carrera', unit: 'm', target: runM, done: runM, status: 'pending' };
+    const sta         = { id: nid('r'), exercise: s.name, unit: s.unit, target: s.amount, done: s.amount, targetText: s.loadText, status: 'pending' };
+    b.groups.push({ id: nid('g'), label: `Carrera ${i + 1}`, rows: [run] }, { id: nid('g'), label: `Estación ${i + 1} · ${s.name}`, rows: [sta] });
+    b.template.push({ exercise: 'Carrera', unit: 'm', target: runM }, { exercise: s.name, unit: s.unit, target: s.amount, targetText: s.loadText });
+  });
+  return b;
+}
+/** Suma de parciales de un bloque HYROX (sin Roxzone si no la apuntas). */
+export const hyroxTotal = (b          ) => b.groups.reduce((a, g) => a + g.rows.reduce((x, r) => x + (r.splitS ?? 0), 0), 0);
+
 const DISC_BY_PART                              = { strength: 'crossfit', wod: 'crossfit', endurance: 'crossfit', other: 'crossfit' };
 
 /** Borrador → sesión registrable. Lo realizado va en reps/peso; lo prescrito, en los campos target*. */
@@ -248,7 +268,7 @@ export function logToSession(d          , base                                  
         exerciseId: ex?.id ?? `custom:${r.exercise}`,
         loadKg: status === 'skipped' ? undefined : r.doneKg,
         roundNo: gi + 1, label: g.label, unit: r.unit, targetReps: r.target, targetLoadKg: r.targetKg, targetPct: r.targetPct, targetText: r.targetText,
-        status, origin: d.origin === 'manual' ? 'manual' : d.origin,
+        status, origin: d.origin === 'manual' ? 'manual' : d.origin, splitS: r.splitS,
       };
       if (r.unit === 'reps') set.reps = done; else if (r.unit === 'cal') set.calories = done; else if (r.unit === 'm') set.distanceM = done; else set.durationS = done;
       sets.push(set);
@@ -258,6 +278,7 @@ export function logToSession(d          , base                                  
       part: b.part, scaling: b.scaling, title: b.title, durationMin: b.durationMin, intervalS: b.intervalS, capped: !!b.result.capped,
       prescribed: b, notes: b.notes,
     };
+    if (b.hyrox && b.result.timeS == null && hyroxTotal(b) > 0) b.result.timeS = hyroxTotal(b);
     if (b.format === 'amrap') {
       const r = amrapResult(b);
       blk.resultRounds = r.rounds; blk.resultReps = r.reps; blk.resultText = `${r.rounds} rondas + ${r.reps} reps`;
@@ -271,7 +292,7 @@ export function logToSession(d          , base                                  
   });
   return {
     id: base.id, startedAt: base.startedAt, durationS: base.durationS ?? (d.durationMin ?? 60) * 60,
-    discipline: base.discipline ?? DISC_BY_PART[d.blocks[0]?.part ?? 'wod'], title: d.title, rpe: d.rpe,
+    discipline: base.discipline ?? (d.blocks.some((b) => b.hyrox) ? 'hyrox' : DISC_BY_PART[d.blocks[0]?.part ?? 'wod']), title: d.title, rpe: d.rpe,
     blocks: blocks.some((b) => b.sets.length) ? blocks : undefined,
     source: d.origin === 'ai' ? 'photo' : 'manual',
   };

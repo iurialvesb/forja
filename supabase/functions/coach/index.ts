@@ -155,8 +155,10 @@ Deno.serve(handler(async (req) => {
   const messages: Message[] = [...history, { role: 'user', content: message }];
   const toolLog: { name: string; input: unknown }[] = [];
   let finalText = '';
+  const t0 = Date.now();
   for (let i = 0; i < 8; i++) {
-    const r = await claude({ system: systemPrompt(ctx), messages, tools: TOOLS, maxTokens: 1500 });
+    // Modelo Pro mientras haya margen de tiempo; si la conversación se alarga, Flash (más rápido) para no cortar la respuesta.
+    const r = await claude({ system: systemPrompt(ctx), messages, tools: TOOLS, maxTokens: 2000, smart: Date.now() - t0 < 40_000 });
     messages.push({ role: 'assistant', content: r.content });
     const uses = r.content.filter((b): b is Extract<ContentBlock, { type: 'tool_use' }> => b.type === 'tool_use');
     if (!uses.length || r.stop_reason !== 'tool_use') { finalText = textOf(r.content); break; }

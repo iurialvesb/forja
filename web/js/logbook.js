@@ -4,7 +4,8 @@ import * as api from './api.js';
 import { get, invalidate, render } from './app.js';
 import { html, act, toast, sheet, setSheet, closeSheet, busy, today, timeOf, shortDate, dayName, resizeImage, lineChart } from './ui.js';
 import { parseWorkoutText } from './engine/workoutText.js';
-import { buildLog, buildBlock, addGroup, regroup, statusFor, amrapResult, logToSession, fmtClock, parseClock, newBlock, emptyLog, summarizeLog, logFromSaved, displayName } from './engine/logbook.js';
+import { buildLog, buildBlock, addGroup, regroup, statusFor, amrapResult, logToSession, fmtClock, parseClock, newBlock, emptyLog, summarizeLog, logFromSaved, displayName, hyroxBlock, hyroxTotal } from './engine/logbook.js';
+import { openTimer } from './timer.js';
 
 const LS = 'forja:draft';
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, (c) => (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16)));
@@ -171,18 +172,25 @@ function fmtLabel(b) {
 const targetHint = (r) => [r.target != null ? `${r.target}${r.unit === 'reps' ? '' : ` ${UNIT[r.unit]}`}` : '', r.targetKg != null ? `${r.targetKg} kg` : r.targetPct != null ? `${r.targetPct}%` : r.targetText ?? ''].filter(Boolean).join(' × ');
 const showKg = (r) => r.targetKg != null || r.targetPct != null || r.targetText || r.doneKg != null;
 
-function rowView(bi, gi, ri, r) {
+function rowView(bi, gi, ri, r, b) {
   if (r.rest) return html`<div class="lrow rest"><span class="ck">·</span><span class="grow muted small">Descanso</span></div>`;
   const st = statusFor(r);
   return html`<div class="lrow ${st}" id="row-${r.id}">
     <button class="ck ${st}" id="ck-${r.id}" data-act="${act(() => cycle(r))}" aria-label="Marcar">${STATUS_ICON[st]}</button>
     <div class="grow"><div class="small" style="font-weight:600">${r.exercise}</div><div class="xs muted">obj. ${targetHint(r) || '—'}${r.notes ? ` · ${r.notes}` : ''}</div></div>
     <input class="num" inputmode="decimal" data-lf="done" data-b="${bi}" data-g="${gi}" data-r="${ri}" value="${r.done ?? ''}" placeholder="${UNIT[r.unit]}"><span class="xs muted u">${UNIT[r.unit]}</span>
-    ${showKg(r) ? html`<input class="num" inputmode="decimal" data-lf="kg" data-b="${bi}" data-g="${gi}" data-r="${ri}" value="${r.doneKg ?? ''}" placeholder="kg"><span class="xs muted u">kg</span>` : ''}
+    ${showKg(r) && !b?.hyrox ? html`<input class="num" inputmode="decimal" data-lf="kg" data-b="${bi}" data-g="${gi}" data-r="${ri}" value="${r.doneKg ?? ''}" placeholder="kg"><span class="xs muted u">kg</span>` : ''}
+    ${b?.hyrox ? html`<input class="num" style="width:70px" inputmode="numeric" data-lf="split" data-b="${bi}" data-g="${gi}" data-r="${ri}" value="${fmtClock(r.splitS)}" placeholder="m:ss"><span class="xs muted u">⏱</span>` : ''}
   </div>`;
 }
 
 function blockResult(bi, b) {
+  if (b.hyrox) {
+    return html`<div class="small" id="hx-${b.id}">Suma de parciales: <b>${fmtClock(hyroxTotal(b)) || '—'}</b></div>
+      <div class="row" style="gap:8px;align-items:center"><label class="grow" style="margin:0">Tiempo final (con transiciones)</label>
+      <input class="num" style="width:84px" data-lf="time" data-b="${bi}" value="${fmtClock(b.result.timeS)}" placeholder="h:mm:ss"></div>
+      <p class="xs muted">Apunta el tiempo de cada tramo (m:ss). Si no pones tiempo final, se guarda la suma de parciales.</p>`;
+  }
   if (b.format === 'amrap') { const r = amrapResult(b); return html`<div class="ok small" id="amrap-${b.id}">Resultado: <b>${r.rounds} rondas + ${r.reps} reps</b> (se calcula de las casillas)</div>`; }
   if (b.part === 'wod' && ['for_time', 'rounds', 'chipper'].includes(b.format) || (b.part === 'endurance')) {
     return html`<div class="row" style="gap:8px;align-items:center"><label class="grow" style="margin:0">Tiempo final</label>
@@ -221,14 +229,37 @@ function blockView(bi, b) {
     <div class="row" style="gap:6px"><input class="grow title-in" data-bf="title" data-b="${bi}" value="${b.title}">
       <div class="seg mini"><button class="${b.scaling === 'rx' ? 'on' : ''}" data-act="${act(() => { b.scaling = 'rx'; persist(); draw(); })}">RX</button><button class="${b.scaling === 'scaled' ? 'on' : ''}" data-act="${act(() => { b.scaling = 'scaled'; persist(); draw(); })}">Scaled</button></div></div>
     <div class="row xs muted" style="gap:8px"><span class="tag accent">${PARTS.find((p) => p[0] === b.part)?.[1] ?? b.part}</span><span class="grow">${fmtLabel(b)}</span>
+      ${timerMode(b) ? html`<button class="sm ghost" data-act="${act(() => startTimer(bi, b))}">⏱</button>` : ''}
       <button class="sm ghost" data-act="${act(() => { open ? editing.delete(b.id) : editing.add(b.id); draw(); })}">${open ? 'Cerrar' : '✎ Estructura'}</button>
       <button class="sm ghost" data-act="${act(() => { if (confirm('¿Quitar este bloque?')) { D.blocks.splice(bi, 1); persist(); draw(); } })}">🗑</button></div>
     ${open ? structureEditor(bi, b) : ''}
     ${b.groups.length ? html`<button class="sm ghost" data-act="${act(() => { for (const g of b.groups) for (const r of g.rows) if (!r.rest && r.status === 'pending') r.status = statusFor({ ...r, status: 'done' }); persist(); draw(); })}">✓ Marcar todo como hecho</button>` : html`<p class="small muted">Añade los ejercicios con «✎ Estructura».</p>`}
-    ${b.groups.map((g, gi) => html`<div class="lgroup"><div class="xs muted glabel">${g.label}</div>${g.rows.map((r, ri) => rowView(bi, gi, ri, r))}</div>`)}
+    ${b.groups.map((g, gi) => html`<div class="lgroup"><div class="xs muted glabel">${g.label}</div>${g.rows.map((r, ri) => rowView(bi, gi, ri, r, b))}</div>`)}
     ${b.addable ? html`<button class="block sm" data-act="${act(() => { addGroup(b); persist(); draw(); })}">+ ${b.addable === 'set' ? 'Serie' : 'Ronda'}</button>` : ''}
     ${blockResult(bi, b)}
   </div>`;
+}
+
+function timerMode(b) {
+  if (b.hyrox) return 'for_time';
+  if (b.format === 'emom' || b.format === 'amrap' || b.format === 'tabata') return b.format;
+  if (b.part === 'wod' && ['for_time', 'rounds', 'chipper', 'intervals'].includes(b.format)) return 'for_time';
+  return null;
+}
+function startTimer(bi, b) {
+  const mode = timerMode(b);
+  const slots = b.format === 'emom' ? b.template.map((t) => (t.rest ? 'Descanso' : `${t.target ?? ''} ${t.exercise}`.trim())) : null;
+  openTimer(mode, {
+    title: b.title, minutes: b.durationMin ?? (b.format === 'emom' ? Math.round((b.groups.length * (b.intervalS ?? 60)) / 60) : 12), intervalS: b.intervalS ?? 60, slots,
+    capS: b.timeCapS, rounds: 8,
+    laps: b.hyrox ? b.groups.map((g) => g.label.replace(/^Estación \d+ · /, '')) : undefined,
+    onDone: (sec, { capped, rounds, laps }) => {
+      if (b.hyrox && laps?.length) b.groups.forEach((g, i) => { const r = g.rows[0]; if (laps[i] != null) { r.splitS = laps[i]; if (r.status === 'pending') r.status = 'done'; } });
+      if (mode === 'for_time') { if (capped) b.result.capped = true; else b.result.timeS = sec; }
+      persist(); draw();
+      toast(mode === 'for_time' ? (capped ? 'Time cap: apunta las reps hechas' : `Tiempo guardado: ${fmtClock(sec)}`) : `Hecho${rounds ? ` · ${rounds} rondas` : ''}`);
+    },
+  });
 }
 
 function cycle(r) {
@@ -263,6 +294,7 @@ function draw() {
       <button class="sm" data-act="${act(() => { const t = document.getElementById('srctext').value; const p = parseWorkoutText(t); if (!p.sections.length) return toast('No encuentro ejercicios'); D.blocks = p.sections.filter((s) => s.items.length).map(buildBlock); D.sourceText = t; persist(); draw(); })}">Volver a interpretar</button></details>` : ''}
     ${D.blocks.map((b, bi) => blockView(bi, b))}
     <div class="grid3"><button class="sm" data-act="${act(() => addBlock('strength'))}">+ Fuerza</button><button class="sm" data-act="${act(() => addBlock('wod'))}">+ WOD</button><button class="sm" data-act="${act(() => addBlock('endurance'))}">+ Endurance</button></div>
+    <div class="grid2" style="margin-top:6px"><button class="sm" data-act="${act(() => addHyrox(8))}">+ Simulación HYROX</button><button class="sm" data-act="${act(() => addHyrox(4))}">+ HYROX 4 estaciones</button></div>
     <div class="grid2"><div><label>Esfuerzo global (RPE 1-10)</label><select data-df="rpe"><option value="">—</option>${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => html`<option ${D.rpe === n ? 'selected' : ''}>${n}</option>`)}</select></div>
       <div><label>Duración total (min)</label><input class="num" data-df="durationMin" value="${D.durationMin ?? 60}"></div></div>
     ${candidates.length ? html`<label>¿Lo unimos a tu entreno del Apple Watch?</label><select data-df="linkSessionId"><option value="">No, sesión nueva</option>${candidates.map((c, i) => html`<option value="${c.id}" ${D.linkSessionId === c.id || (D.linkSessionId === undefined && i === 0) ? 'selected' : ''}>${timeOf(c.started_at)} · ${Math.round(c.duration_s / 60)} min${c.avg_hr ? ` · ${c.avg_hr} ppm` : ''}</option>`)}</select>` : ''}
@@ -272,6 +304,13 @@ function draw() {
   const p2 = document.querySelector('#sheet .panel'); if (p2) p2.scrollTop = top;
 }
 
+/** Abre el registro con una simulación HYROX ya montada. */
+export async function startHyrox(n = 8) { D = emptyLog(today()); await addHyrox(n, false); openLogger(); }
+async function addHyrox(n, redraw = true) {
+  let div = 'open_men';
+  try { div = (await get('profile', async () => (await api.db.select('profiles', { id: `eq.${api.userId()}` }))[0]))?.hyrox_division ?? div; } catch { /* sin conexión */ }
+  D.blocks.push(hyroxBlock(div, n)); if (!D.title) D.title = n >= 8 ? 'Simulación HYROX' : 'HYROX'; persist(); if (redraw) draw();
+}
 function addBlock(part) { const b = newBlock(part); D.blocks.push(b); editing.add(b.id); persist(); draw(); }
 
 export async function openLogger() {
@@ -298,6 +337,13 @@ function bindInputs() {
       if (ds.lf === 'cap') { b.result.capped = t.checked; persist(); draw(); return; }
       if (ds.lf === 'capreps') { b.result.reps = num(t.value); persist(); return; }
       const r = b.groups[+ds.g].rows[+ds.r];
+      if (ds.lf === 'split') {
+        r.splitS = parseClock(t.value.includes(':') ? t.value : t.value ? `${t.value}:00` : '');
+        if (r.splitS && r.status === 'pending') r.status = 'done';
+        persist(); refreshRow(r);
+        const hx = document.getElementById(`hx-${b.id}`); if (hx) hx.innerHTML = `Suma de parciales: <b>${fmtClock(hyroxTotal(b)) || '—'}</b>`;
+        return;
+      }
       if (ds.lf === 'done') r.done = num(t.value); else r.doneKg = num(t.value);
       if (r.status === 'pending' && t.value !== '') r.status = 'done';
       if (r.status !== 'pending' && r.status !== 'skipped') r.status = statusFor({ ...r, status: 'done' });
@@ -341,7 +387,8 @@ async function save(btn) {
     const startedAt = new Date(`${D.date}T${D.startTime || '18:00'}:00`).toISOString();
     const session = logToSession(D, { id: uuid(), startedAt, durationS: (D.durationMin ?? 60) * 60 });
     if (!session.blocks) return toast('No hay ninguna serie para guardar');
-    const r = await api.fn('ingest-session', { session, attachTo: D.editId ?? D.linkSessionId ?? undefined, edit: !!D.editId });
+    const r = await api.fnQueued('ingest-session', { session, attachTo: D.editId ?? D.linkSessionId ?? undefined, edit: !!D.editId });
+    if (r.queued) { dropDraft(); closeSheet(); render(); return toast('Sin conexión: el entreno queda guardado en el móvil y se sube solo al volver la cobertura.', 7000); }
     if (D.importId) api.db.update('photo_imports', { status: 'confirmed', session_id: r.sessionId }, { id: `eq.${D.importId}` }).catch(() => {});
     const lines = summarizeLog(D); const wasEdit = !!D.editId;
     dropDraft(); closeSheet(); invalidate('sessions', 'planned', 'readiness', 'changes', 'insights', 'records', 'exhist'); render();

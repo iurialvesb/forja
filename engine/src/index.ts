@@ -21,3 +21,6 @@ export * from './workoutText.ts';
 export * from './shopping.ts';
 export * from './logbook.ts';
 export * from './activityImport.ts';
+export * from './hyrox.ts';
+export * from './goals.ts';
+export * from './weekly.ts';

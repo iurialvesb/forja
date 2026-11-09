@@ -22,3 +22,6 @@ export * from './workoutText.js';
 export * from './shopping.js';
 export * from './logbook.js';
 export * from './activityImport.js';
+export * from './hyrox.js';
+export * from './goals.js';
+export * from './weekly.js';

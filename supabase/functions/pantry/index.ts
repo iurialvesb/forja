@@ -3,6 +3,7 @@
 //  { action:'match', items:[{name, brand?}] } → producto real de Open Food Facts para cada artículo (foto, marca, formato, macros)
 //  { action:'search', q, brand? }             → candidatos para elegir a mano
 //  { action:'barcode', code }                 → producto por código de barras (escáner)
+//  { action:'recipe', ids? }                  → receta rápida con lo que caduca antes (o con los artículos elegidos)
 //  { action:'save', items:[{name, location, quantityG?, units?, unitGrams?, expiresOn?, queryEn?, barcode?, brand?, imageUrl?}] }
 import { handler, json, requireUser, userClient, HttpError } from '../_shared/supabase.ts';
 import { resolveFood } from '../_shared/foods.ts';
@@ -36,6 +37,28 @@ Deno.serve(handler(async (req) => {
     await requireAIConsent(sb);
     const r = await structured<{ items: any[]; questions?: string[] }>(sb, { system: SYSTEM, text: body.text, photoPath: body.photoPath, tool: 'despensa', schema, maxTokens: 4000, fast: true });
     return json(r);
+  }
+  if (body.action === 'recipe') {
+    await requireAIConsent(sb);
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date());
+    const soon = new Date(Date.parse(`${today}T12:00:00Z`) + 3 * 864e5).toISOString().slice(0, 10);
+    let q = sb.from('pantry_items').select('id,name,quantity_g,units,unit_grams,expires_on,location');
+    q = body.ids?.length ? q.in('id', body.ids) : q.not('expires_on', 'is', null).lte('expires_on', soon);
+    const { data: items } = await q;
+    const { data: rest } = await sb.from('pantry_items').select('name').limit(80);
+    const { data: set } = await sb.from('nutrition_settings').select('mode,preferences').maybeSingle();
+    if (!items?.length) return json({ recipe: null, note: 'No hay nada que caduque en los próximos 3 días.' });
+    const r = await structured<any>(sb, {
+      system: 'Eres un cocinero práctico para un deportista (running + CrossFit) que hace batch cooking. Propón UNA receta sencilla (≤ 30 min) que gaste lo que caduca, usando sobre todo lo que ya tiene en casa. Español de España. Cantidades en gramos para 1 ración salvo que tenga sentido hacer 2-3 raciones para el batch.',
+      text: `Caduca pronto: ${items.map((i: any) => `${i.name}${i.quantity_g ? ` (${i.quantity_g} g)` : i.units ? ` (${i.units} ud)` : ''}, caduca ${i.expires_on ?? '—'}`).join('; ')}.\nTambién tiene: ${(rest ?? []).map((x: any) => x.name).join(', ')}.\nObjetivo nutricional: ${set?.mode ?? 'mantenimiento'}. Preferencias: ${JSON.stringify(set?.preferences ?? {})}.`,
+      tool: 'receta', maxTokens: 1500, fast: true,
+      schema: { type: 'object', required: ['title', 'servings', 'ingredients', 'steps'], properties: {
+        title: { type: 'string' }, servings: { type: 'number' }, minutes: { type: 'number' },
+        ingredients: { type: 'array', items: { type: 'object', required: ['name', 'grams'], properties: { name: { type: 'string' }, grams: { type: 'number' }, fromPantry: { type: 'boolean' } } } },
+        steps: { type: 'array', items: { type: 'string' } }, tip: { type: 'string', description: 'Cómo guardarlo o encajarlo en el menú (comida, cena, táper)' },
+      } },
+    });
+    return json({ recipe: r, uses: items.map((i: any) => i.name) });
   }
   if (body.action === 'match') {
     const items: { name: string; brand?: string }[] = (body.items ?? []).slice(0, 40);

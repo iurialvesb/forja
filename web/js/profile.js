@@ -239,7 +239,7 @@ async function privacy() {
   const consent = (await api.db.select('consents', { kind: 'eq.ai_processing', revoked_at: 'is.null' })).length > 0;
   const mem = await api.db.select('coach_memory', { active: 'eq.true', select: 'id,fact' });
   sheet('Privacidad e IA', html`
-    <p class="small">IA: <b>${consent ? 'activada' : 'desactivada'}</b>. Con ella activada se envían a <b>Google Gemini (nivel gratuito)</b> los datos necesarios para el coach, leer fotos, interpretar lo que comes y crear menús. En el nivel gratuito Google puede usarlos para mejorar sus productos. Sin IA siguen funcionando el plan, el intérprete de WODs en texto, los macros, la compra y los suplementos.</p>
+    <p class="small">IA: <b>${consent ? 'activada' : 'desactivada'}</b>. Con ella activada se envían a <b>Google Gemini (tu cuenta de pago)</b> los datos necesarios para el coach, leer fotos, interpretar lo que comes y crear menús. En las cuentas de pago Google no los usa para entrenar sus modelos. Sin IA siguen funcionando el plan, el intérprete de WODs en texto, los macros, la compra y los suplementos.</p>
     <button class="block ${consent ? 'danger' : 'primary'}" data-act="${act((b) => busy(b, async () => {
       if (consent) await api.db.update('consents', { revoked_at: new Date().toISOString() }, { kind: 'eq.ai_processing' });
       else await api.db.upsert('consents', [{ user_id: uid(), kind: 'ai_processing', version: '2026-11-gemini', provider: 'gemini', granted_at: new Date().toISOString(), revoked_at: null }], 'user_id,kind,version');
@@ -250,11 +250,17 @@ async function privacy() {
     ${!mem.length ? html`<p class="small muted">Nada todavía.</p>` : ''}`);
 }
 
+async function saveBlob(blob, name, type) {
+  const file = new File([blob], name, { type });
+  // En el iPhone, compartir el archivo permite «Guardar en Archivos», AirDrop o mandarlo por correo.
+  if (navigator.canShare?.({ files: [file] })) { try { await navigator.share({ files: [file], title: name }); return; } catch (e) { if (e?.name === 'AbortError') return; } }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+}
 async function exportData() {
-  sheet('Exportar', html`<p class="small">Descarga todos tus datos (perfil, plan, entrenos, series, récords, salud, comidas, despensa…) en un archivo JSON.</p>
-    <button class="primary block" data-act="${act((b) => busy(b, async () => {
-      const blob = await api.fnRaw('export-data'); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `forja-${today()}.json`; a.click();
-    }))}">Descargar copia</button>`);
+  sheet('Exportar', html`<p class="small">Tu copia de seguridad: guárdala en Archivos, iCloud o Drive de vez en cuando (el plan gratuito de Supabase no hace copias).</p>
+    <button class="primary block" data-act="${act((b) => busy(b, async () => saveBlob(await api.fnRaw('export-data'), `forja-${today()}.json`, 'application/json')))}">Todo (JSON, copia completa)</button>
+    <button class="block" data-act="${act((b) => busy(b, async () => saveBlob(await api.fnRaw('export-data?format=csv'), `forja-entrenos-${today()}.csv`, 'text/csv')))}">Entrenos y series (CSV para Excel)</button>
+    <p class="xs muted">El JSON incluye perfil, plan, entrenos, series, récords, salud, comidas, despensa, suplementos y resúmenes. El CSV trae una fila por serie.</p>`);
 }
 
 // ---------- Onboarding ----------

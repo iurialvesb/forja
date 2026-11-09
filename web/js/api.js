@@ -42,7 +42,10 @@ async function token() {
   if (!session) throw new Error('Inicia sesión');
   if (session.expires_at - 60 < Date.now() / 1000) {
     try { save(withExpiry(await authFetch('token?grant_type=refresh_token', { refresh_token: session.refresh_token }))); }
-    catch (e) { save(null); throw new Error('Tu sesión ha caducado. Vuelve a entrar.'); }
+    catch (e) {
+      if (e instanceof TypeError || !navigator.onLine) throw offlineError();   // sin conexión: no cierres la sesión
+      save(null); throw new Error('Tu sesión ha caducado. Vuelve a entrar.');
+    }
   }
   return session.access_token;
 }
@@ -51,7 +54,21 @@ const headers = async (extra = {}) => ({ apikey: KEY, Authorization: `Bearer ${a
 // ---------- PostgREST ----------
 const qs = (params) => Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
 
-async function rest(method, table, { query = {}, body, prefer } = {}) {
+// ---------- Sin conexión: copia local de lo último leído + cola de cambios ----------
+const offlineError = () => Object.assign(new Error('Sin conexión: te enseño lo último guardado en el móvil.'), { offline: true });
+const isNet = (e) => e instanceof TypeError || e?.offline;
+async function cachePut(key, data) { try { const c = await caches.open('forja-data'); await c.put(new Request(`https://forja.local/${encodeURIComponent(key)}`), new Response(JSON.stringify(data), { headers: { 'content-type': 'application/json' } })); } catch { /* sin Cache API */ } }
+async function cacheGet(key) { try { const c = await caches.open('forja-data'); const r = await c.match(new Request(`https://forja.local/${encodeURIComponent(key)}`)); return r ? await r.json() : undefined; } catch { return undefined; } }
+export let offline = false;
+const setOffline = (v) => { if (offline !== v) { offline = v; document.documentElement.classList.toggle('offline', v); } };
+
+async function rest(method, table, opts = {}) {
+  if (method !== 'GET') return restNet(method, table, opts);
+  const key = `rest:${table}?${qs(opts.query ?? {})}`;
+  try { const j = await restNet(method, table, opts); setOffline(false); cachePut(key, j); return j; }
+  catch (e) { if (!isNet(e)) throw e; const c = await cacheGet(key); setOffline(true); if (c !== undefined) return c; throw offlineError(); }
+}
+async function restNet(method, table, { query = {}, body, prefer } = {}) {
   const r = await fetch(`${URL_}/rest/v1/${table}${Object.keys(query).length ? '?' + qs(query) : ''}`, {
     method, headers: await headers({ 'content-type': 'application/json', ...(prefer ? { Prefer: prefer } : {}) }), body: body != null ? JSON.stringify(body) : undefined,
   });
@@ -71,7 +88,36 @@ export const db = {
 };
 
 // ---------- Edge Functions ----------
+const READ_FNS = new Set(['nutrition-day', 'insights', 'goal', 'weekly', 'shopping-list']);
+const isRead = (name, body) => READ_FNS.has(name) && (!body.action || ['build', 'latest'].includes(body.action));
 export async function fn(name, body = {}) {
+  if (!isRead(name, body)) return fnNet(name, body);
+  const key = `fn:${name}:${JSON.stringify(body)}`;
+  try { const j = await fnNet(name, body); setOffline(false); cachePut(key, j); return j; }
+  catch (e) { if (!isNet(e)) throw e; const c = await cacheGet(key); setOffline(true); if (c !== undefined) return c; throw offlineError(); }
+}
+
+/** Cambios que pueden esperar a tener conexión (guardar un entreno, marcar una comida): si no hay red, se encolan. */
+const OUTBOX = 'forja:outbox';
+const readBox = () => { try { return JSON.parse(localStorage.getItem(OUTBOX) || '[]'); } catch { return []; } };
+const writeBox = (b) => { try { localStorage.setItem(OUTBOX, JSON.stringify(b)); } catch { /* */ } };
+export const pendingCount = () => readBox().length;
+export async function fnQueued(name, body = {}) {
+  try { return await fnNet(name, body); }
+  catch (e) { if (!isNet(e)) throw e; writeBox([...readBox(), { name, body, at: Date.now() }]); setOffline(true); return { queued: true }; }
+}
+export async function flushOutbox() {
+  const box = readBox(); if (!box.length) return 0;
+  let sent = 0; const keep = [];
+  for (const it of box) {
+    try { await fnNet(it.name, it.body); sent++; }
+    catch (e) { if (isNet(e)) { keep.push(it); } else console.warn('outbox', it.name, e.message); }
+  }
+  writeBox(keep); if (sent) setOffline(false);
+  return sent;
+}
+
+async function fnNet(name, body = {}) {
   const r = await fetch(`${URL_}/functions/v1/${name}`, { method: 'POST', headers: await headers({ 'content-type': 'application/json' }), body: JSON.stringify(body) });
   const ct = r.headers.get('content-type') || '';
   const j = ct.includes('json') ? await r.json().catch(() => ({})) : await r.text();
