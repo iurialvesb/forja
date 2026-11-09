@@ -14,7 +14,7 @@ jobs:
           HOURS: ${{ inputs.hours }}
         run: |
           START=$(date -u -d "-${HOURS} hours" +%Y-%m-%dT%H:%M:%SZ); END=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          q() { curl -sS -G "https://api.supabase.com/v1/projects/$REF/analytics/endpoints/logs.all" -H "Authorization: Bearer $TOKEN" --data-urlencode "sql=$1" --data-urlencode "iso_timestamp_start=$START" --data-urlencode "iso_timestamp_end=$END"; echo; }
+          q() { curl -sS -G "https://api.supabase.com/v1/projects/$REF/analytics/endpoints/logs" -H "Authorization: Bearer $TOKEN" --data-urlencode "sql=$1" --data-urlencode "iso_timestamp_start=$START" --data-urlencode "iso_timestamp_end=$END"; echo; }
           echo "=== Llamadas a funciones (estado y duración) ==="
           q "select timestamp, m.function_id, r.method, resp.status_code, m.execution_time_ms from function_edge_logs cross join unnest(metadata) as m cross join unnest(m.request) as r cross join unnest(m.response) as resp order by timestamp desc limit 60"
           echo "=== Mensajes de las funciones (errores y avisos) ==="
