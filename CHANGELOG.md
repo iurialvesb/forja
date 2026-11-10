@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-10 · Rediseño azul noche, rapidez y salud completa del Watch
+- Nuevo diseño: azul oscuro, tarjeta principal con anillo de recuperación, tarjetas con minigráficos, barra de pestañas flotante con iconos, animaciones suaves, icono nuevo.
+- Pantalla **Salud** (`#/salud`): sueño (duración, nota, pulso dormido), VFC con tu rango normal, pulso en reposo, pasos, VO₂máx, SpO₂, respiración, grasa corporal y todas las actividades.
+- Todo lo que HealthFit sube a Intervals.icu se guarda (columnas nuevas + `extras`); la primera vez se traen 120 días. Migración `0017_salud_completa`.
+- Rapidez: las pantallas se pintan al instante con lo último guardado en el móvil y se actualizan solas por detrás; sincronización en paralelo.
+- Nutrición → Hoy con anillo de calorías y barras de macros por color.
+
 ## 2026-11-09 (tarde) · Registrar comida al instante
 - Intérprete de comidas en el móvil (`engine/src/foodText.ts`): cantidades («un», «medio», «200 g», «dos tostadas», «una cucharada»), marcas, cocinado/crudo y la comida («como almuerzo»). Sin esperar al servidor.
 - Solo lo que no reconoce va al servidor, y en segundo plano. El teclado no se cierra mientras escribes.

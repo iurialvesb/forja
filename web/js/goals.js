@@ -88,6 +88,10 @@ export const goalCard = (g, phases, today) => {
   const first = phases.find((p) => p.goal_id === g.id);
   const total = first ? Math.max(1, daysUntil(g.date) - daysUntil(first.start_date)) : 1;
   const done = first ? -daysUntil(first.start_date) : 0;
-  return html`<div class="card" data-act="${act(() => go(`objetivo/${g.id}`))}"><div class="row"><h3 class="grow">${g.name}</h3><span class="tag accent">${daysUntil(g.date)} días</span><span class="muted" style="margin-left:6px">›</span></div>
-    <p class="small muted">${ph ? `${ph.focus}` : 'Preparación pendiente'}${g.target_time_s ? ` · objetivo ${dur(g.target_time_s)}` : ''}</p>${bar(Math.max(0, done), total)}</div>`;
+  const hy = g.type === 'hyrox';
+  return html`<div class="card goalc ${hy ? 'hy' : ''}" data-act="${act(() => go(`objetivo/${g.id}`))}">
+    <div class="xs" style="font-weight:750;letter-spacing:.5px;text-transform:uppercase;color:${hy ? 'var(--purple)' : 'var(--blue)'}">${hy ? 'HYROX' : 'Carrera'} · ${shortDate(g.date)}</div>
+    <h3 style="margin:4px 0 10px">${g.name}</h3>
+    <div class="row" style="align-items:flex-end"><div class="kpi">${daysUntil(g.date)}<small> días</small></div><div class="grow"></div>${g.target_time_s ? html`<div style="text-align:right"><div class="xs muted">Objetivo</div><b style="font:750 17px var(--num)">${dur(g.target_time_s)}</b></div>` : ''}</div>
+    <p class="xs muted" style="margin:8px 0 6px">${ph ? ph.focus : 'Preparación pendiente'}</p>${bar(Math.max(0, done), total, hy ? 'linear-gradient(90deg,#6d28d9,#a78bfa)' : undefined)}</div>`;
 };

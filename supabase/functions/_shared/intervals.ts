@@ -5,10 +5,10 @@ import { ingestSession } from './ingest.ts';
 import { todayMadrid } from './context.ts';
 
 const BASE = 'https://intervals.icu/api/v1';
-export interface IcuConn { user_id: string; athlete_id: string; api_key: string; history_from?: string | null; last_pull_at?: string | null }
+export interface IcuConn { user_id: string; athlete_id: string; api_key: string; history_from?: string | null; last_pull_at?: string | null; wellness_backfill_at?: string | null }
 
 export async function icu(conn: Pick<IcuConn, 'api_key'>, path: string): Promise<any> {
-  const r = await fetch(`${BASE}${path}`, { headers: { Authorization: `Basic ${btoa(`API_KEY:${conn.api_key}`)}`, accept: 'application/json' } });
+  const r = await fetch(`${BASE}${path}`, { headers: { Authorization: `Basic ${btoa(`API_KEY:${conn.api_key}`)}`, accept: 'application/json' }, signal: AbortSignal.timeout(20_000) });
   if (r.status === 401 || r.status === 403) throw new Error('Intervals.icu rechaza la clave: revisa el ID de atleta y la API key');
   if (r.status === 429) throw new Error('Intervals.icu pide esperar un poco (límite de peticiones)');
   if (!r.ok) throw new Error(`Intervals.icu ${r.status}: ${(await r.text()).slice(0, 200)}`);
@@ -34,12 +34,16 @@ export async function pullToInbox(sb: SupabaseClient, conn: IcuConn, opts: { old
     newActivities = newActivities.concat((data ?? []).map((r: any) => r.payload));
   }
   // Salud diaria de los últimos días (se reprocesa: el sueño y la VFC pueden completarse más tarde).
-  const wOldest = opts.oldest ?? addDays(today, -3);
+  // La primera vez (o tras activar la salud en HealthFit) se traen 120 días de sueño, VFC, pulso, pasos…
+  const backfill = !conn.wellness_backfill_at;
+  const wOldest = opts.oldest ?? (backfill ? addDays(today, -120) : addDays(today, -4));
   const well: any[] = await icu(conn, `/athlete/${encodeURIComponent(conn.athlete_id)}/wellness?oldest=${wOldest}&newest=${today}`).catch(() => []);
-  const wrows = (well ?? []).filter((w) => w?.id && (w.hrv != null || w.hrvSDNN != null || w.restingHR != null || w.sleepSecs != null || w.weight != null || w.steps != null))
+  const DATA = ['hrv', 'hrvSDNN', 'restingHR', 'sleepSecs', 'weight', 'steps', 'sleepScore', 'spO2', 'respiration', 'bodyFat', 'vo2max', 'avgSleepingHR', 'kcalConsumed'];
+  const wrows = (well ?? []).filter((w) => w?.id && DATA.some((k) => w[k] != null))
     .map((w) => ({ user_id: conn.user_id, kind: 'wellness', external_id: String(w.id), payload: w, received_at: new Date().toISOString(), processed_at: null }));
   if (wrows.length) await sb.from('intervals_inbox').upsert(wrows, { onConflict: 'user_id,kind,external_id' });
-  await sb.from('intervals_connections').update({ last_pull_at: new Date().toISOString(), last_error: null }).eq('user_id', conn.user_id);
+  const anySleep = wrows.some((r) => r.payload.sleepSecs != null || r.payload.hrv != null || r.payload.hrvSDNN != null);
+  await sb.from('intervals_connections').update({ last_pull_at: new Date().toISOString(), last_error: null, ...(backfill && anySleep ? { wellness_backfill_at: new Date().toISOString() } : {}) }).eq('user_id', conn.user_id);
   return { newActivities, wellness: wrows.length };
 }
 
@@ -51,19 +55,26 @@ export async function processIcuInbox(sb: SupabaseClient, userId: string, limit 
   const { data: conn } = await sb.from('intervals_connections').select('*').maybeSingle();
   if (!conn) return out;
   // Salud diaria
-  const { data: wl } = await sb.from('intervals_inbox').select('*').eq('kind', 'wellness').is('processed_at', null).limit(400);
+  const { data: wl } = await sb.from('intervals_inbox').select('*').eq('kind', 'wellness').is('processed_at', null).limit(200);
+  // En bloque: una escritura para todos los días (rápido aunque sean 120 días de historial).
+  const rows: Record<string, unknown>[] = [], weights: Record<string, unknown>[] = [];
+  const more: [string, string][] = [['sleepScore', 'sleep_score'], ['sleepQuality', 'sleep_quality'], ['spo2', 'spo2'], ['respiration', 'respiration'], ['bodyFat', 'body_fat'], ['vo2max', 'vo2max'], ['kcalConsumed', 'kcal_consumed']];
   for (const it of wl ?? []) {
-    const d = icuWellnessToDaily(it.payload);
-    const row: Record<string, unknown> = { user_id: userId, date: d.date, source: 'healthkit', updated_at: new Date().toISOString() };
-    if (d.hrvMs != null) { row.hrv_ms = d.hrvMs; row.hrv_method = d.hrvMethod; }
-    if (d.rhr != null) row.rhr = d.rhr;
-    if (d.sleepH != null) row.sleep_h = d.sleepH;
-    if (d.steps != null) row.steps = d.steps;
-    if (d.avgSleepingHr != null) row.avg_sleeping_hr = d.avgSleepingHr;
-    await sb.from('daily_health').upsert(row, { onConflict: 'user_id,date' });
-    if (d.weightKg) await sb.from('body_metrics').upsert({ user_id: userId, date: d.date, weight_kg: d.weightKg, source: 'healthkit' }, { onConflict: 'user_id,date,source' });
-    await sb.from('intervals_inbox').update({ processed_at: new Date().toISOString(), result: { ok: true } }).eq('id', it.id);
-    out.days++;
+    const d: any = icuWellnessToDaily(it.payload);
+    const row: Record<string, unknown> = { user_id: userId, date: d.date, source: 'healthkit', updated_at: new Date().toISOString(),
+      hrv_ms: d.hrvMs ?? null, hrv_method: d.hrvMethod ?? null, rhr: d.rhr ?? null, sleep_h: d.sleepH ?? null, steps: d.steps ?? null, avg_sleeping_hr: d.avgSleepingHr ?? null,
+      extras: Object.keys(d.extras).length ? d.extras : null };
+    for (const [k, col] of more) row[col] = d[k] ?? null;
+    rows.push(row);
+    if (d.weightKg) weights.push({ user_id: userId, date: d.date, weight_kg: d.weightKg, source: 'healthkit' });
+  }
+  if (rows.length) {
+    // Un mismo día puede venir dos veces (se reprocesa): se queda la última versión.
+    const byDate = new Map(rows.map((r) => [r.date as string, r]));
+    await sb.from('daily_health').upsert([...byDate.values()], { onConflict: 'user_id,date' });
+    if (weights.length) await sb.from('body_metrics').upsert([...new Map(weights.map((w) => [w.date as string, w])).values()], { onConflict: 'user_id,date,source' });
+    await sb.from('intervals_inbox').update({ processed_at: new Date().toISOString(), result: { ok: true } }).in('id', (wl ?? []).map((x: any) => x.id));
+    out.days = byDate.size;
   }
   // Entrenos (los más antiguos primero)
   const { data: prof } = await sb.from('physiology').select('hr_rest,hr_max,lthr').order('effective_from', { ascending: false }).limit(1).maybeSingle();

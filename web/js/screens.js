@@ -3,8 +3,9 @@ import * as api from './api.js';
 import { get, invalidate, go, render } from './app.js';
 import {
   html, raw, act, toast, sheet, setSheet, closeSheet, busy, today, addDays, monday, dayName, shortDate, timeOf, daysUntil, pace, dur, n0,
-  icon, intensityTag, levelColor, ring, bar, barChart, lineChart, steps, resizeImage, phaseName, slotName, SLOTS,
+  icon, intensityTag, levelColor, ring, bar, barChart, lineChart, steps, resizeImage, phaseName, slotName, SLOTS, spark,
 } from './ui.js';
+import { ic } from './icons.js';
 import { goalCard } from './goals.js';
 
 import { activityExtras } from './activity.js';
@@ -27,6 +28,7 @@ export async function HOME() {
     get('weekly', () => api.fn('weekly', {}).catch(() => null), 1_800_000),
     get(`suplog:${t}`, () => api.db.select('supplement_logs', { date: `eq.${t}` }).catch(() => [])),
   ]);
+  const health = await get('health:120', () => api.db.select('daily_health', { date: `gte.${addDays(t, -120)}`, order: 'date' }).catch(() => []), 300_000);
   const todays = (week.filter((s) => s.date === t)).filter((x) => x.status !== 'skipped');
   const thisWeek = sessions.filter((s) => s.started_at.slice(0, 10) >= mon);
   const km = thisWeek.filter((s) => s.discipline === 'running').reduce((a, s) => a + (+s.distance_m || 0), 0) / 1000;
@@ -37,34 +39,122 @@ export async function HOME() {
   const h = new Date().getHours();
   const noWod = fresh.filter((s) => s.primary_source === 'healthkit' && !(s.session_blocks || []).length);
   const rep = weekly?.reports?.find((r) => r.week_start === weekly.current && !r.seen_at);
+  const H = healthSummary(health, t);
+  const lvl = readiness?.level;
+  const minByDay = [...Array(7)].map((_, i) => { const d = addDays(mon, i); return sessions.filter((s) => s.started_at.slice(0, 10) === d).reduce((a, s) => a + (+s.duration_s || 0), 0) / 60; });
+  const w = (await get('body', () => api.db.select('body_metrics', { date: `gte.${addDays(t, -180)}`, order: 'date' }).catch(() => []), 300_000)).filter((x) => x.weight_kg != null);
   return {
     title: h < 14 ? 'Buenos días' : h < 21 ? 'Buenas tardes' : 'Buenas noches',
-    right: html`<button class="icon-btn" data-act="${act(() => go('perfil'))}">👤</button>`,
+    sub: dayName(t, true),
+    right: html`<button class="icon-btn" data-act="${act(() => go('perfil'))}">${raw(ic('user', 20))}</button>`,
     body: html`
-      <div class="card row" data-act="${act(checkIn)}">
-        ${ring((readiness?.score ?? 0) / 100, levelColor(readiness?.level), readiness ? readiness.score : '–')}
-        <div class="grow"><div class="small muted">Recuperación</div>
-          <div style="font-size:20px;font-weight:700;color:${levelColor(readiness?.level)}">${{ verde: 'Listo para entrenar', ambar: 'Con precaución', rojo: 'Prioriza recuperar' }[readiness?.level] ?? 'Haz el check-in'}</div>
-          <div class="small muted">${readiness?.reasons?.[0] ?? 'Toca para contarme cómo estás hoy.'}</div></div>
-      </div>
-      ${noWod.map((s) => html`<div class="card tight row" style="border-color:var(--accent)"><span style="font-size:22px">⌚</span><div class="grow"><b class="small">${s.title ?? 'CrossFit'} · ${timeOf(s.started_at)}</b><div class="xs muted">Del Apple Watch, sin el WOD. Pega la pizarra y queda todo junto.</div></div><button class="sm primary" data-act="${act(() => addWodTo(s))}">Añadir WOD</button></div>`)}
-      ${rep ? html`<div class="card"><div class="row"><div class="small grow" style="color:var(--accent);font-weight:700">📋 Tu semana (${shortDate(rep.week_start)})</div><button class="sm ghost" data-act="${act(async () => { await api.fn('weekly', { action: 'seen', weekStart: rep.week_start }).catch(() => {}); invalidate('weekly'); render(); })}">Leído</button></div><p class="small" style="white-space:pre-line">${rep.text}</p></div>` : ''}
-      ${todayCard(t, todays, nd, nut, supLogs)}
-      <div class="card">
-        <h3>Carga semanal</h3>
-        <div class="stats">
-          <div class="stat"><div class="l">Carrera</div><div class="v" style="color:var(--blue)">${km.toFixed(1)}<span class="u"> / ${Math.round(plannedKm)} km</span></div></div>
-          <div class="stat"><div class="l">Sesiones</div><div class="v">${thisWeek.length}</div></div>
-          <div class="stat"><div class="l">ACWR</div><div class="v">${readiness?.acwr != null ? (+readiness.acwr).toFixed(2) : '–'}</div></div>
+      <div class="hero" data-act="${act(checkIn)}">
+        <div class="row" style="position:relative;z-index:1">
+          ${ring((readiness?.score ?? 0) / 100, levelColor(lvl) === 'var(--muted)' ? '#7fb0ff' : levelColor(lvl), readiness ? readiness.score : '–', 104, 'de 100')}
+          <div class="grow"><div class="k">Recuperación</div>
+            <div class="big" style="color:${lvl ? levelColor(lvl) : '#fff'}">${{ verde: 'Listo para entrenar', ambar: 'Con precaución', rojo: 'Prioriza recuperar' }[lvl] ?? 'Haz el check-in'}</div>
+            <div class="small" style="color:rgba(220,232,255,.78)">${readiness?.reasons?.[0] ?? 'Toca para contarme cómo estás hoy.'}</div></div>
         </div>
-        ${readiness?.leg_fatigue != null ? html`<div class="small muted" style="margin-top:10px">Fatiga de piernas</div>${bar(+readiness.leg_fatigue, 350, +readiness.leg_fatigue >= 250 ? 'var(--red)' : +readiness.leg_fatigue >= 140 ? 'var(--amber)' : 'var(--green)')}` : ''}
+        <div class="mini">
+          <div><div class="l">${raw(ic('moon', 13))} Sueño</div><div class="v">${H.sleep ? fmtSleep(H.sleep.h) : '–'}</div></div>
+          <div><div class="l">${raw(ic('pulse', 13))} VFC</div><div class="v">${H.hrv ? Math.round(H.hrv.v) : '–'}<small> ms</small></div></div>
+          <div><div class="l">${raw(ic('heart', 13))} Reposo</div><div class="v">${H.rhr ? H.rhr.v : '–'}<small> ppm</small></div></div>
+        </div>
+      </div>
+      ${noWod.map((s) => html`<div class="card tight row" style="border-color:rgba(127,176,255,.45)"><span class="bub" style="width:40px;height:40px;background:var(--accentSoft);color:var(--accent2)">${raw(ic('watch', 22))}</span><div class="grow"><b class="small">${s.title ?? 'CrossFit'} · ${timeOf(s.started_at)}</b><div class="xs muted">Del Apple Watch, sin el WOD. Pega la pizarra y queda todo junto.</div></div><button class="sm primary" data-act="${act(() => addWodTo(s))}">Añadir WOD</button></div>`)}
+      ${rep ? html`<div class="card"><div class="row"><div class="small grow" style="color:var(--accent2);font-weight:750">${raw(ic('sparkle', 14))} Tu semana (${shortDate(rep.week_start)})</div><button class="sm ghost" data-act="${act(async () => { await api.fn('weekly', { action: 'seen', weekStart: rep.week_start }).catch(() => {}); invalidate('weekly'); render(); })}">Leído</button></div><p class="small" style="white-space:pre-line">${rep.text}</p></div>` : ''}
+      ${todayCard(t, todays, nd, nut, supLogs)}
+      <div class="tiles">
+        ${tile('Sueño', 'moon', 'var(--purple)', H.sleep ? fmtSleep(H.sleep.h) : '–', H.sleep ? `media 7 días ${fmtSleep(H.sleep.avg7)}${H.sleep.score ? ` · nota ${H.sleep.score}` : ''}` : 'Sin datos del Watch', spark(H.sleepSeries, '#a78bfa', 'bar'), 'salud')}
+        ${tile('Pasos', 'steps', 'var(--green)', H.steps ? n0(H.steps.v) : '–', H.steps ? `media ${n0(H.steps.avg7)}` : 'Sin datos', spark(H.stepsSeries, '#34d399', 'bar'), 'salud')}
+        ${tile('Actividad', 'flame', 'var(--pink)', html`${n0(minByDay.reduce((a, b) => a + b, 0))}<small> min</small>`, `${thisWeek.length} ${thisWeek.length === 1 ? 'entreno' : 'entrenos'} esta semana`, spark(minByDay, '#f472b6', 'bar'), 'entrenos')}
+        ${tile('Peso', 'scale', 'var(--amber)', w.length ? html`${(+w[w.length - 1].weight_kg).toLocaleString('es-ES', { maximumFractionDigits: 1 })}<small> kg</small>` : '–', w.length >= 2 ? `${(w[w.length - 1].weight_kg - w[Math.max(0, w.length - 8)].weight_kg) > 0 ? '+' : ''}${(w[w.length - 1].weight_kg - w[Math.max(0, w.length - 8)].weight_kg).toLocaleString('es-ES', { maximumFractionDigits: 1 })} kg últimas semanas` : 'Apunta tu peso', spark(w.slice(-20).map((x) => +x.weight_kg), '#fbbf24'), 'entrenos/progreso')}
+      </div>
+      <div class="card">
+        <div class="row"><h3 class="grow">Carga semanal</h3>${readiness?.acwr != null ? html`<span class="tag ${+readiness.acwr > 1.5 ? 'red' : +readiness.acwr > 1.3 ? 'amber' : 'green'}">ACWR ${(+readiness.acwr).toFixed(2).replace('.', ',')}</span>` : ''}</div>
+        <div class="row" style="align-items:flex-end;margin:4px 0 8px"><div class="kpi">${km.toFixed(1).replace('.', ',')}<small> / ${Math.round(plannedKm)} km</small></div></div>
+        ${bar(km, Math.max(1, plannedKm))}
+        ${readiness?.leg_fatigue != null ? html`<div class="row xs muted" style="margin-top:12px"><span class="grow">Fatiga de piernas</span><span>${Math.round(+readiness.leg_fatigue)} / 350</span></div>${bar(+readiness.leg_fatigue, 350, +readiness.leg_fatigue >= 250 ? 'var(--red)' : +readiness.leg_fatigue >= 140 ? 'var(--amber)' : 'var(--green)')}` : ''}
       </div>
       <h2>Objetivos</h2>
-      ${goals.length ? goals.map((g) => goalCard(g, phases, t)) : html`<div class="card muted">Añade tu próxima competición en Perfil → Objetivos.</div>`}
-      ${last ? html`<div class="card"><div class="small" style="color:var(--accent);font-weight:700">✨ Tu entrenador</div><p>${last.reason}</p></div>` : ''}
-      <h2>Última actividad</h2>
+      ${goals.length ? html`<div class="hscroll">${goals.map((g) => goalCard(g, phases, t))}</div>` : html`<div class="card muted">Añade tu próxima competición en Perfil → Objetivos.</div>`}
+      ${last ? html`<div class="card"><div class="small" style="color:var(--accent2);font-weight:750">${raw(ic('sparkle', 14))} Tu entrenador</div><p style="margin:6px 0 0">${last.reason}</p></div>` : ''}
+      <h2>Última actividad <a href="#/salud">Ver todo</a></h2>
       ${sessions.slice(0, 3).map(sessionRow)}
       ${!sessions.length ? html`<div class="card muted small">Conecta el Apple Watch (Perfil → Apple Watch) o registra un entreno en Entrenos.</div>` : ''}`,
+  };
+}
+
+const tile = (label, icn, color, value, sub, chart, to) => html`<div class="tile" data-act="${act(() => go(to))}"><div class="l"><span class="bub" style="background:color-mix(in srgb, ${color} 18%, transparent);color:${color}">${raw(ic(icn, 15))}</span>${label}</div><div class="v">${value}</div><div class="s">${sub}</div>${chart}</div>`;
+export const fmtSleep = (h) => (h == null ? '–' : `${Math.floor(h)}h ${String(Math.round((h % 1) * 60)).padStart(2, '0')}`);
+/** Últimos valores de salud (sueño de anoche, VFC, pulso en reposo, pasos) y sus series para los gráficos. */
+function healthSummary(rows, t) {
+  const by = Object.fromEntries(rows.map((r) => [r.date, r]));
+  const lastWith = (k) => { for (let i = 0; i < 4; i++) { const r = by[addDays(t, -i)]; if (r?.[k] != null) return { r, v: +r[k] }; } return null; };
+  const days = (n) => [...Array(n)].map((_, i) => by[addDays(t, -(n - 1 - i))]);
+  const avg = (xs) => { const v = xs.filter((x) => x != null).map(Number); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const sl = lastWith('sleep_h'), st = by[t]?.steps != null ? { v: +by[t].steps } : lastWith('steps');
+  return {
+    sleep: sl ? { h: sl.v, score: sl.r.sleep_score, avg7: avg(days(7).map((r) => r?.sleep_h)) } : null,
+    hrv: lastWith('hrv_ms'), rhr: lastWith('rhr'),
+    steps: st ? { v: st.v, avg7: avg(days(7).map((r) => r?.steps)) } : null,
+    sleepSeries: days(7).map((r) => r?.sleep_h ?? null), stepsSeries: days(7).map((r) => r?.steps ?? null),
+  };
+}
+
+// ======================= SALUD =======================
+export async function HEALTH(params = []) {
+  const t = today();
+  const span = Number(params[0]) || 30;
+  const [rows, sessions] = await Promise.all([
+    get('health:120', () => api.db.select('daily_health', { date: `gte.${addDays(t, -120)}`, order: 'date' }).catch(() => []), 300_000),
+    get('sessions:42', () => api.db.select('sessions', { deleted_at: 'is.null', started_at: `gte.${addDays(t, -42)}`, order: 'started_at.desc' })),
+  ]);
+  const by = Object.fromEntries(rows.map((r) => [r.date, r]));
+  const days = [...Array(span)].map((_, i) => addDays(t, -(span - 1 - i)));
+  const ser = (k) => days.map((d) => ({ x: shortDate(d), y: by[d]?.[k] != null ? +by[d][k] : null, label: dayName(d).slice(0, 2), value: by[d]?.[k] != null ? +by[d][k] : 0 }));
+  const vals = (k) => days.map((d) => by[d]?.[k]).filter((x) => x != null).map(Number);
+  const avg = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
+  const sd = (xs) => { const m = avg(xs); return xs.length > 2 ? Math.sqrt(xs.reduce((a, x) => a + (x - m) ** 2, 0) / (xs.length - 1)) : 0; };
+  const H = healthSummary(rows, t);
+  const lastNight = [0, 1, 2].map((i) => by[addDays(t, -i)]).find((r) => r?.sleep_h != null);
+  const hrv = vals('hrv_ms'), hm = avg(hrv), hs = sd(hrv);
+  const any = rows.some((r) => r.sleep_h != null || r.hrv_ms != null || r.steps != null);
+  const extraTiles = [['vo2max', 'VO₂máx', 'lungs', 'var(--blue)', ''], ['spo2', 'Oxígeno en sangre', 'drop', 'var(--red)', ' %'], ['respiration', 'Respiración', 'lungs', 'var(--green)', ' rpm'], ['body_fat', 'Grasa corporal', 'scale', 'var(--amber)', ' %']]
+    .map(([k, l, i, c, u]) => { const v = vals(k); return v.length ? tile(l, i, c, html`${(+v[v.length - 1]).toLocaleString('es-ES', { maximumFractionDigits: 1 })}<small>${u}</small>`, `media ${avg(v).toLocaleString('es-ES', { maximumFractionDigits: 1 })}${u}`, spark(v.slice(-30), c.replace(/var\((--[a-z]+)\)/, (m) => ({ '--blue': '#38bdf8', '--red': '#f87171', '--green': '#34d399', '--amber': '#fbbf24' })[m.slice(4, -1)] ?? '#7fb0ff')), 'salud') : ''; }).join('');
+  const acts = sessions.slice(0, 30);
+  return {
+    title: 'Salud', sub: 'Apple Watch · HealthFit',
+    right: html`<button class="icon-btn" data-act="${act(() => go('inicio'))}">✕</button>`,
+    body: html`
+      <div class="seg">${[7, 30, 90].map((n) => html`<button class="${span === n ? 'on' : ''}" data-act="${act(() => go(`salud/${n}`))}">${n} días</button>`)}</div>
+      ${!any ? html`<div class="card"><h3>Aún no llega tu salud del Watch</h3><p class="small muted">Los entrenos ya llegan; el sueño, la VFC, el pulso en reposo y los pasos se activan aparte en HealthFit:</p>
+        <ol class="small"><li>Abre <b>HealthFit</b> → pestaña <b>Ajustes</b> → <b>Intervals.icu</b>.</li><li>Activa <b>Sincronizar datos de salud / Health metrics</b> (sueño, VFC, FC en reposo, peso, pasos).</li><li>Pulsa <b>Sincronizar ahora</b>. En unos minutos aparece aquí (traigo los últimos 120 días).</li></ol></div>` : ''}
+      <div class="card">
+        <div class="row"><span class="bub" style="width:34px;height:34px;background:rgba(167,139,250,.18);color:var(--purple)">${raw(ic('moon', 18))}</span><h3 class="grow" style="margin:0">Sueño</h3>${lastNight?.sleep_score != null ? html`<span class="tag purple">Nota ${lastNight.sleep_score}</span>` : ''}</div>
+        <div class="row" style="margin:10px 0 2px;align-items:flex-end"><div class="kpi">${lastNight ? fmtSleep(+lastNight.sleep_h) : '–'}</div><div class="small muted" style="margin-left:6px">${lastNight ? (lastNight.date === t ? 'anoche' : shortDate(lastNight.date)) : ''}</div></div>
+        <div class="small muted">Media ${fmtSleep(avg(vals('sleep_h')))}${lastNight?.avg_sleeping_hr ? ` · pulso dormido ${lastNight.avg_sleeping_hr} ppm` : ''}${H.sleep && H.sleep.avg7 < 7 ? ' · intenta llegar a 7–8 h' : ''}</div>
+        ${barChart(ser('sleep_h').map((p) => ({ ...p, color: p.value && p.value < 6.5 ? '#f87171' : undefined })), { color: '#a78bfa', height: 130, goal: 8, fmt: (v) => `${Math.round(v)} h`, label: (p) => (span > 14 ? p.x : p.label) })}
+      </div>
+      <div class="card">
+        <div class="row"><span class="bub" style="width:34px;height:34px;background:var(--accentSoft);color:var(--accent2)">${raw(ic('pulse', 18))}</span><h3 class="grow" style="margin:0">Variabilidad cardiaca (VFC)</h3>${H.hrv && hm ? html`<span class="tag ${H.hrv.v < hm - hs ? 'amber' : 'green'}">${H.hrv.v < hm - hs ? 'Por debajo' : 'En tu rango'}</span>` : ''}</div>
+        <div class="row" style="margin:10px 0 2px;align-items:flex-end"><div class="kpi">${H.hrv ? Math.round(H.hrv.v) : '–'}<small> ms</small></div></div>
+        <div class="small muted">Tu rango normal: ${hm ? `${Math.round(hm - hs)}–${Math.round(hm + hs)} ms` : '—'} (franja verde)</div>
+        ${lineChart([{ color: '#7fb0ff', points: ser('hrv_ms') }], { height: 130, band: hm ? [hm - hs, hm + hs] : undefined })}
+      </div>
+      <div class="card">
+        <div class="row"><span class="bub" style="width:34px;height:34px;background:rgba(248,113,113,.16);color:var(--red)">${raw(ic('heart', 18))}</span><h3 class="grow" style="margin:0">Pulso en reposo</h3></div>
+        <div class="row" style="margin:10px 0 2px;align-items:flex-end"><div class="kpi">${H.rhr ? H.rhr.v : '–'}<small> ppm</small></div></div>
+        ${lineChart([{ color: '#f87171', points: ser('rhr') }], { height: 110 })}
+      </div>
+      <div class="card">
+        <div class="row"><span class="bub" style="width:34px;height:34px;background:rgba(52,211,153,.16);color:var(--green)">${raw(ic('steps', 18))}</span><h3 class="grow" style="margin:0">Pasos</h3><span class="small muted">media ${n0(avg(vals('steps')))}</span></div>
+        ${barChart(ser('steps'), { color: '#34d399', height: 120, goal: 8000, fmt: (v) => `${Math.round(v / 1000)}k`, label: (p) => (span > 14 ? p.x : p.label) })}
+      </div>
+      ${extraTiles ? html`<div class="tiles">${raw(extraTiles)}</div>` : ''}
+      <h2>Todas tus actividades</h2>
+      ${acts.length ? acts.map(sessionRow) : html`<div class="card muted small">Sin actividades en las últimas semanas.</div>`}
+      <p class="xs muted center" style="padding:16px 0">Llegan del Apple Watch a través de HealthFit e Intervals.icu cada pocos minutos.</p>`,
   };
 }
 

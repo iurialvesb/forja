@@ -172,13 +172,21 @@ export function icuToActivity(act: any, streams: IcuStream[], profile: { hrRest?
 }
 
 /** Wellness de Intervals.icu → datos diarios de Forja (solo lo que viene relleno). */
-export function icuWellnessToDaily(w: any): { date: string; hrvMs?: number; hrvMethod?: 'sdnn' | 'rmssd'; rhr?: number; sleepH?: number; steps?: number; weightKg?: number; avgSleepingHr?: number } {
+export interface DailyWellness { date: string; hrvMs?: number; hrvMethod?: 'sdnn' | 'rmssd'; rhr?: number; sleepH?: number; steps?: number; weightKg?: number; avgSleepingHr?: number;
+  sleepScore?: number; sleepQuality?: number; spo2?: number; respiration?: number; bodyFat?: number; vo2max?: number; kcalConsumed?: number; extras: Record<string, unknown> }
+/** Día de salud de Intervals.icu (lo que HealthFit sube del Apple Watch) → fila de daily_health. Lo que no tiene columna va a extras. */
+export function icuWellnessToDaily(w: any): DailyWellness {
   const sdnn = num(w.hrvSDNN), rmssd = num(w.hrv);
+  const KNOWN = new Set(['id', 'hrv', 'hrvSDNN', 'restingHR', 'sleepSecs', 'steps', 'weight', 'avgSleepingHR', 'sleepScore', 'sleepQuality', 'spO2', 'respiration', 'bodyFat', 'vo2max', 'kcalConsumed', 'updated', 'ctl', 'atl', 'rampRate', 'ctlLoad', 'atlLoad', 'sportInfo']);
+  const extras: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(w ?? {})) if (!KNOWN.has(k) && v != null && v !== '' && typeof v !== 'object') extras[k] = v;
   return {
     date: String(w.id).slice(0, 10),
     // Apple Watch mide SDNN: si viene, se usa ese (coherente con el Atajo); si no, RMSSD.
     hrvMs: sdnn ?? rmssd, hrvMethod: sdnn != null ? 'sdnn' : rmssd != null ? 'rmssd' : undefined,
     rhr: round(num(w.restingHR)), sleepH: num(w.sleepSecs) != null ? round(num(w.sleepSecs)! / 3600, 2) : undefined,
     steps: round(num(w.steps)), weightKg: num(w.weight), avgSleepingHr: round(num(w.avgSleepingHR)),
+    sleepScore: round(num(w.sleepScore)), sleepQuality: round(num(w.sleepQuality)), spo2: round(num(w.spO2), 1), respiration: round(num(w.respiration), 1),
+    bodyFat: round(num(w.bodyFat), 1), vo2max: round(num(w.vo2max), 1), kcalConsumed: round(num(w.kcalConsumed)), extras,
   };
 }

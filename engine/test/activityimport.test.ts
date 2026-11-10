@@ -43,8 +43,10 @@ test('CrossFit sin GPS ni distancia: sin splits, con zonas', () => {
 });
 
 test('wellness: VFC (SDNN preferente), sueño y pulso', () => {
-  const d = icuWellnessToDaily({ id: '2026-11-07', hrv: 41, hrvSDNN: 55, restingHR: 51, sleepSecs: 27000, steps: 9000, weight: 77.8 });
-  assert.deepEqual(d, { date: '2026-11-07', hrvMs: 55, hrvMethod: 'sdnn', rhr: 51, sleepH: 7.5, steps: 9000, weightKg: 77.8, avgSleepingHr: undefined });
+  const d = icuWellnessToDaily({ id: '2026-11-07', hrv: 41, hrvSDNN: 55, restingHR: 51, sleepSecs: 27000, steps: 9000, weight: 77.8, sleepScore: 83, spO2: 96.4, respiration: 14.1, vo2max: 51, mood: 3, comments: '' });
+  assert.equal(d.hrvMs, 55); assert.equal(d.hrvMethod, 'sdnn'); assert.equal(d.rhr, 51); assert.equal(d.sleepH, 7.5); assert.equal(d.steps, 9000); assert.equal(d.weightKg, 77.8);
+  assert.equal(d.sleepScore, 83); assert.equal(d.spo2, 96.4); assert.equal(d.respiration, 14.1); assert.equal(d.vo2max, 51);
+  assert.deepEqual(d.extras, { mood: 3 });                                   // lo que no tiene columna se guarda igual
   assert.equal(disciplineFromIcu('TrailRun'), 'running');
   assert.equal(kmSplits([0, 1], [0, 500]).length, 0);
 });

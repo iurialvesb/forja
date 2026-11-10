@@ -2,7 +2,7 @@
 import * as api from './api.js';
 import { get, invalidate, render } from './app.js';
 import { parseFoodText, matchFood } from './engine/foodText.js';
-import { html, act, toast, sheet, setSheet, closeSheet, busy, today, addDays, monday, dayName, shortDate, n0, bar, resizeImage, SLOTS, slotName, GOAL_MODES } from './ui.js';
+import { html, act, toast, sheet, setSheet, closeSheet, busy, today, addDays, monday, dayName, shortDate, n0, bar, ring, resizeImage, SLOTS, slotName, GOAL_MODES } from './ui.js';
 
 const uid = () => api.userId();
 let tab = 'hoy', menuWeek = 0, shopWeek = 7, batchWeek = 7;
@@ -23,13 +23,16 @@ async function hoy() {
   const d = w.days.find((x) => x.date === today());
   if (!d) return html`<div class="card muted">Sin datos para hoy.</div>`;
   const T = d.target.macros, S = d.totals;
-  const mb = (n, v, t, c) => html`<div style="margin:8px 0"><div class="row small"><span class="grow">${n}</span><b>${n0(v)} / ${n0(t)} g</b></div>${bar(v, t, Math.abs(v - t) / Math.max(1, t) > 0.12 ? 'var(--amber)' : c)}</div>`;
+  const mb = (n, v, t, c) => html`<div style="margin:9px 0"><div class="row small"><span class="grow" style="font-weight:650">${n}</span><b style="font-family:var(--num)">${n0(v)}<span class="muted"> / ${n0(t)} g</span></b></div>${bar(v, t, `linear-gradient(90deg, ${c}88, ${c})`)}</div>`;
   const meals = [...d.meals].sort((a, b) => SLOTS.indexOf(a.slot) - SLOTS.indexOf(b.slot));
+  const kc = S.kcal / Math.max(1, T.kcal);
   return html`
-    <div class="card"><div class="row"><div class="grow"><div class="small muted">Día de carga ${d.target.load} · ${({ definicion: 'definiendo', volumen: 'ganando masa', mantenimiento: 'mantenimiento', recomposicion: 'recomposición', rendimiento: 'rendimiento' })[w.settings.mode] ?? ''}</div>
-      <div style="font-size:24px;font-weight:800">${n0(S.kcal)} <span class="muted small">/ ${n0(T.kcal)} kcal</span></div></div></div>
-      ${mb('Proteína', S.protein, T.protein, 'var(--red)')}${mb('Hidratos', S.carbs, T.carbs, 'var(--blue)')}${mb('Grasa', S.fat, T.fat, 'var(--amber)')}
-      <div class="xs muted">Previsto con tu menú + lo que has registrado fuera de él (${n0(d.eaten.kcal)} kcal).${d.adherence ? ` Cumplimiento: ${d.adherence.mealsDone}/${d.adherence.mealsTotal} comidas · ${d.adherence.score}/100.` : ''}</div></div>
+    <div class="hero" style="padding:18px">
+      <div class="row" style="position:relative;z-index:1">${ring(Math.min(1, kc), kc > 1.08 ? '#fbbf24' : '#7fb0ff', n0(S.kcal), 104, `de ${n0(T.kcal)}`)}
+        <div class="grow"><div class="k">Día de carga ${d.target.load}</div><div class="big" style="font-size:22px">${({ definicion: 'Definiendo', volumen: 'Ganando masa', mantenimiento: 'Mantenimiento', recomposicion: 'Recomposición', rendimiento: 'Rendimiento' })[w.settings.mode] ?? 'Hoy'}</div>
+          <div class="small" style="color:rgba(220,232,255,.78)">${S.kcal < T.kcal ? `Te quedan ${n0(T.kcal - S.kcal)} kcal` : `${n0(S.kcal - T.kcal)} kcal por encima`}</div></div></div>
+      <div style="position:relative;z-index:1;margin-top:8px">${mb('Proteína', S.protein, T.protein, '#7fb0ff')}${mb('Hidratos', S.carbs, T.carbs, '#fbbf24')}${mb('Grasa', S.fat, T.fat, '#f472b6')}
+      <div class="xs" style="color:rgba(220,232,255,.6)">Previsto con tu menú + lo que has registrado fuera de él (${n0(d.eaten.kcal)} kcal).${d.adherence ? ` Cumplimiento: ${d.adherence.mealsDone}/${d.adherence.mealsTotal} comidas · ${d.adherence.score}/100.` : ''}</div></div></div>
     ${d.adjustments?.length ? html`<div class="card tight"><div class="small" style="color:var(--accent);font-weight:700">🔄 He reajustado lo que te queda hoy</div>${d.adjustments.map((a) => html`<div class="small">• ${a.text}</div>`)}
         ${d.alerts.length ? html`<div class="small alert" style="margin-top:6px">Aun con el reajuste: ${d.alerts.map((a) => a.message.replace(/^Te quedarías/, 'te quedarías')).join(' ')}</div>` : ''}</div>`
       : d.alerts.map((a) => html`<div class="card tight alert">⚠️ ${a.message}</div>`)}

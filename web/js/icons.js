@@ -1,0 +1,32 @@
+// Iconos de línea (SVG, 24×24, trazo 2) para pestañas, tarjetas y métricas. Heredan el color (currentColor).
+const P = {
+  home: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/>',
+  calendar: '<rect x="3" y="4.5" width="18" height="16.5" rx="3"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/>',
+  activity: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+  dumbbell: '<path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"/>',
+  run: '<circle cx="14.5" cy="4.5" r="2"/><path d="m8 21 3.5-6.5 3 2.5V22M6 11.5l3-3.5 4 1.5 2.5 3.5 3 1"/><path d="M11 8.5 9.5 14"/>',
+  food: '<path d="M7 3v8a3 3 0 0 0 3 3v7M10 3v6M13 3v8a3 3 0 0 1-3 3"/><path d="M17 3c-1.7 1.2-2.5 3.4-2.5 6.5 0 1.6 1 2.5 2.5 2.5V21"/>',
+  chat: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-5 4v-4.2A2.5 2.5 0 0 1 4 13.5Z"/><path d="M8.5 8.5h7M8.5 11.5h4.5"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/>',
+  moon: '<path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z"/>',
+  heart: '<path d="M12 20.5s-8-4.6-8-10.6A4.4 4.4 0 0 1 12 7a4.4 4.4 0 0 1 8 2.9c0 6-8 10.6-8 10.6Z"/>',
+  pulse: '<path d="M12 20.5s-8-4.6-8-10.6A4.4 4.4 0 0 1 12 7a4.4 4.4 0 0 1 8 2.9c0 6-8 10.6-8 10.6Z"/><path d="M6.5 12h3l1.5-2.5 2 4 1.5-1.5h3"/>',
+  steps: '<path d="M8.5 3.5c-2 0-3 2.3-3 5s1 4.5 3 4.5 2.5-2 2.5-4.5-.5-5-2.5-5ZM15.5 8.5c2 0 3 2.3 3 5s-1 4.5-3 4.5-2.5-2-2.5-4.5.5-5 2.5-5Z"/><path d="M6 16.5c0 2 1 3.5 2.5 3.5s2-1.5 2-3M13.5 21c0-1.5.5-2.5 2-2.5"/>',
+  flame: '<path d="M12 21c-3.9 0-7-2.8-7-6.6 0-3.1 2-5.2 3.6-6.8.4 1.7 1.3 2.8 2.4 3.4 0-3.3 1.4-6.2 4-8 0 3.2 4 5.6 4 11.1C19 18.2 15.9 21 12 21Z"/>',
+  scale: '<rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 9a5 5 0 0 1 8 0l-2.5 2.5"/>',
+  target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/>',
+  clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  zap: '<path d="M13 2.5 4.5 13.5H11l-1 8 8.5-11H12Z"/>',
+  check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  chevron: '<path d="m9 5 7 7-7 7"/>',
+  watch: '<rect x="6" y="6" width="12" height="12" rx="3.5"/><path d="M9 6V3h6v3M9 18v3h6v-3M12 9.5V12l1.5 1.5"/>',
+  lungs: '<path d="M12 4v8M12 12c-1 1.5-2.5 2-4 2M12 12c1 1.5 2.5 2 4 2"/><path d="M8.5 7C6 7 4 10.5 4 15c0 3 1 5 3 5 2.5 0 3-2 3-4V9.5M15.5 7C18 7 20 10.5 20 15c0 3-1 5-3 5-2.5 0-3-2-3-4V9.5"/>',
+  drop: '<path d="M12 3.5s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11Z"/>',
+  trophy: '<path d="M7.5 4h9v5a4.5 4.5 0 0 1-9 0ZM7.5 6H4.5c0 3 1.5 4.5 3.3 4.8M16.5 6h3c0 3-1.5 4.5-3.3 4.8M12 13.5V17M8.5 20.5h7M9.5 17h5v3.5h-5Z"/>',
+  pill: '<rect x="3.5" y="8.5" width="17" height="7" rx="3.5" transform="rotate(-35 12 12)"/><path d="m9.2 8 5.6 8"/>',
+  sparkle: '<path d="M12 3.5 13.8 10l6.7 2-6.7 2L12 20.5 10.2 14 3.5 12l6.7-2Z"/>',
+  bed: '<path d="M3 18.5V6M3 14h18v4.5M21 14v-2.5a3 3 0 0 0-3-3h-7V14"/><circle cx="7" cy="11" r="2"/>',
+};
+/** <svg> de un icono. size en px. */
+export const ic = (name, size = 22, extra = '') => `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${P[name] ?? P.zap}</svg>`;

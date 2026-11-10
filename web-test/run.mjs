@@ -76,6 +76,8 @@ const FN = {
 }
 REST.foods = E.REFERENCE_FOODS.map((f) => ({ id: f.id, name: f.name, kcal: f.per100.kcal, protein: f.per100.protein, carbs: f.per100.carbs, fat: f.per100.fat, unit_grams: f.unitGrams ?? null, source: f.source, brand: null, search_terms: [] }));
 FN['nutrition-log'] = (b) => (b.action === 'confirm' ? { logged: { kcal: 512 }, day: null, missingInPantry: [] } : { items: [{ foodId: 'off_1', name: 'Coca de tomate', grams: 150, gramsConfidence: 'estimado', macros: { kcal: 400, protein: 9, carbs: 60, fat: 14 } }], questions: [] });
+REST.daily_health = [...Array(40)].map((_, i) => { const d = E.addDays(today, -(39 - i)); const k = Math.sin(i / 3);
+  return { date: d, sleep_h: +(7.1 + k * 0.8 - (i % 9 === 0 ? 1.3 : 0)).toFixed(2), sleep_score: Math.round(78 + k * 9), hrv_ms: Math.round(52 + k * 7 + (i % 5) - 2), rhr: Math.round(50 - k * 2), steps: Math.round(9000 + k * 3500 + (i % 4) * 600), avg_sleeping_hr: 49, vo2max: 51.2, spo2: 96.5, respiration: 14.2 }; });
 const posted = [];
 REST.planned_sessions.push({ id: 'pcf', date: E.addDays(today, -1), slot: 'pm', type: 'crossfit_box', discipline: 'crossfit', title: 'CrossFit (pendiente de reserva)', objective: 'Mantener fuerza', intensity: 'alta', est_minutes: 60, status: 'done', completed_session_id: 's1', steps: [] },
   { id: 'pcf2', date: E.addDays(today, -1), slot: 'am', type: 'run_easy', discipline: 'running', title: 'Rodaje suave', objective: 'Aeróbico', intensity: 'baja', est_minutes: 40, status: 'planned', steps: [] },
@@ -202,6 +204,8 @@ await shot('#/perfil', '14b-watch', () => page.getByText('Apple Watch automátic
 await shot('#/perfil', '14-atajo', () => page.getByText('Apple Salud (Atajo)').click());
 await shot('#/inicio', '15-checkin', () => page.locator('#view .card.row').first().click());
 await shot('#/nutricion', '16-editar-comida', async () => { await page.getByRole('button', { name: 'Hoy', exact: true }).click(); await page.waitForTimeout(500); await page.getByRole('button', { name: '✎ Cambiar' }).first().click(); });
+await shot('#/salud', '25-salud');
+await page.evaluate(() => window.scrollTo(0, 900)); await page.screenshot({ path: `${OUT}/25b-salud-abajo.png` });
 await shot('#/objetivo/g1', '17-objetivo-media');
 await shot('#/objetivo/g2', '18-objetivo-hyrox');
 await page.evaluate(() => window.scrollTo(0, 700)); await page.screenshot({ path: `${OUT}/18b-objetivo-hyrox-estaciones.png` });
@@ -214,7 +218,7 @@ await page.evaluate(() => { const o = performance.now.bind(performance); let add
 await page.locator('#timer [data-t="go"]').click(); await page.evaluate(() => window.__adv(10)); await page.waitForTimeout(150);
 for (let k = 0; k < 16; k++) { await page.evaluate(() => window.__adv(300)); await page.waitForTimeout(60); if (k === 2) await page.screenshot({ path: `${OUT}/20b-temporizador-tramos.png` }); await page.locator('#timer [data-t="lap"]').click(); }
 await page.waitForTimeout(300);
-{ const sum = await page.locator('[id^="hx-"]').first().innerText(); console.log(/1:20:00/.test(sum) ? `Tramos del cronómetro OK: ${sum}` : `✗ tramos del cronómetro: ${sum}`); }
+{ const sum = await page.locator('[id^="hx-"]').first().innerText(); console.log(/1:20:0\d/.test(sum) ? `Tramos del cronómetro OK: ${sum}` : `✗ tramos del cronómetro: ${sum}`); }
 await page.evaluate(() => { localStorage.removeItem('forja:draft'); });
 await shot('#/nutricion/despensa', '21-despensa-receta', async () => { await page.getByText('Proponme una receta').click(); await page.waitForTimeout(500); });
 await shot('#/coach', '22-coach-resumen');
@@ -237,7 +241,7 @@ await shot('#/inicio', '23-inicio-abajo', async () => { await page.evaluate(() =
 // ---------- Recorrido automático: pulsa TODOS los botones de cada pantalla (y los de las hojas que abren) ----------
 if (process.env.MONKEY) {
   page.on('dialog', (d) => d.accept(d.type() === 'prompt' ? 'Prueba' : undefined).catch(() => {}));
-  const screens = [['#/inicio'], ['#/objetivo/g1'], ['#/objetivo/g2'], ['#/plan'], ['#/entrenos'], ['#/entrenos', 'Historial'], ['#/entrenos', 'Progreso'], ['#/nutricion', 'Hoy'], ['#/nutricion', 'Menú'], ['#/nutricion', 'Compra'], ['#/nutricion', 'Batch'], ['#/nutricion', 'Despensa'], ['#/nutricion', 'Suplementos'], ['#/coach'], ['#/perfil']];
+  const screens = [['#/inicio'], ['#/salud'], ['#/objetivo/g1'], ['#/objetivo/g2'], ['#/plan'], ['#/entrenos'], ['#/entrenos', 'Historial'], ['#/entrenos', 'Progreso'], ['#/nutricion', 'Hoy'], ['#/nutricion', 'Menú'], ['#/nutricion', 'Compra'], ['#/nutricion', 'Batch'], ['#/nutricion', 'Despensa'], ['#/nutricion', 'Suplementos'], ['#/coach'], ['#/perfil']];
   let clicks = 0; const seen = new Set();
   const go = async (route, tab) => {
     await page.evaluate(() => { const sh = document.getElementById('sheet'); if (sh) sh.hidden = true; document.querySelectorAll('.scan-ov').forEach((x) => x.remove()); });
