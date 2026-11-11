@@ -117,7 +117,7 @@ function renderAuth(mode = 'login') {
 // ---------- Sincronización al abrir ----------
 let lastSync = 0;
 export async function backgroundSync(force = false) {
-  if (!api.user() || (!force && Date.now() - lastSync < 3 * 60_000)) return;
+  if (!api.user() || (!force && Date.now() - lastSync < 45_000)) return;
   lastSync = Date.now();
   try {
     const sent = await api.flushOutbox().catch(() => 0);
@@ -139,6 +139,8 @@ export async function backgroundSync(force = false) {
 }
 window.addEventListener('online', () => backgroundSync(true));
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') backgroundSync(); });
+// Con la app abierta, mira cada 2 minutos si el Watch ha mandado algo nuevo.
+setInterval(() => { if (document.visibilityState === 'visible') backgroundSync(); }, 120_000);
 
 // Si llegaron datos nuevos mientras escribías o con una hoja abierta, se repinta al terminar.
 new MutationObserver(() => { if (document.getElementById('sheet').hidden) flushDirty(); }).observe(document.getElementById('sheet'), { attributes: true, attributeFilter: ['hidden'] });

@@ -35,6 +35,8 @@ Deno.serve(handler(async (req) => {
     for (const c of conns ?? []) {
       try {
         const r = await pullToInbox(admin, c);
+        // Se procesa ya en el servidor: al abrir Forja todo está listo, sin esperar.
+        if (r.newActivities.length || r.wellness) await processIcuInbox(admin, c.user_id, 20).catch((e) => console.warn('process', c.user_id, e));
         const fresh = r.newActivities.filter((a) => Date.now() - Date.parse(a.start_date ?? `${a.start_date_local}Z`) < 2 * 864e5);
         if (!fresh.length || !vapid) continue;
         const { data: subs } = await admin.from('push_subscriptions').select('*').eq('user_id', c.user_id);

@@ -52,10 +52,10 @@ const STREAM_TYPES = 'time,heartrate,distance,velocity_smooth,cadence,altitude,f
 /** Procesa el buzón con los permisos del usuario: crea sesiones (con splits, vueltas, zonas y series) y la salud diaria. */
 export async function processIcuInbox(sb: SupabaseClient, userId: string, limit = 12): Promise<{ activities: number; days: number; remaining: number; prs: string[]; changes: unknown[]; sessions: string[] }> {
   const out = { activities: 0, days: 0, remaining: 0, prs: [] as string[], changes: [] as unknown[], sessions: [] as string[] };
-  const { data: conn } = await sb.from('intervals_connections').select('*').maybeSingle();
+  const { data: conn } = await sb.from('intervals_connections').select('*').eq('user_id', userId).maybeSingle();
   if (!conn) return out;
   // Salud diaria
-  const { data: wl } = await sb.from('intervals_inbox').select('*').eq('kind', 'wellness').is('processed_at', null).limit(200);
+  const { data: wl } = await sb.from('intervals_inbox').select('*').eq('user_id', userId).eq('kind', 'wellness').is('processed_at', null).limit(200);
   // En bloque: una escritura para todos los días (rápido aunque sean 120 días de historial).
   const rows: Record<string, unknown>[] = [], weights: Record<string, unknown>[] = [];
   const more: [string, string][] = [['sleepScore', 'sleep_score'], ['sleepQuality', 'sleep_quality'], ['spo2', 'spo2'], ['respiration', 'respiration'], ['bodyFat', 'body_fat'], ['vo2max', 'vo2max'], ['kcalConsumed', 'kcal_consumed']];
@@ -77,9 +77,9 @@ export async function processIcuInbox(sb: SupabaseClient, userId: string, limit 
     out.days = byDate.size;
   }
   // Entrenos (los más antiguos primero)
-  const { data: prof } = await sb.from('physiology').select('hr_rest,hr_max,lthr').order('effective_from', { ascending: false }).limit(1).maybeSingle();
+  const { data: prof } = await sb.from('physiology').select('hr_rest,hr_max,lthr').eq('user_id', userId).order('effective_from', { ascending: false }).limit(1).maybeSingle();
   const profile = { hrRest: prof?.hr_rest ?? undefined, hrMax: prof?.hr_max ?? undefined, lthr: prof?.lthr ?? undefined };
-  const { data: items } = await sb.from('intervals_inbox').select('*').eq('kind', 'activity').is('processed_at', null).order('received_at').order('id').limit(limit);
+  const { data: items } = await sb.from('intervals_inbox').select('*').eq('user_id', userId).eq('kind', 'activity').is('processed_at', null).order('received_at').order('id').limit(limit);
   for (const it of items ?? []) {
     try {
       const id = it.external_id;
@@ -107,7 +107,7 @@ export async function processIcuInbox(sb: SupabaseClient, userId: string, limit 
       await sb.from('intervals_inbox').update({ processed_at: new Date().toISOString(), result: { error: String(e) } }).eq('id', it.id);
     }
   }
-  const { count } = await sb.from('intervals_inbox').select('id', { count: 'exact', head: true }).eq('kind', 'activity').is('processed_at', null);
+  const { count } = await sb.from('intervals_inbox').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('kind', 'activity').is('processed_at', null);
   out.remaining = count ?? 0;
   return out;
 }

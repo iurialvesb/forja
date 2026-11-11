@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-11 (noche) · Sincronización del Watch más rápida
+- Intervals.icu se comprueba cada 2 minutos (antes 10) y lo nuevo se procesa en el servidor: al abrir Forja ya está todo. Migración `0019_sync_rapida`.
+- Con la app abierta, se vuelve a mirar cada 2 minutos; al volver a la app, como mucho cada 45 s.
+- Consultas del contexto e importación filtradas siempre por usuario (necesario para procesar desde el servidor).
+
 ## 2026-11-11 · Diario de comidas tipo MyFitnessPal y despensa por unidades o peso
 - Nutrición → **Diario**: navegación por días, Objetivo − Comido = Restante, macros, y cada comida con sus alimentos. Cada alimento se cambia (gramos o unidades), se mueve de comida o se quita por separado.
 - «＋ Añadir alimento» en cada comida: buscador instantáneo (tus alimentos y recientes primero), cantidad con − / +, unidades o gramos, «Como ayer», escribir/dictar, código de barras y búsqueda en Open Food Facts/USDA.

@@ -12,12 +12,12 @@ export async function ingestSession(sb: SupabaseClient, userId: string, s: Sessi
   const source = s.source ?? 'manual';
   if (source === 'strava') throw new HttpError(400, 'Las actividades de Strava no se guardan como sesiones (API Policy de Strava). Usa Apple Health como fuente.');
   if (s.externalId) {
-    const { data: link } = await sb.from('session_sources').select('session_id').eq('source', source).eq('external_id', s.externalId).maybeSingle();
+    const { data: link } = await sb.from('session_sources').select('session_id').eq('user_id', userId).eq('source', source).eq('external_id', s.externalId).maybeSingle();
     if (link) return { sessionId: link.session_id, merged: false, duplicateOf: link.session_id, prs: [], changes: [] };
   }
   // Candidatas: misma franja de ±6 h.
   const t = Date.parse(s.startedAt);
-  const { data: near } = await sb.from('sessions').select('*, session_blocks(*), session_sets(*)').is('deleted_at', null)
+  const { data: near } = await sb.from('sessions').select('*, session_blocks(*), session_sets(*)').eq('user_id', userId).is('deleted_at', null)
     .gte('started_at', new Date(t - 6 * 3.6e6).toISOString()).lte('started_at', new Date(t + 6 * 3.6e6).toISOString());
   const nearS = (near ?? []).map(rowToSession);
   // Si el usuario elige la sesión del Watch a la que pertenece este WOD, se une a ella directamente.

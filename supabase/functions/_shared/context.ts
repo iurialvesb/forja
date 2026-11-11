@@ -69,22 +69,22 @@ export async function loadContext(sb: SupabaseClient, userId: string, now = new 
   const since = addDays(today, -180);
   const [prof, phys, avail, inj, goals, sess, health, checkin, mem, bm] = await Promise.all([
     sb.from('profiles').select('*').eq('id', userId).single(),
-    sb.from('physiology').select('*').lte('effective_from', today).order('effective_from', { ascending: false }).limit(1),
-    sb.from('availability').select('*'),
-    sb.from('injuries').select('*').is('resolved_on', null),
-    sb.from('goals').select('*').eq('status', 'active').order('date'),
-    sb.from('sessions').select('*, session_blocks(*), session_sets(*)').is('deleted_at', null).neq('primary_source', 'strava').gte('started_at', since).order('started_at'),
-    sb.from('daily_health').select('*').gte('date', addDays(today, -90)).order('date'),
-    sb.from('checkins').select('*').eq('date', today).maybeSingle(),
-    sb.from('coach_memory').select('fact, category').eq('active', true).order('created_at', { ascending: false }).limit(50),
-    sb.from('body_metrics').select('weight_kg').not('weight_kg', 'is', null).order('date', { ascending: false }).limit(1),
+    sb.from('physiology').select('*').eq('user_id', userId).lte('effective_from', today).order('effective_from', { ascending: false }).limit(1),
+    sb.from('availability').select('*').eq('user_id', userId),
+    sb.from('injuries').select('*').eq('user_id', userId).is('resolved_on', null),
+    sb.from('goals').select('*').eq('user_id', userId).eq('status', 'active').order('date'),
+    sb.from('sessions').select('*, session_blocks(*), session_sets(*)').eq('user_id', userId).is('deleted_at', null).neq('primary_source', 'strava').gte('started_at', since).order('started_at'),
+    sb.from('daily_health').select('*').eq('user_id', userId).gte('date', addDays(today, -90)).order('date'),
+    sb.from('checkins').select('*').eq('user_id', userId).eq('date', today).maybeSingle(),
+    sb.from('coach_memory').select('fact, category').eq('user_id', userId).eq('active', true).order('created_at', { ascending: false }).limit(50),
+    sb.from('body_metrics').select('weight_kg').eq('user_id', userId).not('weight_kg', 'is', null).order('date', { ascending: false }).limit(1),
   ]);
   for (const r of [prof, phys, avail, inj, goals, sess, health, mem, bm]) if (r.error) throw r.error;
   // Calendario (clases reservadas de WodBuster / Google / iCloud y agenda ocupada): próximas 3 semanas.
-  const { data: calSet } = await sb.from('calendar_settings').select('*').maybeSingle();
+  const { data: calSet } = await sb.from('calendar_settings').select('*').eq('user_id', userId).maybeSingle();
   let calendar: AthleteContext['calendar'];
   if (calSet) {
-    const { data: evs } = await sb.from('calendar_events').select('*').gte('start_at', addDays(today, -1)).lte('start_at', addDays(today, 22));
+    const { data: evs } = await sb.from('calendar_events').select('*').eq('user_id', userId).gte('start_at', addDays(today, -1)).lte('start_at', addDays(today, 22));
     const events: CalendarEvent[] = (evs ?? []).filter((e: any) => e.kind !== 'ignore').map((e: any) => ({ uid: e.uid, title: e.title, start: e.start_at, end: e.end_at, allDay: e.all_day, calendar: e.calendar ?? undefined }));
     calendar = calendarConstraints(events, addDays(today, -7), addDays(today, 21), {
       ...DEFAULT_RULES,
