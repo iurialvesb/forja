@@ -43,7 +43,7 @@ const REST = {
   readiness_daily: [{ date: today, score: 71, level: 'verde', reasons: ['Fatiga de piernas moderada', 'HRV en tu rango alto'], acwr: 1.08, leg_fatigue: 165 }],
   planned_sessions: plannedRows, goals: goals.map((g) => ({ ...g, distance_m: g.distanceM })), phases: phases.map((p, i) => ({ id: `ph${i}`, goal_id: p.goalId, kind: p.kind, start_date: p.start, end_date: p.end, focus: p.focus })),
   sessions, plan_changes: [{ id: 'c1', action: 'downgrade', reason: 'Fatiga de piernas alta (310 sobre umbral 250): el martes cambio las series por un rodaje suave de 7 km.', created_at: new Date().toISOString() }],
-  pantry_items: [...pantry.map((p) => ({ id: p.id, name: p.name, food_id: p.foodId, location: p.location, quantity_g: p.quantityG, expires_on: p.expiresOn ?? null })), { id: 'pk1', name: 'Puré de patatas copos', brand: 'Hacendado', food_id: 'x', location: 'despensa', units: 2, pack_units: 4, unit_grams: 115 }, { id: 'pk2', name: 'Yogur natural', brand: 'Hacendado', food_id: 'x', location: 'despensa', units: 5, pack_units: 6, unit_grams: 125, expires_on: E.addDays(today, 1) }],
+  pantry_items: [...pantry.map((p) => ({ id: p.id, name: p.name, food_id: p.foodId, location: p.location, mode: 'weight', quantity_g: p.quantityG, package_g: p.quantityG >= 400 ? 1000 : null, expires_on: p.expiresOn ?? null })), { id: 'pk1', name: 'Puré de patatas en sobres', brand: 'Hacendado', food_id: 'x', location: 'despensa', mode: 'units', units: 2, pack_units: 4, unit_grams: 115, unit_label: 'sobre' }, { id: 'pk2', name: 'Yogur natural', brand: 'Hacendado', food_id: 'x', location: 'despensa', mode: 'units', units: 5, pack_units: 6, unit_grams: 125, unit_label: 'yogur', expires_on: E.addDays(today, 1) }, { id: 'pk3', name: 'Huevos camperos', food_id: 'huevo', location: 'nevera', mode: 'units', units: 18, pack_units: 24, unit_grams: 60, unit_label: 'huevo' }, { id: 'pk4', name: 'Atún claro al natural', food_id: 'atun_lata_natural', location: 'despensa', mode: 'units', units: 3, pack_units: 3, unit_grams: 60, unit_label: 'lata' }, { id: 'pk5', name: 'Macarrones', food_id: 'pasta', location: 'despensa', mode: 'weight', quantity_g: 420, package_g: 500 }],
   supplements: [{ id: 'sp1', kind: 'colageno', name: 'Colágeno', dose_text: '15 g', stock: 20 }, { id: 'sp2', kind: 'magnesio', name: 'Magnesio', dose_text: '300 mg', stock: 4 }],
   consents: [{ kind: 'ai_processing' }], recipes: [{ id: 'r1', name: 'Pollo al horno con boniato', tags: ['batch'] }],
   personal_records: [{ id: 'pr1', metric: 'front_squat:6rm', value: 50, unit: 'kg', kind: 'actual', achieved_on: E.addDays(today, -1), detail: 'Front Squat 50 kg × 6' }],
@@ -78,6 +78,7 @@ REST.foods = E.REFERENCE_FOODS.map((f) => ({ id: f.id, name: f.name, kcal: f.per
 FN['nutrition-log'] = (b) => (b.action === 'confirm' ? { logged: { kcal: 512 }, day: null, missingInPantry: [] } : { items: [{ foodId: 'off_1', name: 'Coca de tomate', grams: 150, gramsConfidence: 'estimado', macros: { kcal: 400, protein: 9, carbs: 60, fat: 14 } }], questions: [] });
 REST.daily_health = [...Array(40)].map((_, i) => { const d = E.addDays(today, -(39 - i)); const k = Math.sin(i / 3);
   return { date: d, sleep_h: +(7.1 + k * 0.8 - (i % 9 === 0 ? 1.3 : 0)).toFixed(2), sleep_score: Math.round(78 + k * 9), hrv_ms: Math.round(52 + k * 7 + (i % 5) - 2), rhr: Math.round(50 - k * 2), steps: Math.round(9000 + k * 3500 + (i % 4) * 600), avg_sleeping_hr: 49, vo2max: 51.2, spo2: 96.5, respiration: 14.2 }; });
+REST.food_logs = [{ id: 'fl1', date: today, slot: 'media_manana', items: [{ foodId: 'wrap_avena_hacendado', name: 'Wrap de avena Hacendado', grams: 40, macros: { kcal: 115, protein: 6, carbs: 16, fat: 2.4 } }, { foodId: 'huevo', name: 'Huevo', grams: 120, macros: { kcal: 172, protein: 15, carbs: 1, fat: 12 } }], kcal: 287, protein: 21, carbs: 17, fat: 14.4, source: 'texto', created_at: today + 'T09:00:00Z' }];
 const posted = [];
 REST.planned_sessions.push({ id: 'pcf', date: E.addDays(today, -1), slot: 'pm', type: 'crossfit_box', discipline: 'crossfit', title: 'CrossFit (pendiente de reserva)', objective: 'Mantener fuerza', intensity: 'alta', est_minutes: 60, status: 'done', completed_session_id: 's1', steps: [] },
   { id: 'pcf2', date: E.addDays(today, -1), slot: 'am', type: 'run_easy', discipline: 'running', title: 'Rodaje suave', objective: 'Aeróbico', intensity: 'baja', est_minutes: 40, status: 'planned', steps: [] },
@@ -179,6 +180,15 @@ await (async () => {
 })();
 await shot('#/entrenos', '06-progreso', () => page.getByRole('button', { name: 'Progreso' }).click());
 await shot('#/nutricion', '07-nutricion-hoy');
+await page.evaluate(() => window.scrollTo(0, 800)); await page.screenshot({ path: `${OUT}/07b-diario-abajo.png` });
+await shot('#/nutricion', '07c-anadir-alimento', async () => { await page.locator('.addf').first().click(); await page.waitForTimeout(300); await page.fill('#fq', 'huev'); await page.waitForTimeout(200); });
+{ const n = await page.locator('#fres .entry').count(); console.log(n ? `Buscador de alimentos OK (${n} resultados para «huev»)` : '✗ buscador sin resultados'); }
+await page.locator('#fres .entry').first().click(); await page.waitForTimeout(200); await page.screenshot({ path: `${OUT}/07d-cantidad.png` });
+await page.locator('#sheet .qty button').last().click(); await page.waitForTimeout(100);
+{ const v = await page.locator('#sheet .qty input').inputValue(); console.log(v === '2' ? 'Huevo en unidades (+1 → 2 ud) OK' : `✗ unidades: ${v}`); }
+await page.keyboard.press('Escape'); await page.evaluate(() => document.querySelector('#sheet')?.setAttribute('hidden', ''));
+await shot('#/nutricion', '07e-editar-entrada', async () => { await page.locator('.entry').first().click(); await page.waitForTimeout(300); });
+await page.evaluate(() => document.querySelector('#sheet')?.setAttribute('hidden', ''));
 await shot('#/nutricion', '08-compra', () => page.getByRole('button', { name: 'Compra', exact: true }).click());
 await shot('#/nutricion', '09-batch', () => page.getByRole('button', { name: 'Batch', exact: true }).click());
 await shot('#/nutricion', '10-despensa', () => page.getByRole('button', { name: 'Despensa', exact: true }).click());
@@ -196,14 +206,27 @@ await shot('#/nutricion', '10a-despensa-arrastrar', async () => {
   if (!patches.some((x) => x.includes('nevera'))) errors.push('arrastrar a nevera no ha actualizado el producto');
   else console.log('Arrastrar entre lugares OK');
 });
+{ // Despensa: −/+ por unidades y «Usar» por gramos
+  await page.goto('http://forja.test/index.html#/inicio'); await page.waitForTimeout(150); await page.goto('http://forja.test/index.html#/nutricion'); await page.waitForTimeout(300);
+  await page.getByRole('button', { name: 'Despensa', exact: true }).click(); await page.waitForTimeout(400);
+  const before = patches.length;
+  await page.locator('.pitem[data-pid="pk3"] .stepper button').first().click(); await page.waitForTimeout(300);
+  const txt = await page.locator('.pitem[data-pid="pk3"] .pq').innerText();
+  console.log(/17\s*huevos de 24/.test(txt) && patches.slice(before).some((x) => x.includes('"units":17')) ? 'Huevos −1 → 17 de 24 OK' : `✗ huevos: «${txt}» ${patches.slice(before)}`);
+  await page.locator('.pitem[data-pid="pk5"] button', { hasText: 'Usar' }).click(); await page.waitForTimeout(200); await page.screenshot({ path: `${OUT}/10c-despensa-usar.png` });
+  await page.locator('#sheet button', { hasText: '80 g' }).click(); await page.waitForTimeout(300);
+  const t5 = await page.locator('.pitem[data-pid="pk5"] .pq').innerText();
+  console.log(/340 g/.test(t5) ? 'Pasta −80 g → 340 g OK' : `✗ pasta: «${t5}»`);
+  await page.screenshot({ path: `${OUT}/10d-despensa-tras.png` });
+}
 await shot('#/nutricion', '10b-despensa-anadir', async () => { await page.getByRole('button', { name: 'Despensa', exact: true }).click(); await page.waitForTimeout(400); await page.getByRole('button', { name: '＋ Añadir' }).click(); await page.fill('#ptext', 'dos sobres de puré Hacendado, seis latas de atún de 60 g, un kilo de arroz La Fallera'); await page.getByRole('button', { name: 'Organizar' }).click(); await page.waitForTimeout(900); });
 await shot('#/nutricion', '11-suplementos', () => page.getByRole('button', { name: 'Suplementos', exact: true }).click());
 await shot('#/coach', '12-coach', async () => { await page.getByText('¿Puedo hacer series mañana').click(); });
 await shot('#/perfil', '13-perfil');
 await shot('#/perfil', '14b-watch', () => page.getByText('Apple Watch automático').click());
 await shot('#/perfil', '14-atajo', () => page.getByText('Apple Salud (Atajo)').click());
-await shot('#/inicio', '15-checkin', () => page.locator('#view .card.row').first().click());
-await shot('#/nutricion', '16-editar-comida', async () => { await page.getByRole('button', { name: 'Hoy', exact: true }).click(); await page.waitForTimeout(500); await page.getByRole('button', { name: '✎ Cambiar' }).first().click(); });
+await shot('#/inicio', '15-checkin', () => page.locator('#view .hero').first().click());
+await shot('#/nutricion', '16-editar-comida', async () => { await page.getByRole('button', { name: 'Diario', exact: true }).click(); await page.waitForTimeout(500); await page.getByRole('button', { name: 'Cambiar', exact: true }).first().click(); });
 await shot('#/salud', '25-salud');
 await page.evaluate(() => window.scrollTo(0, 900)); await page.screenshot({ path: `${OUT}/25b-salud-abajo.png` });
 await shot('#/objetivo/g1', '17-objetivo-media');
@@ -225,7 +248,7 @@ await shot('#/coach', '22-coach-resumen');
 await shot('#/inicio', '23-inicio-abajo', async () => { await page.evaluate(() => window.scrollTo(0, 900)); });
 { // Registrar comida: interpretación instantánea en el móvil
   await page.goto('http://forja.test/index.html#/inicio'); await page.waitForTimeout(200); await page.goto('http://forja.test/index.html#/nutricion/hoy'); await page.waitForTimeout(700);
-  await page.getByText('He comido algo').click(); await page.waitForTimeout(400);
+  await page.locator('.addf').first().click(); await page.waitForTimeout(300); await page.getByRole('button', { name: '✍️ Escribir' }).click(); await page.waitForTimeout(400);
   let calls = 0; page.on('request', (r) => { if (r.url().includes('/functions/v1/nutrition-log')) calls++; });
   const t0 = Date.now();
   await page.locator('#ltext').pressSequentially('wrap de avena de hacendado, canonigos, un huevo revuelto y medio aguacate como almuerzo', { delay: 5 });

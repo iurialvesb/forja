@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-11 · Diario de comidas tipo MyFitnessPal y despensa por unidades o peso
+- Nutrición → **Diario**: navegación por días, Objetivo − Comido = Restante, macros, y cada comida con sus alimentos. Cada alimento se cambia (gramos o unidades), se mueve de comida o se quita por separado.
+- «＋ Añadir alimento» en cada comida: buscador instantáneo (tus alimentos y recientes primero), cantidad con − / +, unidades o gramos, «Como ayer», escribir/dictar, código de barras y búsqueda en Open Food Facts/USDA.
+- El menú aparece como sugerencia en cada comida: «Me lo he comido» lo pasa al diario (y descuenta de casa), «Cambiar» o «No».
+- Despensa: cada producto se lleva **de una en una** (huevos, latas, sobres, yogures: − / +) o **por gramos/ml** (pasta, arroz, leche: «Usar» con cantidades rápidas, barra de lo que queda, «He comprado otro paquete»). Lo antiguo se convierte solo.
+- Buscador y filtro por lugar en la despensa; la IA y el escáner cuentan lo de dentro del envase (caja de 3 latas = 3 latas).
+- Arreglado: deshacer o volver a marcar una comida del menú podía duplicarla en el registro.
+- Migración `0018_despensa_modo`.
+
 ## 2026-11-10 · Rediseño azul noche, rapidez y salud completa del Watch
 - Nuevo diseño: azul oscuro, tarjeta principal con anillo de recuperación, tarjetas con minigráficos, barra de pestañas flotante con iconos, animaciones suaves, icono nuevo.
 - Pantalla **Salud** (`#/salud`): sueño (duración, nota, pulso dormido), VFC con tu rango normal, pulso en reposo, pasos, VO₂máx, SpO₂, respiración, grasa corporal y todas las actividades.

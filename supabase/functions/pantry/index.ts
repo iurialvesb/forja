@@ -9,6 +9,7 @@ import { handler, json, requireUser, userClient, HttpError } from '../_shared/su
 import { resolveFood } from '../_shared/foods.ts';
 import { requireAIConsent, structured } from '../_shared/vision.ts';
 import { offByCode, offSearch, cacheProduct, pool } from '../_shared/off.ts';
+import { normalizePantry } from '../_shared/engine/index.ts';
 
 const schema = { type: 'object', required: ['items'], properties: {
   items: { type: 'array', items: { type: 'object', required: ['name', 'location', 'queryEn'], properties: {
@@ -16,17 +17,20 @@ const schema = { type: 'object', required: ['items'], properties: {
     brand: { type: 'string', description: 'Marca si se dice (Hacendado, Consum, Bonduelle, La Fallera…). Mercadona = Hacendado' },
     queryEn: { type: 'string', description: 'Consulta USDA en inglés ("lentils cooked", "tuna canned in water drained")' },
     location: { type: 'string', enum: ['congelador', 'nevera', 'despensa'], description: 'Lo que diga; si no, el sitio habitual (latas, pasta, arroz, harinas, briks sin abrir → despensa)' },
-    units: { type: 'number', description: 'Nº de unidades que quedan (latas, sobres, huevos, yogures, briks)' },
-    packUnits: { type: 'number', description: 'Si es un pack (caja de 4 sobres, docena de huevos), cuántas unidades traía entero' },
-    unitGrams: { type: 'number', description: 'Gramos por unidad (peso ESCURRIDO si lo dice)' },
-    quantityG: { type: 'number', description: 'Gramos totales solo si se dice un peso total sin unidades (1 kg de arroz → 1000)' },
+    mode: { type: 'string', enum: ['units', 'weight'], description: "units = se gasta de una en una (huevos, latas, sobres, yogures, briks, botes, wraps, piezas de fruta). weight = se gasta por gramos/ml (pasta, arroz, legumbre seca, harina, avena, cereales, frutos secos, queso, embutido, carne, pescado fresco, leche, aceite)" },
+    units: { type: 'number', description: 'Solo si mode=units: cuántas unidades HAY DENTRO (caja con 3 latas → 3; pack de 24 huevos → 24; caja de 10 sobres → 10). Nunca cuentes la caja o el pack como 1' },
+    unitLabel: { type: 'string', description: 'Solo si mode=units: la unidad que se gasta, en singular: huevo, lata, sobre, yogur, brik, bote, wrap, unidad' },
+    packUnits: { type: 'number', description: 'Si mode=units y viene en pack, cuántas traía entero' },
+    unitGrams: { type: 'number', description: 'Si mode=units: gramos de cada unidad (peso ESCURRIDO de una lata si lo dice)' },
+    quantityG: { type: 'number', description: 'Si mode=weight: gramos (o ml) totales que hay (2 paquetes de 500 g → 1000; 1 kg de arroz → 1000; 6 briks de 1 l de leche → 6000)' },
+    packageG: { type: 'number', description: 'Si mode=weight: gramos (o ml) de un paquete (500 para pasta de 500 g)' },
     expiresOn: { type: 'string', description: 'YYYY-MM-DD solo si se indica' },
   } } },
   questions: { type: 'array', items: { type: 'string' } },
 } };
 
 const SYSTEM = `Organizas la despensa de un deportista que compra en Mercadona (marca Hacendado) y Consum. El texto suele venir dictado por voz, con errores ("100 × 100" = 100 %, "Pedro, sano" = Pedro Luis o similar, "Bon Dere" = Bonduelle).
-Convierte TODO lo que cuenta en artículos: uno por producto, con nº de unidades y gramos por unidad (escurridos si lo dice) o gramos totales.
+Convierte TODO lo que cuenta en artículos: uno por producto. Decide cómo se gasta: por unidades (cuenta lo de DENTRO del envase: la caja de 3 latas son 3 latas; el pack de 24 huevos, 24 huevos; la caja de 10 sobres, 10 sobres) o por peso (paquetes y bolsas de pasta, arroz, legumbre seca, harina, etc.: gramos totales y gramos de un paquete).
 No inventes productos ni cantidades que no se dicen. Responde rápido y en español.`;
 
 Deno.serve(handler(async (req) => {
@@ -84,11 +88,22 @@ Deno.serve(handler(async (req) => {
   if (body.action === 'save') {
     const rows = await pool(body.items ?? [], 6, async (it: any) => {
       const f = it.barcode ? (await resolveFood(sb, it.name, undefined, it.barcode)) : await resolveFood(sb, it.name, it.queryEn).catch(() => null);
-      return { user_id: userId, name: it.name, food_id: f?.id ?? null, location: it.location ?? 'despensa', quantity_g: it.quantityG ?? null, units: it.units ?? null, unit_grams: it.unitGrams ?? f?.unitGrams ?? null,
-        expires_on: it.expiresOn ?? null, barcode: it.barcode ?? null, brand: it.brand ?? null, image_url: it.imageUrl ?? null, pack_units: it.packUnits ?? (it.units > 1 ? it.units : null) };
+      const n = normalizePantry({ name: it.name, units: it.units, packUnits: it.packUnits, unitGrams: it.unitGrams ?? (it.mode === 'units' ? f?.unitGrams : undefined), quantityG: it.quantityG, packageG: it.packageG, unitLabel: it.unitLabel, mode: it.mode });
+      return { user_id: userId, name: it.name, food_id: f?.id ?? null, location: it.location ?? 'despensa', mode: n.mode, quantity_g: n.quantityG ?? null, package_g: n.packageG ?? null,
+        units: n.units ?? null, unit_grams: n.unitGrams ?? null, pack_units: n.packUnits ?? null, unit_label: n.unitLabel ?? null,
+        expires_on: it.expiresOn ?? null, barcode: it.barcode ?? null, brand: it.brand ?? null, image_url: it.imageUrl ?? null };
     });
     if (rows.length) { const { error } = await sb.from('pantry_items').insert(rows); if (error) throw error; }
     return json({ saved: rows.length, unresolved: rows.filter((r) => !r.food_id).map((r) => r.name) });
+  }
+  if (body.action === 'normalize') {
+    // Una vez: lo que se guardó antes (p. ej. «1 ud × 500 g» de pasta) pasa a llevarse por peso o por unidades.
+    const { data } = await sb.from('pantry_items').select('*').is('mode', null);
+    for (const r of data ?? []) {
+      const n = normalizePantry({ name: r.name, units: r.units != null ? +r.units : null, packUnits: r.pack_units, unitGrams: r.unit_grams != null ? +r.unit_grams : null, quantityG: r.quantity_g != null ? +r.quantity_g : null });
+      await sb.from('pantry_items').update({ mode: n.mode, quantity_g: n.mode === 'weight' ? n.quantityG ?? null : null, package_g: n.packageG ?? null, units: n.mode === 'units' ? n.units : null, pack_units: n.packUnits ?? null, unit_label: n.unitLabel ?? null }).eq('id', r.id);
+    }
+    return json({ normalized: (data ?? []).length });
   }
   throw new HttpError(400, 'Acción desconocida');
 }));

@@ -25,13 +25,14 @@ Deno.serve(handler(async (req) => {
       upd.recipe_id = r.id; upd.title = r.name; upd.ingredients = r.ingredients; upd.status = 'planned'; upd.from_batch = (r.tags ?? []).includes('batch');
       break;
     }
-    case 'skip': upd.status = 'skipped'; if (meal.pantry_deduction) { await restorePantry(sb, meal.pantry_deduction); upd.pantry_deduction = null; } break;
-    case 'reset': upd.status = 'planned'; if (meal.pantry_deduction) { await restorePantry(sb, meal.pantry_deduction); upd.pantry_deduction = null; } break;
+    case 'skip': await sb.from('food_logs').delete().eq('planned_meal_id', meal.id); upd.status = 'skipped'; if (meal.pantry_deduction) { await restorePantry(sb, meal.pantry_deduction); upd.pantry_deduction = null; } break;
+    case 'reset': await sb.from('food_logs').delete().eq('planned_meal_id', meal.id); upd.status = 'planned'; if (meal.pantry_deduction) { await restorePantry(sb, meal.pantry_deduction); upd.pantry_deduction = null; } break;
     case 'lock': upd.locked = true; break;
     case 'unlock': upd.locked = false; break;
     case 'partial':
     case 'eaten': {
       upd.status = 'eaten';
+      await sb.from('food_logs').delete().eq('planned_meal_id', meal.id);   // nunca dos veces la misma comida en el diario
       const fraction = b.action === 'partial' ? Math.max(0.05, Math.min(1.5, Number(b.fraction ?? 0.5))) : 1;
       if (b.action === 'partial') upd.eaten_fraction = fraction;
       const ings = scaleMeal({ ingredients: (b.ingredients ?? meal.ingredients) as any[] }, fraction).ingredients as { foodId: string; name: string; grams: number }[];

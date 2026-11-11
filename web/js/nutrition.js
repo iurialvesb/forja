@@ -1,12 +1,13 @@
 // Nutrición: hoy (chequeo diario), menú semanal, compra, batch cooking, despensa y suplementos.
 import * as api from './api.js';
 import { get, invalidate, render } from './app.js';
-import { parseFoodText, matchFood } from './engine/foodText.js';
+import { parseFoodText, matchFood, foodTokens } from './engine/foodText.js';
+import { normalizePantry, unitWord, isLiquid, usePresets } from './engine/pantry.js';
 import { html, act, toast, sheet, setSheet, closeSheet, busy, today, addDays, monday, dayName, shortDate, n0, bar, ring, resizeImage, SLOTS, slotName, GOAL_MODES } from './ui.js';
 
 const uid = () => api.userId();
 let tab = 'hoy', menuWeek = 0, shopWeek = 7, batchWeek = 7;
-const TABS = [['hoy', 'Hoy'], ['menu', 'Menú'], ['compra', 'Compra'], ['batch', 'Batch'], ['despensa', 'Despensa'], ['suplementos', 'Suplementos']];
+const TABS = [['hoy', 'Diario'], ['menu', 'Menú'], ['compra', 'Compra'], ['batch', 'Batch'], ['despensa', 'Despensa'], ['suplementos', 'Suplementos']];
 const week = (mon) => get(`nutweek:${mon}`, () => api.fn('nutrition-day', { weekStart: mon }), 120_000);
 const refresh = () => { invalidate('nutweek', 'shopping', 'pantry'); render(); };
 
@@ -17,41 +18,177 @@ export async function NUTRITION(params = []) {
   return { title: 'Nutrición', right: html`<button class="icon-btn" data-act="${act(settings)}">🎯</button>`, body: html`${chips}${body}` };
 }
 
-// ---------------- HOY ----------------
+// ---------------- DIARIO (estilo MyFitnessPal) ----------------
+// Lo comido = tus registros (food_logs). El menú aparece como sugerencia en cada comida: un toque y pasa al diario.
+// Cada alimento se cambia o se borra por separado; «＋ Añadir» busca al instante en tus alimentos y recientes.
+let dDate = null;
+const OTHER = 'otros';
+const logsOf = (date) => get(`flogs:${date}`, () => api.db.select('food_logs', { date: `eq.${date}`, order: 'created_at' }), 60_000);
+const recentFoods = () => get('flogs:recent', async () => {
+  const rows = await api.db.select('food_logs', { select: 'items,slot,date', date: `gte.${addDays(today(), -45)}`, order: 'created_at.desc', limit: 400 }).catch(() => []);
+  const by = new Map();
+  for (const r of rows) for (const it of r.items ?? []) { if (!it.foodId) continue; const x = by.get(it.foodId) ?? { foodId: it.foodId, name: it.name, grams: it.grams, n: 0, slots: {} }; x.n++; x.slots[r.slot] = (x.slots[r.slot] ?? 0) + 1; by.set(it.foodId, x); }
+  return [...by.values()].sort((a, b) => b.n - a.n);
+}, 300_000);
+const sumLogs = (logs) => logs.reduce((a, l) => ({ kcal: a.kcal + +l.kcal, protein: a.protein + +l.protein, carbs: a.carbs + +l.carbs, fat: a.fat + +l.fat }), { kcal: 0, protein: 0, carbs: 0, fat: 0 });
+
 async function hoy() {
-  const w = await week(monday());
-  const d = w.days.find((x) => x.date === today());
-  if (!d) return html`<div class="card muted">Sin datos para hoy.</div>`;
-  const T = d.target.macros, S = d.totals;
-  const mb = (n, v, t, c) => html`<div style="margin:9px 0"><div class="row small"><span class="grow" style="font-weight:650">${n}</span><b style="font-family:var(--num)">${n0(v)}<span class="muted"> / ${n0(t)} g</span></b></div>${bar(v, t, `linear-gradient(90deg, ${c}88, ${c})`)}</div>`;
-  const meals = [...d.meals].sort((a, b) => SLOTS.indexOf(a.slot) - SLOTS.indexOf(b.slot));
+  const date = dDate ?? today();
+  const [w, logs] = await Promise.all([week(monday(date)), logsOf(date)]);
+  const d = w.days.find((x) => x.date === date);
+  if (!d) return html`<div class="card muted">Sin datos para ese día.</div>`;
+  const T = d.target.macros, S = sumLogs(logs), left = T.kcal - S.kcal;
+  const mb = (n, v, t, c) => html`<div class="mm"><div class="xs" style="color:${c};font-weight:750">${n}</div><div style="font:750 15px var(--num)">${n0(v)}<span class="muted xs"> / ${n0(t)} g</span></div>${bar(v, t, c)}</div>`;
+  const slots = [...new Set([...(w.settings.mealSlots ?? []), ...(w.settings.optionalSlots ?? []), ...d.meals.map((m) => m.slot), ...logs.map((l) => l.slot ?? OTHER)])]
+    .sort((a, b) => (a === OTHER ? 99 : SLOTS.indexOf(a)) - (b === OTHER ? 99 : SLOTS.indexOf(b)));
+  const isOpt = (x) => (w.settings.optionalSlots ?? []).includes(x) && !(w.settings.mealSlots ?? []).includes(x);
   const kc = S.kcal / Math.max(1, T.kcal);
+  const advice = d.adjustments?.length ? `He reajustado lo que te queda: ${d.adjustments.map((x) => x.text).join(' · ')}` : d.alerts?.[0]?.message;
   return html`
-    <div class="hero" style="padding:18px">
-      <div class="row" style="position:relative;z-index:1">${ring(Math.min(1, kc), kc > 1.08 ? '#fbbf24' : '#7fb0ff', n0(S.kcal), 104, `de ${n0(T.kcal)}`)}
-        <div class="grow"><div class="k">Día de carga ${d.target.load}</div><div class="big" style="font-size:22px">${({ definicion: 'Definiendo', volumen: 'Ganando masa', mantenimiento: 'Mantenimiento', recomposicion: 'Recomposición', rendimiento: 'Rendimiento' })[w.settings.mode] ?? 'Hoy'}</div>
-          <div class="small" style="color:rgba(220,232,255,.78)">${S.kcal < T.kcal ? `Te quedan ${n0(T.kcal - S.kcal)} kcal` : `${n0(S.kcal - T.kcal)} kcal por encima`}</div></div></div>
-      <div style="position:relative;z-index:1;margin-top:8px">${mb('Proteína', S.protein, T.protein, '#7fb0ff')}${mb('Hidratos', S.carbs, T.carbs, '#fbbf24')}${mb('Grasa', S.fat, T.fat, '#f472b6')}
-      <div class="xs" style="color:rgba(220,232,255,.6)">Previsto con tu menú + lo que has registrado fuera de él (${n0(d.eaten.kcal)} kcal).${d.adherence ? ` Cumplimiento: ${d.adherence.mealsDone}/${d.adherence.mealsTotal} comidas · ${d.adherence.score}/100.` : ''}</div></div></div>
-    ${d.adjustments?.length ? html`<div class="card tight"><div class="small" style="color:var(--accent);font-weight:700">🔄 He reajustado lo que te queda hoy</div>${d.adjustments.map((a) => html`<div class="small">• ${a.text}</div>`)}
-        ${d.alerts.length ? html`<div class="small alert" style="margin-top:6px">Aun con el reajuste: ${d.alerts.map((a) => a.message.replace(/^Te quedarías/, 'te quedarías')).join(' ')}</div>` : ''}</div>`
-      : d.alerts.map((a) => html`<div class="card tight alert">⚠️ ${a.message}</div>`)}
-    ${w.balance?.message ? html`<div class="card tight small">📅 ${w.balance.message}</div>` : ''}
-    ${(() => {
-      const fixed = (w.settings.mealSlots ?? []).filter((x) => !meals.some((m) => m.slot === x));
-      const opt = (w.settings.optionalSlots ?? []).filter((x) => !meals.some((m) => m.slot === x) && !fixed.includes(x));
-      const all = [...meals.map((m) => ({ slot: m.slot, m })), ...fixed.map((slot) => ({ slot, m: null, fixed: true })), ...opt.map((slot) => ({ slot, m: null }))].sort((a, b) => SLOTS.indexOf(a.slot) - SLOTS.indexOf(b.slot));
-      return all.map(({ slot, m, fixed: fx }) => (m ? mealCard(m) : html`<div class="card tight row" style="border-style:dashed;opacity:${fx ? 1 : 0.8}"><div class="grow"><b class="small" style="color:var(--accent)">${slotName(slot)}</b> <span class="xs muted">${fx ? '(sin planificar)' : '(opcional)'}</span><div class="xs muted">${fx ? 'Aún no está en tu menú: genera el menú en Batch o apunta lo que comas.' : 'Solo si lo haces hoy, p. ej. al volver de correr.'}</div></div><button class="sm" data-act="${act(() => logFood(slot))}">＋ Añadir</button></div>`));
-    })()}
-    ${!meals.length ? html`<div class="card muted small">Sin menú para hoy. Genéralo en <b>Batch</b> o cuéntame lo que has cocinado.</div>` : ''}
-    <button class="primary block" data-act="${act(() => logFood())}">＋ He comido algo (extra o fuera del menú)</button>
+    <div class="row daynav"><button class="icon-btn" data-act="${act(() => { dDate = addDays(date, -1); render(); })}">‹</button>
+      <div class="grow center" style="padding:0" data-act="${act(() => { dDate = null; render(); })}"><b>${date === today() ? 'Hoy' : date === addDays(today(), -1) ? 'Ayer' : date === addDays(today(), 1) ? 'Mañana' : dayName(date)}</b><div class="xs muted">${shortDate(date)} · día de carga ${d.target.load}</div></div>
+      <button class="icon-btn" data-act="${act(() => { dDate = addDays(date, 1); render(); })}">›</button></div>
+    <div class="hero" style="padding:16px 18px">
+      <div class="row" style="position:relative;z-index:1">${ring(Math.min(1, kc), kc > 1.06 ? '#fbbf24' : '#7fb0ff', n0(Math.abs(left)), 100, left >= 0 ? 'restantes' : 'de más')}
+        <div class="grow eq"><div><span class="muted">Objetivo</span><b>${n0(T.kcal)}</b></div><div><span class="muted">− Comido</span><b>${n0(S.kcal)}</b></div><div class="tot"><span>= Restante</span><b style="color:${left < 0 ? 'var(--amber)' : '#fff'}">${n0(left)}</b></div></div></div>
+      <div class="macros3">${mb('Proteína', S.protein, T.protein, '#7fb0ff')}${mb('Hidratos', S.carbs, T.carbs, '#fbbf24')}${mb('Grasa', S.fat, T.fat, '#f472b6')}</div>
+    </div>
+    ${advice && date >= today() ? html`<div class="card tight small" style="border-color:rgba(127,176,255,.35)">💡 ${advice}</div>` : ''}
+    ${slots.map((slot) => mealSection(slot, date, logs.filter((l) => (l.slot ?? OTHER) === slot), d.meals.find((m) => m.slot === slot), isOpt(slot)))}
+    <button class="block" data-act="${act(() => addFood(OTHER, date))}">＋ Algo más (picoteo, bebida…)</button>
     <details><summary>Por qué estos objetivos</summary>${d.target.explanation.map((e) => html`<p class="small muted">${e}</p>`)}</details>`;
+}
+
+function mealSection(slot, date, logs, planned, optional) {
+  const entries = logs.flatMap((l) => (l.items ?? []).map((it, k) => ({ log: l, k, it })));
+  const kcal = logs.reduce((a, l) => a + +l.kcal, 0);
+  const sugg = planned && planned.status !== 'eaten' && planned.status !== 'skipped' && !logs.some((l) => l.planned_meal_id === planned.id);
+  return html`<div class="card meal">
+    <div class="row mhead"><b class="grow">${slot === OTHER ? 'Otros' : slotName(slot)}${optional ? html` <span class="xs muted">opcional</span>` : ''}</b><span class="mk">${kcal ? `${n0(kcal)} kcal` : ''}</span></div>
+    ${entries.map(({ log, k, it }) => html`<div class="entry" data-act="${act(() => editEntry(log, k, date))}"><div class="grow"><div class="en">${it.name}</div><div class="xs muted">${fmtAmount(it)}${log.source === 'menu' ? ' · del menú' : ''}</div></div><div class="ek">${n0(it.macros?.kcal ?? 0)}</div></div>`)}
+    ${sugg ? html`<div class="sugg"><div class="row"><div class="grow"><div class="xs" style="color:var(--accent2);font-weight:750">SUGERIDO EN TU MENÚ${planned.fromBatch ? ' · BATCH' : ''}</div><div class="small" style="font-weight:650">${planned.title}</div>
+          <div class="xs muted">${planned.ingredients.map((i) => `${i.name} ${Math.round(i.grams)} g`).join(' · ')}</div></div><div class="ek muted">${n0(planned.macros.kcal)}</div></div>
+        <div class="row" style="gap:6px;margin-top:8px"><button class="sm primary" data-act="${act(mealAction(planned, 'eaten'))}">✓ Me lo he comido</button><button class="sm" data-act="${act(() => editMeal(planned))}">Cambiar</button><button class="sm ghost" data-act="${act(mealAction(planned, 'skip'))}">No</button></div></div>` : ''}
+    ${planned?.status === 'skipped' && !entries.length ? html`<div class="xs muted" style="padding:6px 0">Menú descartado · <a data-act="${act(mealAction(planned, 'reset'))}">recuperar</a></div>` : ''}
+    <button class="addf" data-act="${act(() => addFood(slot, date))}">＋ Añadir alimento</button>
+  </div>`;
+}
+
+const fmtAmount = (it) => { const u = it.unitGrams ?? catalogUnit(it.foodId); return u && Math.abs(it.grams / u - Math.round(it.grams / u)) < 0.05 && it.grams / u <= 12 ? `${Math.round(it.grams / u)} ud · ${Math.round(it.grams)} g` : `${Math.round(it.grams)} g`; };
+let catalogCache = null;
+const catalogUnit = (id) => catalogCache?.find((f) => f.id === id)?.unitGrams;
+
+/** Cambiar cantidad, mover o borrar un alimento del diario. */
+async function editEntry(log, k, date) {
+  const cat = catalogCache ?? (catalogCache = await foodCatalog());
+  const it = { ...log.items[k] }; const food = cat.find((f) => f.id === it.foodId);
+  const per100 = food?.per100 ?? (it.macros && it.grams ? Object.fromEntries(Object.entries(it.macros).map(([x, v]) => [x, (v * 100) / it.grams])) : null);
+  const unit = food?.unitGrams; let useUnits = !!unit && Math.abs(it.grams / unit - Math.round(it.grams / unit)) < 0.05; let slot = log.slot ?? OTHER;
+  const draw = () => {
+    const g = it.grams, m = per100 ? { kcal: per100.kcal * g / 100, protein: per100.protein * g / 100, carbs: per100.carbs * g / 100, fat: per100.fat * g / 100 } : it.macros;
+    setSheet(html`<div class="center" style="padding:4px 0 8px"><div class="kpi">${n0(m?.kcal ?? 0)}<small> kcal</small></div><div class="small muted">P ${n0(m?.protein ?? 0)} · C ${n0(m?.carbs ?? 0)} · G ${n0(m?.fat ?? 0)} g</div></div>
+      ${unit ? html`<div class="seg"><button class="${!useUnits ? 'on' : ''}" data-act="${act(() => { useUnits = false; draw(); })}">Gramos</button><button class="${useUnits ? 'on' : ''}" data-act="${act(() => { useUnits = true; it.grams = Math.max(1, Math.round(g / unit)) * unit; draw(); })}">Unidades (${unit} g)</button></div>` : ''}
+      <div class="row qty"><button data-act="${act(() => { it.grams = Math.max(useUnits ? unit : 5, g - (useUnits ? unit : g >= 100 ? 10 : 5)); draw(); })}">−</button>
+        <input id="eg" type="number" inputmode="decimal" value="${useUnits ? Math.round(g / unit * 10) / 10 : Math.round(g)}" data-change="${act((el) => { const v = +el.value; if (v > 0) { it.grams = useUnits ? v * unit : v; draw(); } })}"><span class="muted">${useUnits ? 'ud' : 'g'}</span>
+        <button data-act="${act(() => { it.grams = g + (useUnits ? unit : g >= 100 ? 10 : 5); draw(); })}">+</button></div>
+      <label>Comida</label><select data-change="${act((el) => { slot = el.value; })}">${[...SLOTS, OTHER].map((x) => html`<option value="${x}" ${x === slot ? 'selected' : ''}>${x === OTHER ? 'Otros' : slotName(x)}</option>`)}</select>
+      <button class="primary block" data-act="${act((b) => busy(b, async () => { it.macros = m; await saveEntry(log, k, it, slot, date); closeSheet(); }))}">Guardar</button>
+      <button class="block danger" data-act="${act((b) => busy(b, async () => { await saveEntry(log, k, null, slot, date); closeSheet(); }))}">Quitar del diario</button>`);
+  };
+  sheet(it.name, ''); draw();
+}
+
+async function saveEntry(log, k, item, slot, date) {
+  const items = (log.items ?? []).map((x) => ({ ...x }));
+  const moved = item && (slot === OTHER ? null : slot) !== (log.slot ?? null);
+  if (!item || moved) items.splice(k, 1); else items[k] = item;
+  const tot = items.reduce((a, x) => ({ kcal: a.kcal + (x.macros?.kcal ?? 0), protein: a.protein + (x.macros?.protein ?? 0), carbs: a.carbs + (x.macros?.carbs ?? 0), fat: a.fat + (x.macros?.fat ?? 0) }), { kcal: 0, protein: 0, carbs: 0, fat: 0 });
+  const r = (v) => Math.round(v * 10) / 10;
+  if (moved) await api.db.insert('food_logs', [{ user_id: uid(), date, slot: slot === OTHER ? null : slot, items: [item], kcal: r(item.macros.kcal), protein: r(item.macros.protein), carbs: r(item.macros.carbs), fat: r(item.macros.fat), source: 'manual' }]);
+  if (!items.length) {
+    if (log.planned_meal_id) await api.fn('meal-update', { mealId: log.planned_meal_id, action: 'reset' });   // devuelve a la despensa lo descontado
+    else await api.db.remove('food_logs', { id: `eq.${log.id}` });
+  } else {
+    await api.db.update('food_logs', { items, kcal: r(tot.kcal), protein: r(tot.protein), carbs: r(tot.carbs), fat: r(tot.fat) }, { id: `eq.${log.id}` });
+    // Si viene del menú, el menú se entera (para reajustar el resto del día con lo que de verdad has comido).
+    if (log.planned_meal_id) await api.db.update('planned_meals', { ingredients: items.map(({ foodId, name, grams }) => ({ foodId, name, grams })) }, { id: `eq.${log.planned_meal_id}` });
+  }
+  invalidate(`flogs:${date}`, 'flogs:recent', 'nutweek'); render();
+}
+
+/** Añadir alimento: búsqueda instantánea en tus alimentos (recientes primero) y cantidad. */
+async function addFood(slot, date) {
+  const [cat, recent] = await Promise.all([catalogCache ?? foodCatalog().then((c) => (catalogCache = c)), recentFoods()]);
+  let q = '', pick = null, grams = 100, useUnits = false, web = null, searching = false;
+  const ded = () => { try { return localStorage.getItem('forja:deduct') !== '0'; } catch { return true; } };
+  const results = () => {
+    if (!q.trim()) {
+      const rs = recent.filter((r) => cat.some((f) => f.id === r.foodId)).sort((a, b) => (b.slots[slot] ?? 0) - (a.slots[slot] ?? 0) || b.n - a.n).slice(0, 20);
+      return rs.map((r) => ({ f: cat.find((f) => f.id === r.foodId), grams: r.grams }));
+    }
+    const qt = foodTokens(q);
+    const scored = cat.map((f) => { const nt = foodTokens(`${f.name} ${f.brand ?? ''}`); const hit = qt.filter((w) => nt.some((x) => x.startsWith(w))).length; return { f, s: hit === qt.length ? 10 - nt.length * 0.3 + (recent.find((r) => r.foodId === f.id) ? 5 : 0) + (f.source === 'reference' ? 1 : 0) : -1 }; })
+      .filter((x) => x.s > 0).sort((a, b) => b.s - a.s).slice(0, 30);
+    return scored.map((x) => ({ f: x.f }));
+  };
+  const list = () => {
+    const el = document.getElementById('fres'); if (!el) return;
+    const rs = results();
+    el.innerHTML = html`${!q.trim() && rs.length ? html`<div class="xs muted" style="margin:8px 2px">RECIENTES</div>` : ''}
+      ${rs.map(({ f, grams: g }) => html`<div class="entry" data-act="${act(() => { pick = f; useUnits = !!f.unitGrams && (!g || Math.abs(g / f.unitGrams - Math.round(g / f.unitGrams)) < 0.05); grams = g ?? f.unitGrams ?? 100; draw(); })}"><div class="grow"><div class="en">${f.name}</div><div class="xs muted">${f.brand ? `${f.brand} · ` : ''}${n0(f.per100.kcal)} kcal/100 g${g ? ` · ${Math.round(g)} g la última vez` : ''}</div></div><span class="muted">›</span></div>`)}
+      ${q.trim() && !rs.length ? html`<p class="small muted" style="padding:8px 2px">No lo tengo guardado.</p>` : ''}
+      ${q.trim() ? html`<button class="block" data-act="${act(() => searchWeb())}">${searching ? html`<span class="spinner"></span> Buscando…` : `🔎 Buscar «${q.trim()}» en Open Food Facts / USDA`}</button>` : ''}
+      ${web ? web.map((it) => html`<div class="entry" data-act="${act(() => { pick = { id: it.foodId, name: it.name, per100: { kcal: it.macros.kcal * 100 / it.grams, protein: it.macros.protein * 100 / it.grams, carbs: it.macros.carbs * 100 / it.grams, fat: it.macros.fat * 100 / it.grams } }; grams = it.grams; useUnits = false; draw(); })}"><div class="grow"><div class="en">${it.name}</div><div class="xs muted">${Math.round(it.grams)} g · ${n0(it.macros.kcal)} kcal</div></div><span class="muted">›</span></div>`) : ''}`.s;
+  };
+  const searchWeb = async () => {
+    searching = true; list();
+    try { const r = await api.fn('nutrition-log', { action: 'parse', text: q.trim() }); web = r.items || []; invalidate('foodcat'); foodCatalog().then((c) => { catalogCache = c; }); }
+    catch (e) { toast(e.message); }
+    searching = false; list();
+  };
+  const draw = () => {
+    if (!pick) {
+      setSheet(html`<input id="fq" type="search" placeholder="Buscar alimento (huevo, arroz, yogur…)" value="${q}" autocomplete="off">
+        <div class="grid3" style="margin-top:8px"><button class="sm" data-act="${act(() => logFood(slot === OTHER ? undefined : slot, { date }))}">✍️ Escribir</button><button class="sm" data-act="${act(() => logFood(slot === OTHER ? undefined : slot, { date, scan: true }))}">▦ Código</button><button class="sm" data-act="${act(() => copyYesterday(slot, date))}">⟲ Como ayer</button></div>
+        <div id="fres"></div>`);
+      const inp = document.getElementById('fq');
+      inp.oninput = () => { q = inp.value; web = null; list(); };
+      list(); setTimeout(() => inp.focus(), 50);
+      return;
+    }
+    const u = pick.unitGrams; const g = grams;
+    const m = { kcal: pick.per100.kcal * g / 100, protein: pick.per100.protein * g / 100, carbs: pick.per100.carbs * g / 100, fat: pick.per100.fat * g / 100 };
+    setSheet(html`<button class="sm ghost" data-act="${act(() => { pick = null; draw(); })}">‹ Volver</button>
+      <h3 style="margin:6px 0 0">${pick.name}</h3>
+      <div class="center" style="padding:8px 0"><div class="kpi">${n0(m.kcal)}<small> kcal</small></div><div class="small muted">P ${n0(m.protein)} · C ${n0(m.carbs)} · G ${n0(m.fat)} g</div></div>
+      ${u ? html`<div class="seg"><button class="${!useUnits ? 'on' : ''}" data-act="${act(() => { useUnits = false; draw(); })}">Gramos</button><button class="${useUnits ? 'on' : ''}" data-act="${act(() => { useUnits = true; grams = Math.max(1, Math.round(g / u)) * u; draw(); })}">Unidades (${u} g)</button></div>` : ''}
+      <div class="row qty"><button data-act="${act(() => { grams = Math.max(useUnits ? u : 5, g - (useUnits ? u : g >= 100 ? 10 : 5)); draw(); })}">−</button>
+        <input type="number" inputmode="decimal" value="${useUnits ? Math.round(g / u * 10) / 10 : Math.round(g)}" data-change="${act((el) => { const v = +el.value; if (v > 0) { grams = useUnits ? v * u : v; draw(); } })}"><span class="muted">${useUnits ? 'ud' : 'g'}</span>
+        <button data-act="${act(() => { grams = g + (useUnits ? u : g >= 100 ? 10 : 5); draw(); })}">+</button></div>
+      ${!useUnits ? html`<div class="chips">${[50, 100, 150, 200, 250].map((x) => html`<button class="chip ${Math.round(g) === x ? 'on' : ''}" data-act="${act(() => { grams = x; draw(); })}">${x} g</button>`)}</div>` : ''}
+      <label class="check"><input type="checkbox" id="fded" ${ded() ? 'checked' : ''} onchange="try{localStorage.setItem('forja:deduct', this.checked ? '1' : '0')}catch{}"> Descontar de mi despensa</label>
+      <button class="primary block" data-act="${act((b) => busy(b, async () => {
+        const r = await api.fnQueued('nutrition-log', { action: 'confirm', date, slot: slot === OTHER ? null : slot, items: [{ foodId: pick.id, name: pick.name, grams: Math.round(g) }], source: 'manual', deductPantry: document.getElementById('fded').checked });
+        closeSheet(); invalidate(`flogs:${date}`, 'flogs:recent', 'nutweek', 'pantry'); render();
+        toast(r.queued ? 'Sin conexión: se sube al volver la cobertura' : `${pick.name}: ${n0(m.kcal)} kcal a ${slot === OTHER ? 'Otros' : slotName(slot)}`);
+      }))}">Añadir a ${slot === OTHER ? 'Otros' : slotName(slot)}</button>`);
+  };
+  sheet(`Añadir a ${slot === OTHER ? 'Otros' : slotName(slot)}`, ''); draw();
+}
+
+/** Copia lo que comiste ayer en esa comida. */
+async function copyYesterday(slot, date) {
+  const prev = (await logsOf(addDays(date, -1))).filter((l) => (l.slot ?? OTHER) === slot);
+  const items = prev.flatMap((l) => l.items ?? []).filter((i) => i.foodId).map(({ foodId, name, grams }) => ({ foodId, name, grams }));
+  if (!items.length) return toast(`Ayer no apuntaste nada en ${slot === OTHER ? 'Otros' : slotName(slot)}`);
+  await busy(null, () => api.fn('nutrition-log', { action: 'confirm', date, slot: slot === OTHER ? null : slot, items, source: 'manual', deductPantry: false }));
+  closeSheet(); invalidate(`flogs:${date}`, 'nutweek'); render(); toast(`Copiado de ayer: ${items.map((i) => i.name).join(', ')}`);
 }
 
 const mealAction = (m, action, extra = {}) => async (b) => busy(b, async () => {
   const r = await api.fnQueued('meal-update', { mealId: m.id, action, ...extra });
   if (r.queued) return toast('Sin conexión: lo apunto y lo sincronizo al volver la cobertura');
-  invalidate('nutweek'); render();
+  invalidate('nutweek', `flogs:${m.date}`, 'flogs:recent'); render();
   const msg = [...(r.pantry?.used?.length ? [`Descontado de casa: ${r.pantry.used.map((u) => `${u.from} ${u.grams} g`).join(', ')}`] : []), ...(r.pantry?.missing?.length ? [`No lo tenías en casa: ${r.pantry.missing.map((x) => x.name).join(', ')}`] : []),
     ...(r.adjustments || []).map((a) => a.text), ...(r.alerts || []).map((a) => a.message)];
   if (r.pantry) invalidate('pantry', 'shopping');
@@ -108,7 +245,7 @@ const macrosFor = (f, g) => ({ kcal: (f.per100.kcal * g) / 100, protein: (f.per1
 export function logFood(slot, opts = {}) {
   const now = new Date().getHours();
   let sel = slot ?? (now < 11 ? 'desayuno' : now < 13 ? 'media_manana' : now < 16 ? 'comida' : now < 20 ? 'merienda' : 'cena');
-  let slotTouched = !!slot;
+  let slotTouched = false;   // «como almuerzo» en el texto manda, salvo que elijas la comida a mano
   let items = [], extra = [], questions = [], photoPath = null, lastText = opts.prefill ?? '', pending = [], seq = 0;
   let catalog = null;
   foodCatalog().then((c) => { catalog = c; if (lastText) interpret(lastText); }).catch(() => { catalog = []; });
@@ -170,7 +307,7 @@ export function logFood(slot, opts = {}) {
         const list = [...items, ...extra].filter((i) => i.foodId);
         const r = await api.fnQueued('nutrition-log', { action: 'confirm', date: opts.date ?? today(), slot: sel, items: list.map(({ foodId, name, grams }) => ({ foodId, name, grams })), source: photoPath ? 'foto' : 'texto', deductPantry: document.getElementById('lded').checked, photoPath,
           plannedMealId: opts.plannedMealId, title: opts.replace ? (said ? said.charAt(0).toUpperCase() + said.slice(1, 70) : list.map((i) => i.name).join(', ').slice(0, 70)) : undefined });
-        closeSheet(); invalidate('nutweek', 'pantry'); render();
+        closeSheet(); invalidate('nutweek', 'pantry', 'flogs'); render();
         if (r.queued) return toast('Sin conexión: lo apunto y lo subo al volver la cobertura');
         const msgs = (r.missingInPantry || []).map((x) => `No tenías ${x.name} en la despensa.`);
         toast([`Registrado: ${n0(r.logged.kcal)} kcal`, ...msgs].join(' · '), 6000);
@@ -178,6 +315,7 @@ export function logFood(slot, opts = {}) {
   };
   sheet(opts.replace ? `${slotName(sel)}: lo que comí` : 'Registrar comida', '');
   drawStatic(); draw();
+  if (opts.scan) setTimeout(() => [...document.querySelectorAll('#sheet button')].find((b) => /Código de barras/.test(b.textContent))?.click(), 100);
   document.getElementById('ltext').addEventListener('input', (e) => { clearTimeout(drawStatic.t); const v = e.target.value; drawStatic.t = setTimeout(() => interpret(v), 200); });
   document.getElementById('sheet').onchange = async (e) => {
     if (e.target.id !== 'lphoto' || !e.target.files[0]) return;
@@ -288,18 +426,24 @@ const prodImg = (url, alt) => (url ? html`<img src="${url}" alt="${alt ?? ''}" l
 const qtyText = (i) => [i.units ? `${i.units} ud${i.unitGrams || i.unit_grams ? ` × ${i.unitGrams ?? i.unit_grams} g` : ''}` : '', i.quantityG ?? i.quantity_g ? `${i.quantityG ?? i.quantity_g} g` : ''].filter(Boolean).join(' · ');
 
 const LOCS = [['congelador', '❄️ Congelador'], ['nevera', '🧊 Nevera'], ['despensa', '🗄 Despensa']];
+let ploc = 'todo';
 async function despensa() {
-  const items = await get('pantry', () => api.db.select('pantry_items', { order: 'name' }));
+  let items = await get('pantry', () => api.db.select('pantry_items', { order: 'name' }));
+  // Una vez: lo antiguo («1 ud × 500 g» de pasta…) pasa a llevarse por peso o por unidades.
+  if (items.some((i) => !i.mode)) { await api.fn('pantry', { action: 'normalize' }).catch(() => null); invalidate('pantry'); items = await get('pantry', () => api.db.select('pantry_items', { order: 'name' })); }
   const soon = items.filter((i) => i.expires_on && i.expires_on <= addDays(today(), 3));
   setupPantryDrag();
+  const locs = ploc === 'todo' ? LOCS : LOCS.filter(([l]) => l === ploc);
   return html`
-    ${soon.length ? html`<div class="card tight"><div class="small alert">⏰ Caduca pronto: ${soon.map((i) => `${i.name} (${i.expires_on <= today() ? 'hoy' : shortDate(i.expires_on)})`).join(', ')}</div>
-      <button class="sm" style="margin-top:6px" data-act="${act((b) => recipeFor(b, soon.map((i) => i.id)))}">👩‍🍳 Proponme una receta con esto</button></div>` : ''}
-    <div class="grid2"><button class="primary" data-act="${act(addPantry)}">＋ Añadir</button><button data-act="${act(() => scanToPantry())}">📷 Escanear código</button></div>
-    <p class="xs muted">Arrastra por ⠿ para cambiar de sitio. Lo que comes desde el menú o cocinas en el batch se descuenta solo; −1 y − g son para lo que gastes por tu cuenta.</p>
-    ${LOCS.map(([loc, label]) => html`<div data-loc="${loc}" class="ploc"><h2>${label} <small>${items.filter((i) => i.location === loc).length}</small></h2>
+    <div class="psearch"><input id="pq" type="search" placeholder="Buscar en casa…" autocomplete="off" oninput="for (const r of document.querySelectorAll('.pitem')) r.style.display = r.dataset.name.includes(this.value.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')) ? '' : 'none'"></div>
+    <div class="chips">${[['todo', 'Todo'], ...LOCS].map(([l, lb]) => html`<button class="chip ${ploc === l ? 'on' : ''}" data-act="${act(() => { ploc = l; render(); })}">${lb} <span class="muted">${l === 'todo' ? items.length : items.filter((i) => i.location === l).length}</span></button>`)}</div>
+    ${soon.length ? html`<div class="card tight" style="border-color:rgba(251,191,36,.35)"><div class="small alert">⏰ Caduca pronto: ${soon.map((i) => `${i.name} (${i.expires_on <= today() ? 'hoy' : shortDate(i.expires_on)})`).join(', ')}</div>
+      <button class="sm" style="margin-top:8px" data-act="${act((b) => recipeFor(b, soon.map((i) => i.id)))}">👩‍🍳 Proponme una receta con esto</button></div>` : ''}
+    <div class="grid2"><button class="primary" data-act="${act(addPantry)}">＋ Añadir</button><button data-act="${act(() => scanToPantry())}">📷 Escanear</button></div>
+    ${locs.map(([loc, label]) => html`<div data-loc="${loc}" class="ploc"><h2>${label} <small>${items.filter((i) => i.location === loc).length}</small></h2>
       <div class="card tight list">${items.filter((i) => i.location === loc).map((i) => pantryRow(i))}
-        ${!items.filter((i) => i.location === loc).length ? html`<div class="item muted small">Vacío · suelta aquí</div>` : ''}</div></div>`)}`;
+        ${!items.filter((i) => i.location === loc).length ? html`<div class="item muted small">Vacío${ploc === 'todo' ? ' · arrastra aquí con ⠿' : ''}</div>` : ''}</div></div>`)}
+    <p class="xs muted" style="margin-top:14px">Lo que comes del menú o cocinas en el batch se descuenta solo. Toca un producto para cambiarlo; arrástralo por ⠿ para moverlo de sitio.</p>`;
 }
 
 async function recipeFor(btn, ids) {
@@ -316,37 +460,52 @@ async function recipeFor(btn, ids) {
   });
 }
 
+const normName = (x) => x.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+const fmtQ = (g, liquid) => (g >= 1000 ? `${(g / 1000).toLocaleString('es-ES', { maximumFractionDigits: 2 })} ${liquid ? 'l' : 'kg'}` : `${Math.round(g)} ${liquid ? 'ml' : 'g'}`);
 function pantryRow(i) {
-  const u = i.units != null ? +i.units : null; const pack = i.pack_units ? +i.pack_units : null;
-  return html`<div class="item prod pitem" data-pid="${i.id}">
+  const liquid = isLiquid(i.name);
+  const name = html`<div class="small" style="font-weight:650">${i.name}${i.brand ? html` <span class="muted xs">${i.brand}</span>` : ''}</div>`;
+  let qty, ctl;
+  if (i.mode === 'weight') {
+    const q = +i.quantity_g || 0, pk = +i.package_g || 0, cap = Math.max(q, pk);
+    qty = html`<div class="pq"><b>${fmtQ(q, liquid)}</b>${pk && pk !== q ? html`<span class="muted"> de ${fmtQ(pk * Math.max(1, Math.ceil(q / pk)), liquid)}</span>` : ''}</div>${cap ? bar(q, pk ? pk * Math.max(1, Math.ceil(q / pk)) : cap, q / Math.max(1, pk || cap) < 0.2 ? 'var(--amber)' : 'linear-gradient(90deg,#1d4ed8,#7fb0ff)') : ''}`;
+    ctl = html`<button class="sm" data-act="${act(() => useGrams(i))}">Usar</button>`;
+  } else {
+    const u = Math.round((+i.units || 0) * 10) / 10, pack = +i.pack_units || 0;
+    qty = html`<div class="pq"><b>${u.toLocaleString('es-ES')}</b> <span class="muted">${unitWord(i.unit_label ?? 'unidad', u)}${pack ? ` de ${pack}` : ''}</span></div>
+      ${pack && pack <= 36 ? html`<div class="dots-row">${[...Array(pack)].map((_, k) => html`<i class="${k < Math.round(u) ? 'on' : ''}"></i>`)}</div>` : ''}`;
+    ctl = html`<div class="stepper"><button aria-label="Quitar una" data-act="${act(() => stepUnit(i, -1))}">−</button><button aria-label="Añadir una" data-act="${act(() => stepUnit(i, +1))}">+</button></div>`;
+  }
+  return html`<div class="item prod pitem" data-pid="${i.id}" data-name="${normName(i.name + ' ' + (i.brand ?? ''))}">
     <span class="drag" aria-label="Mover">⠿</span>
     <span data-act="${act(() => editPantry(i))}">${prodImg(i.image_url, i.name)}</span>
-    <div class="grow" data-act="${act(() => editPantry(i))}"><div class="small" style="font-weight:600">${i.name}${i.brand ? html` <span class="muted xs">${i.brand}</span>` : ''}</div>
-      <div class="xs muted">${u != null ? `${u}${pack ? ` de ${pack}` : ''} ud${i.unit_grams ? ` × ${+i.unit_grams} g` : ''}` : i.quantity_g ? `${+i.quantity_g} g` : 'cantidad sin indicar'}${i.expires_on ? ` · caduca ${shortDate(i.expires_on)}` : ''}${!i.food_id ? ' · sin datos nutricionales' : ''}</div>
-      ${pack && pack <= 30 ? html`<div class="dots-row">${[...Array(pack)].map((_, k) => html`<i class="${k < (u ?? 0) ? 'on' : ''}"></i>`)}</div>` : ''}</div>
-    ${u != null ? html`<button class="sm" data-act="${act((b) => busy(b, () => useUnit(i)))}">−1</button>` : i.quantity_g ? html`<button class="sm" data-act="${act(() => useGrams(i))}">− g</button>` : ''}
+    <div class="grow" data-act="${act(() => editPantry(i))}">${name}${qty}${i.expires_on ? html`<div class="xs ${i.expires_on <= addDays(today(), 3) ? 'alert' : 'muted'}">caduca ${shortDate(i.expires_on)}</div>` : ''}</div>
+    ${ctl}
   </div>`;
 }
 
-async function useUnit(i, n = 1) {
-  const left = Math.max(0, (+i.units || 0) - n);
-  if (left === 0) { await api.db.remove('pantry_items', { id: `eq.${i.id}` }); toast(`${i.name}: se ha acabado`); }
-  else await api.db.update('pantry_items', { units: left, updated_at: new Date().toISOString() }, { id: `eq.${i.id}` });
-  invalidate('pantry', 'shopping'); render();
+// Cambios al momento en pantalla; se guardan por detrás.
+async function savePantry(i, patch, msg) {
+  Object.assign(i, patch); render({ soft: true });
+  try {
+    const gone = (i.mode === 'weight' ? +i.quantity_g : +i.units) <= 0;
+    if (gone) { const list = await get('pantry', () => api.db.select('pantry_items', { order: 'name' })); list.splice(list.indexOf(i), 1); render({ soft: true }); await api.db.remove('pantry_items', { id: `eq.${i.id}` }); toast(`${i.name}: se ha acabado`); }
+    else { await api.db.update('pantry_items', { ...patch, updated_at: new Date().toISOString() }, { id: `eq.${i.id}` }); if (msg) toast(msg); }
+    invalidate('shopping');
+  } catch (e) { toast(`No se pudo guardar: ${e.message}`); invalidate('pantry'); render(); }
 }
+const stepUnit = (i, d) => savePantry(i, { units: Math.max(0, Math.round(((+i.units || 0) + d) * 10) / 10) });
 
 function useGrams(i) {
-  const left = +i.quantity_g;
-  const go = (g) => busy(null, async () => {
-    const rest = Math.max(0, Math.round(left - g));
-    if (rest <= 0) { await api.db.remove('pantry_items', { id: `eq.${i.id}` }); toast(`${i.name}: se ha acabado`); }
-    else await api.db.update('pantry_items', { quantity_g: rest, updated_at: new Date().toISOString() }, { id: `eq.${i.id}` });
-    closeSheet(); invalidate('pantry', 'shopping'); render();
-  });
-  sheet(`${i.name}: ¿cuánto has usado?`, html`<p class="small muted">Te quedan ${left} g. Lo que cocines desde el menú o el batch se descuenta solo; esto es para lo que gastes por tu cuenta.</p>
-    <div class="grid3">${[50, 100, 150, 200, 250, 500].filter((g) => g < left).map((g) => html`<button data-act="${act(() => go(g))}">${g} g</button>`)}</div>
-    <div class="row" style="gap:8px"><input id="ug" class="grow" type="number" inputmode="numeric" placeholder="gramos"><button class="primary" data-act="${act(() => { const g = +document.getElementById('ug').value; if (g > 0) go(g); })}">Restar</button></div>
-    <button class="block danger" data-act="${act(() => go(left))}">Se ha acabado</button>`);
+  const left = +i.quantity_g || 0, liquid = isLiquid(i.name), u = liquid ? 'ml' : 'g';
+  const go = (g) => { closeSheet(); savePantry(i, { quantity_g: Math.max(0, Math.round(left - g)) }, `−${g} ${u} de ${i.name}`); };
+  sheet(i.name, html`<div class="center" style="padding:6px 0 2px"><div class="kpi">${fmtQ(left, liquid)}</div><div class="small muted">te quedan</div></div>
+    <label>¿Cuánto has usado?</label>
+    <div class="grid4">${usePresets(i.name).filter((g) => g <= left).map((g) => html`<button data-act="${act(() => go(g))}">${g} ${u}</button>`)}</div>
+    <div class="row" style="gap:8px;margin-top:10px"><input id="ug" class="grow" type="number" inputmode="numeric" placeholder="Otra cantidad (${u})"><button class="primary" data-act="${act(() => { const g = +document.getElementById('ug').value; if (g > 0) go(g); })}">Restar</button></div>
+    ${i.package_g ? html`<button class="block" data-act="${act(() => { closeSheet(); savePantry(i, { quantity_g: left + +i.package_g }, `+ ${fmtQ(+i.package_g, liquid)}`); })}">＋ He comprado otro paquete (${fmtQ(+i.package_g, liquid)})</button>` : ''}
+    <button class="block danger" data-act="${act(() => go(left))}">Se ha acabado</button>
+    <p class="xs muted">Lo que cocinas desde el menú o el batch se descuenta solo; esto es para lo que gastes por tu cuenta.</p>`);
 }
 
 let dragReady = false;
@@ -395,16 +554,35 @@ async function scanToPantry(list) {
   const r = await busy(null, () => api.fn('pantry', { action: 'barcode', code }));
   if (!r.product) { toast(r.message, 6000); return; }
   const p = r.product;
-  const item = { name: p.name, brand: p.brand, barcode: p.code, imageUrl: p.imageUrl, location: p.location ?? 'despensa', units: p.packUnits ?? 1, matched: true, packUnits: p.packUnits, unitGrams: p.unitG ?? p.packageG, queryEn: p.name };
+  const n = normalizePantry({ name: p.name, units: p.packUnits ?? 1, packUnits: p.packUnits, unitGrams: p.unitG, packageG: p.packageG, quantityG: p.packUnits ? undefined : p.packageG });
+  const item = { name: p.name, brand: p.brand, barcode: p.code, imageUrl: p.imageUrl, location: p.location ?? 'despensa', matched: true, mode: n.mode, units: n.units, packUnits: n.packUnits, unitGrams: n.unitGrams, unitLabel: n.unitLabel, quantityG: n.quantityG, packageG: n.packageG, queryEn: p.name };
   if (list) { list.push(item); return item; }
-  sheet('Producto escaneado', html`<div class="card tight prod">${prodImg(p.imageUrl, p.name)}<div class="grow"><b>${p.name}</b><div class="xs muted">${p.brand ?? ''} ${p.quantity ?? ''}</div>
+  const draw = () => setSheet(html`<div class="card tight prod">${prodImg(p.imageUrl, p.name)}<div class="grow"><b>${p.name}</b><div class="xs muted">${p.brand ?? ''} ${p.quantity ?? ''}</div>
       ${p.food ? html`<div class="xs">${Math.round(p.food.per100.kcal)} kcal · P ${p.food.per100.protein} · C ${p.food.per100.carbs} · G ${p.food.per100.fat} (por 100 g)</div>` : html`<div class="xs bad">Sin tabla nutricional en Open Food Facts</div>`}</div></div>
-    <form data-submit="${act((v, f) => busy(f.querySelector('button'), async () => { await api.fn('pantry', { action: 'save', items: [{ ...item, location: v.location, units: +v.u || 1, packUnits: +v.pk || undefined, unitGrams: +v.ug || undefined }] }); closeSheet(); invalidate('pantry', 'shopping'); render(); toast('Añadido'); }))}">
-      <label>Lugar</label><select name="location">${LOCS.map(([l, lb]) => html`<option value="${l}" ${item.location === l ? 'selected' : ''}>${lb}</option>`)}</select>
-      <div class="grid3"><div><label>Unidades que tienes</label><input name="u" type="number" value="${item.units}"></div><div><label>Trae el pack</label><input name="pk" type="number" value="${item.packUnits ?? ''}" placeholder="—"></div><div><label>g por unidad</label><input name="ug" type="number" value="${item.unitGrams ?? ''}"></div></div>
-      <p class="xs muted">Caja de sobres, pack de latas, docena de huevos…: pon cuántas trae y luego ve tocando −1 al gastarlas.</p>
-      <button class="primary block">Añadir a la despensa</button></form>
+    ${pantryForm(item, draw)}
+    <button class="primary block" data-act="${act((b) => busy(b, async () => { await api.fn('pantry', { action: 'save', items: [item] }); closeSheet(); invalidate('pantry', 'shopping'); render(); toast('Añadido a la despensa'); }))}">Añadir a la despensa</button>
     <button class="block" data-act="${act(() => scanToPantry())}">Escanear otro</button>`);
+  sheet('Producto escaneado', ''); draw();
+}
+
+/** Campos de cantidad según cómo se gasta (unidades o peso). `it` usa nombres camelCase; `redraw` repinta la hoja. */
+function pantryForm(it, redraw) {
+  const liquid = isLiquid(it.name), u = liquid ? 'ml' : 'g';
+  const num = (v) => (v === '' || v == null ? undefined : +v);
+  return html`
+    <label>Lugar</label><div class="seg">${LOCS.map(([l, lb]) => html`<button type="button" class="${it.location === l ? 'on' : ''}" data-act="${act(() => { it.location = l; redraw(); })}">${lb}</button>`)}</div>
+    <label>Se gasta…</label><div class="seg">
+      <button type="button" class="${it.mode === 'units' ? 'on' : ''}" data-act="${act(() => { if (it.mode !== 'units') { const n = normalizePantry({ name: it.name, mode: 'units', units: it.packageG && it.quantityG ? Math.round(it.quantityG / it.packageG) : 1, unitGrams: it.packageG }); Object.assign(it, { mode: 'units', units: n.units, unitLabel: n.unitLabel, unitGrams: n.unitGrams }); } redraw(); })}">De una en una</button>
+      <button type="button" class="${it.mode === 'weight' ? 'on' : ''}" data-act="${act(() => { if (it.mode !== 'weight') { const pk = it.unitGrams ?? it.packageG; Object.assign(it, { mode: 'weight', quantityG: it.quantityG ?? (pk ? (it.units ?? 1) * pk : undefined), packageG: pk }); } redraw(); })}">Por ${liquid ? 'ml' : 'gramos'}</button></div>
+    ${it.mode === 'weight' ? html`<div class="grid2"><div><label>Te quedan (${u})</label><input type="number" inputmode="numeric" value="${it.quantityG ?? ''}" data-change="${act((el) => { it.quantityG = num(el.value); })}"></div>
+        <div><label>Un paquete trae (${u})</label><input type="number" inputmode="numeric" value="${it.packageG ?? ''}" data-change="${act((el) => { it.packageG = num(el.value); })}"></div></div>
+        <p class="xs muted">Pasta, arroz, legumbre, leche, aceite…: se descuenta lo que gastas (80 g, 200 ml…), no el paquete entero.</p>`
+      : html`<div class="grid2"><div><label>Te quedan</label><input type="number" inputmode="numeric" value="${it.units ?? ''}" data-change="${act((el) => { it.units = num(el.value); })}"></div>
+        <div><label>Cada una es un/a…</label><input value="${it.unitLabel ?? 'unidad'}" placeholder="huevo, lata, sobre…" data-change="${act((el) => { it.unitLabel = el.value.trim().toLowerCase() || 'unidad'; })}"></div>
+        <div><label>El pack traía</label><input type="number" inputmode="numeric" value="${it.packUnits ?? ''}" placeholder="—" data-change="${act((el) => { it.packUnits = num(el.value); })}"></div>
+        <div><label>Peso de cada una (${u})</label><input type="number" inputmode="numeric" value="${it.unitGrams ?? ''}" placeholder="opcional" data-change="${act((el) => { it.unitGrams = num(el.value); })}"></div></div>
+        <p class="xs muted">Cuenta lo de dentro: pack de 24 huevos = 24 huevos; caja con 3 latas = 3 latas; caja de 10 sobres = 10 sobres.</p>`}
+    <label>Caduca (opcional)</label><input type="date" value="${it.expiresOn ?? ''}" data-change="${act((el) => { it.expiresOn = el.value || undefined; })}">`;
 }
 
 function addPantry() {
@@ -420,7 +598,7 @@ function addPantry() {
     } catch (e) { toast(`No he podido buscar los productos: ${e.message}`, 6000); }
     status = ''; draw();
   };
-  const choose = (p, prod) => { p.barcode = prod.code; p.imageUrl = prod.imageUrl; p.brandFound = prod.brand; p.prodName = prod.name; if (!p.unitGrams && !p.quantityG && (prod.unitG || prod.packageG)) p.unitGrams = prod.unitG ?? prod.packageG; if (!p.packUnits && prod.packUnits) p.packUnits = prod.packUnits; };
+  const choose = (p, prod) => { p.barcode = prod.code; p.imageUrl = prod.imageUrl; p.brandFound = prod.brand; p.prodName = prod.name; if (p.mode === 'weight' && !p.packageG && prod.packageG) { p.packageG = prod.packageG; p.quantityG ??= prod.packageG; } if (p.mode === 'units' && !p.unitGrams && prod.unitG) p.unitGrams = prod.unitG; if (p.mode === 'units' && !p.packUnits && prod.packUnits) p.packUnits = prod.packUnits; };
   const draw = () => setSheet(html`
     <p class="small muted">Díctalo o escríbelo como te salga («dos sobres de puré Hacendado, seis latas de atún de 60 g escurrido…»), escanea los códigos de barras o haz una foto.</p>
     <textarea id="ptext" rows="5" placeholder="En la despensa: 2 sobres de puré de patatas Hacendado, 6 latas de atún claro al natural de 60 g escurrido, 1 kg de arroz La Fallera…"></textarea>
@@ -434,16 +612,15 @@ function addPantry() {
     <div class="grid2"><button data-act="${act(async () => { const it = await scanToPantry(parsed); if (it) { it.matched = true; draw(); } })}">📷 Código de barras</button>
       <label class="btn" style="margin:0">🖼 Foto<input type="file" accept="image/*" id="pphoto" hidden></label></div>
     ${status ? html`<p class="small"><span class="spinner"></span> ${status}</p>` : ''}
-    ${parsed.length ? html`<h3 style="margin-top:12px">Revisa (${parsed.length})</h3>${parsed.map((p, k) => html`<div class="card tight">
+    ${parsed.length ? html`<h3 style="margin-top:12px">Revisa (${parsed.length})</h3>${parsed.map((p, k) => { if (!p.mode) Object.assign(p, normalizePantry({ name: p.name, units: p.units, packUnits: p.packUnits, unitGrams: p.unitGrams, quantityG: p.quantityG, packageG: p.packageG, unitLabel: p.unitLabel })); return html`<div class="card tight">
         <div class="prod">${prodImg(p.imageUrl, p.name)}<div class="grow"><input value="${p.name}" data-change="${act((el) => { parsed[k].name = el.value; parsed[k].matched = false; })}">
-          <div class="xs muted">${p.prodName ? `${p.prodName}${p.brandFound ? ` · ${p.brandFound}` : ''}` : p.matched ? 'No lo encuentro en Open Food Facts: usaré datos genéricos' : p.brand ?? ''}</div></div></div>
+          <div class="xs muted">${p.prodName ? `${p.prodName}${p.brandFound ? ` · ${p.brandFound}` : ''}` : p.matched ? 'No lo encuentro en Open Food Facts: usaré datos genéricos' : p.brand ?? ''}</div></div>
+          <button class="sm ghost danger" data-act="${act(() => { parsed.splice(k, 1); draw(); })}">✕</button></div>
         ${p.alts?.length > 1 ? html`<div class="row" style="gap:6px;overflow-x:auto;margin-top:6px">${p.alts.map((a) => html`<button class="sm ${a.code === p.barcode ? 'primary' : 'ghost'}" style="padding:2px" title="${a.name}" data-act="${act(() => { choose(p, a); draw(); })}">${a.imageUrl ? html`<img src="${a.imageUrl}" style="width:40px;height:40px;object-fit:contain;background:#fff;border-radius:8px">` : a.name.slice(0, 14)}</button>`)}<button class="sm ghost" data-act="${act(() => { p.barcode = p.imageUrl = p.prodName = p.brandFound = undefined; draw(); })}">Ninguno</button></div>` : ''}
-        <div class="row" style="margin-top:6px;gap:6px"><select style="width:auto" data-change="${act((el) => { parsed[k].location = el.value; })}">${['congelador', 'nevera', 'despensa'].map((l) => html`<option ${p.location === l ? 'selected' : ''}>${l}</option>`)}</select>
-          <input class="num" type="number" placeholder="ud" value="${p.units ?? ''}" data-change="${act((el) => { parsed[k].units = el.value ? +el.value : undefined; })}"><span class="xs muted">ud ×</span>
-          <input class="num" type="number" placeholder="g" value="${p.unitGrams ?? p.quantityG ?? ''}" data-change="${act((el) => { if (parsed[k].units) parsed[k].unitGrams = el.value ? +el.value : undefined; else parsed[k].quantityG = el.value ? +el.value : undefined; })}"><span class="xs muted">g</span>
-          <button class="sm ghost danger" data-act="${act(() => { parsed.splice(k, 1); draw(); })}">✕</button></div></div>`)}
+        <div class="row small" style="margin-top:8px" data-act="${act(() => { p.open = !p.open; draw(); })}"><span class="grow"><b>${p.mode === 'weight' ? fmtQ(p.quantityG ?? 0, isLiquid(p.name)) : `${p.units ?? 1} ${unitWord(p.unitLabel ?? 'unidad', p.units ?? 1)}`}</b> · ${p.location}</span><span class="muted">${p.open ? 'Cerrar' : 'Cambiar'} ›</span></div>
+        ${p.open ? pantryForm(p, draw) : ''}</div>`; })}
       <button class="primary block" data-act="${act((b) => busy(b, async () => {
-        const items = parsed.map((p) => ({ name: p.prodName && p.barcode ? p.name : p.name, brand: p.brandFound ?? p.brand, barcode: p.barcode, imageUrl: p.imageUrl, location: p.location, units: p.units, packUnits: p.packUnits, unitGrams: p.unitGrams, quantityG: p.quantityG, queryEn: p.queryEn, expiresOn: p.expiresOn }));
+        const items = parsed.map((p) => ({ name: p.name, brand: p.brandFound ?? p.brand, barcode: p.barcode, imageUrl: p.imageUrl, location: p.location, mode: p.mode, units: p.units, packUnits: p.packUnits, unitGrams: p.unitGrams, unitLabel: p.unitLabel, quantityG: p.quantityG, packageG: p.packageG, queryEn: p.queryEn, expiresOn: p.expiresOn }));
         const r = await api.fn('pantry', { action: 'save', items }); closeSheet(); invalidate('pantry', 'shopping'); render();
         toast(r.unresolved.length ? `Guardado. Sin datos nutricionales: ${r.unresolved.join(', ')}` : `${r.saved} artículos guardados`, 6000);
       }))}">Guardar ${parsed.length} artículos</button>` : ''}`);
@@ -457,15 +634,18 @@ function addPantry() {
 }
 
 function editPantry(i) {
-  sheet(i.name, html`${i.image_url ? html`<div class="center"><img src="${i.image_url}" style="max-height:140px;border-radius:12px;background:#fff"></div>` : ''}
-    <form data-submit="${act((v, f) => busy(f.querySelector('button'), async () => {
-      await api.db.update('pantry_items', { quantity_g: v.g ? +v.g : null, units: v.u ? +v.u : null, pack_units: v.pk ? +v.pk : null, unit_grams: v.ug ? +v.ug : null, location: v.location, expires_on: v.exp || null }, { id: `eq.${i.id}` }); closeSheet(); invalidate('pantry', 'shopping'); render();
-    }))}">
-    <label>Lugar</label><div class="seg">${LOCS.map(([l, lb]) => html`<button type="button" class="${i.location === l ? 'on' : ''}" data-act="${act((b) => busy(b, async () => { await api.db.update('pantry_items', { location: l }, { id: `eq.${i.id}` }); i.location = l; invalidate('pantry', 'shopping'); render(); editPantry(i); }))}">${lb}</button>`)}</div><input type="hidden" name="location" value="${i.location}">
-    <div class="grid3"><div><label>Unidades que quedan</label><input name="u" type="number" value="${i.units ?? ''}"></div><div><label>Trae el pack</label><input name="pk" type="number" value="${i.pack_units ?? ''}"></div><div><label>g/unidad</label><input name="ug" type="number" value="${i.unit_grams ?? ''}"></div></div>
-    <label>g totales (si no va por unidades)</label><input name="g" type="number" value="${i.quantity_g ?? ''}">
-    <label>Caduca</label><input name="exp" type="date" value="${i.expires_on ?? ''}"><button class="primary block">Guardar</button></form>
+  const it = { name: i.name, location: i.location, mode: i.mode ?? 'units', units: i.units != null ? +i.units : undefined, packUnits: i.pack_units ?? undefined, unitGrams: i.unit_grams != null ? +i.unit_grams : undefined, unitLabel: i.unit_label ?? undefined,
+    quantityG: i.quantity_g != null ? +i.quantity_g : undefined, packageG: i.package_g != null ? +i.package_g : undefined, expiresOn: i.expires_on ?? undefined };
+  const draw = () => setSheet(html`${i.image_url ? html`<div class="center" style="padding:4px 0"><img src="${i.image_url}" style="max-height:120px;border-radius:14px;background:#fff"></div>` : ''}
+    <label>Nombre</label><input value="${it.name}" data-change="${act((el) => { it.name = el.value; })}">
+    ${pantryForm(it, draw)}
+    <button class="primary block" data-act="${act((b) => busy(b, async () => {
+      await api.db.update('pantry_items', { name: it.name, location: it.location, mode: it.mode, units: it.mode === 'units' ? it.units ?? 0 : null, pack_units: it.mode === 'units' ? it.packUnits ?? null : null, unit_grams: it.unitGrams ?? null, unit_label: it.mode === 'units' ? it.unitLabel ?? null : null,
+        quantity_g: it.mode === 'weight' ? it.quantityG ?? 0 : null, package_g: it.packageG ?? null, expires_on: it.expiresOn ?? null, updated_at: new Date().toISOString() }, { id: `eq.${i.id}` });
+      closeSheet(); invalidate('pantry', 'shopping'); render();
+    }))}">Guardar</button>
     <button class="block danger" data-act="${act((b) => busy(b, async () => { await api.db.remove('pantry_items', { id: `eq.${i.id}` }); closeSheet(); invalidate('pantry', 'shopping'); render(); }))}">Eliminar (se ha acabado)</button>`);
+  sheet(i.name, ''); draw();
 }
 
 // ---------------- SUPLEMENTOS ----------------

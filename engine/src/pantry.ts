@@ -174,3 +174,71 @@ export function buildBatchPlan(cookDate: string, meals: PlannedMeal[], recipes: 
   }
   return { cookDate, totalMinutes, tasks, containers, totals, warnings };
 }
+
+// ---------------- Cómo se gasta cada producto ----------------
+// «Pack de 24 huevos» → se cuentan huevos (24 → 23…). «Caja con 3 latas de atún» → se cuentan latas.
+// «Paquete de 500 g de pasta» → se gasta por gramos (500 → 420 g…). «2 bolsas de arroz de 1 kg» → 2.000 g, paquete de 1.000 g.
+// «Caja de 10 sobres» → se cuentan sobres (el contenido, no la caja).
+
+export type PantryMode = 'units' | 'weight';
+export interface PantryNorm { mode: PantryMode; units?: number; packUnits?: number; unitGrams?: number; quantityG?: number; packageG?: number; unitLabel?: string; liquid: boolean }
+
+const n0 = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+/** Cosas que se cuentan por unidades (aunque vengan en caja o pack). Clave: palabra → etiqueta de la unidad. */
+const COUNT: [RegExp, string][] = [
+  [/huevo/, 'huevo'], [/\blatas?\b|atun|sardina|mejillon|berberecho|caballa en|bonito en|maiz dulce|esparragos/, 'lata'], [/yogur|skyr|kefir|petit|natillas?|flan|cuajada|actimel|danone/, 'yogur'],
+  [/sobres?|bolsitas?|infusion|te verde|capsulas?|monodosis/, 'sobre'], [/\bbriks?\b|\bbrick/, 'brik'], [/botell[ai]n?/, 'botella'], [/\bbotes?\b|tarros?|frascos?/, 'bote'],
+  [/barritas?/, 'barrita'], [/tortitas?/, 'tortita'], [/wraps?|tortillas? de (trigo|avena|maiz)|fajitas?/, 'wrap'], [/pan de hamburguesa|panecillos?|bollos?|croissants?|magdalenas?|muffins?/, 'unidad'],
+  [/hamburguesas?|salchichas?|filetes?|pechugas? enteras?|lomos? de (salmon|merluza|bacalao)|pizza/, 'unidad'],
+  [/\b(platanos?|manzanas?|naranjas?|kiwis?|aguacates?|limon(es)?|peras?|melocoton(es)?|mandarinas?|pimientos?|cebollas?|calabacin(es)?|berenjenas?|pepinos?|tomates?|patatas?|boniatos?|zanahorias?)\b/, 'unidad'],
+];
+/** Productos a granel que se gastan por peso aunque vengan en paquete. */
+const BULK = /arroz|pasta|macarron|espagueti|fideo|tallarin|lentejas? (secas|pardina)|garbanzos? secos|alubias? secas|quinoa|cuscus|harina|avena|copos|cereales|muesli|granola|azucar|sal\b|frutos secos|nueces|almendras|cacahuetes|anacardos|pipas|chocolate|cacao|cafe molido|pan rallado|queso rallado|jamon|pavo|fiambre|lonchas|queso|carne picada|pollo|ternera|cerdo|salmon|merluza|gambas|espinacas|lechuga|canonigos|rucula|brotes|verdura congelada|guisantes|judias|brocoli|coliflor|champinones|fresas|arandanos|uvas|leche|bebida de|aceite|vinagre|caldo|nata|tomate frito|tomate triturado|salsa|miel|mermelada|crema de cacahuete|mantequilla|proteina|whey|creatina/;
+const LIQUID = /leche|bebida de|aceite|vinagre|caldo|nata|zumo|agua|salsa de soja|kefir liquido/;
+
+export function unitLabelOf(name: string): string | undefined { const s = n0(name); return COUNT.find(([re]) => re.test(s))?.[1]; }
+export const isLiquid = (name: string) => LIQUID.test(n0(name));
+
+/**
+ * Decide cómo se lleva un producto y normaliza sus cantidades.
+ * Entrada: lo que se sepa (unidades, pack, g por unidad, g totales, g del paquete).
+ */
+export function normalizePantry(a: { name: string; units?: number | null; packUnits?: number | null; unitGrams?: number | null; quantityG?: number | null; packageG?: number | null; unitLabel?: string | null; mode?: PantryMode | null }): PantryNorm {
+  const s = n0(a.name);
+  const liquid = LIQUID.test(s);
+  const label = a.unitLabel ?? unitLabelOf(a.name);
+  const units = a.units ?? undefined, pack = a.packUnits ?? undefined;
+  // Elegido a mano: se respeta.
+  let mode: PantryMode | undefined = a.mode ?? undefined;
+  if (!mode) {
+    const bulk = BULK.test(s) && !/\blatas?\b|sobres?|botes?|tarros?|briks?|yogur/.test(s);
+    if ((pack && pack > 1) || (units && units > 1 && !bulk)) mode = 'units';
+    else if (label && !bulk) mode = 'units';
+    else if (a.quantityG != null || a.unitGrams != null || a.packageG != null || bulk) mode = 'weight';
+    else mode = 'units';
+  }
+  if (mode === 'weight') {
+    const pkg = a.packageG ?? (a.unitGrams && (!units || units <= 20) ? a.unitGrams : undefined);
+    const q = a.quantityG ?? (units != null && pkg ? units * pkg : pkg);
+    return { mode, quantityG: q != null ? Math.round(q) : undefined, packageG: pkg ? Math.round(pkg) : undefined, liquid };
+  }
+  return { mode, units: units ?? (pack ?? 1), packUnits: pack ?? (units && units > 1 ? units : undefined), unitGrams: a.unitGrams ?? undefined, unitLabel: label ?? 'unidad', liquid };
+}
+
+/** Plural sencillo para la etiqueta de unidad («3 latas», «1 huevo»). */
+export const unitWord = (label = 'unidad', n = 2) => (n === 1 ? label : label.endsWith('n') ? `${label}es` : /[aeiou]$/.test(label) ? `${label}s` : `${label}es`);
+
+/** Cantidades rápidas para «usar» según el producto (g o ml). */
+export function usePresets(name: string): number[] {
+  const s = n0(name);
+  if (/arroz|pasta|macarron|espagueti|fideo|quinoa|cuscus/.test(s)) return [60, 80, 100, 150];
+  if (/lenteja|garbanzo|alubia/.test(s)) return [60, 80, 100];
+  if (/avena|copos|cereales|muesli|granola/.test(s)) return [30, 40, 60, 80];
+  if (/aceite/.test(s)) return [5, 10, 15, 20];
+  if (/leche|bebida de|zumo|caldo/.test(s)) return [100, 200, 250, 500];
+  if (/frutos secos|nueces|almendras|cacahuetes|anacardos|chocolate/.test(s)) return [15, 25, 30, 50];
+  if (/queso|jamon|pavo|fiambre/.test(s)) return [20, 30, 50, 75];
+  if (/pollo|ternera|cerdo|salmon|merluza|carne|pescado/.test(s)) return [120, 150, 200, 250];
+  if (/espinaca|lechuga|canonigos|rucula|brotes/.test(s)) return [30, 50, 75, 100];
+  return [50, 100, 150, 200];
+}

@@ -198,3 +198,22 @@ details summary { cursor: pointer; padding: 6px 0; }
 html.offline #top::after { content: 'Sin conexión'; position: absolute; right: 60px; top: calc(var(--safe-top) + 22px); font-size: 12px; color: var(--amber); }
 .goalc { background: radial-gradient(120% 120% at 100% 0%, rgba(56,189,248,.18), transparent 55%), linear-gradient(180deg, var(--card), #0c152b); }
 .goalc.hy { background: radial-gradient(120% 120% at 100% 0%, rgba(167,139,250,.22), transparent 55%), linear-gradient(180deg, var(--card), #0c152b); }
+/* Despensa */
+.psearch input { border-radius: 16px; padding-left: 14px; }
+.pq { font: 650 15px var(--num); margin: 2px 0 5px; } .pq b { font-size: 17px; }
+.stepper { display: flex; border: 1px solid var(--line2); border-radius: 14px; overflow: hidden; flex: none; }
+.stepper button { border: 0; border-radius: 0; background: var(--card2); padding: 9px 14px; font-size: 19px; line-height: 1; box-shadow: none; }
+.stepper button + button { border-left: 1px solid var(--line2); }
+.grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.pitem .bar { height: 6px; }
+/* Diario de comidas */
+.daynav { margin: 2px 0 4px; } .daynav .icon-btn { font-size: 26px; width: 44px; height: 44px; color: var(--accent2); }
+.eq { display: grid; gap: 4px; font-size: 13.5px; } .eq > div { display: flex; justify-content: space-between; } .eq b { font: 750 15px var(--num); }
+.eq .tot { border-top: 1px solid rgba(160,190,255,.2); padding-top: 5px; font-weight: 700; } .eq .tot b { font-size: 19px; }
+.macros3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; position: relative; z-index: 1; } .macros3 .bar { height: 6px; margin-top: 4px; }
+.card.meal { padding: 12px 14px 8px; } .mhead { padding-bottom: 6px; border-bottom: 1px solid var(--line); } .mhead b { font-size: 16px; } .mk { font: 750 14px var(--num); color: var(--accent2); }
+.entry { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); cursor: pointer; } .entry:active { opacity: .6; }
+.entry .en { font-size: 15px; font-weight: 550; } .ek { font: 700 15px var(--num); min-width: 44px; text-align: right; }
+.sugg { margin: 8px 0 4px; padding: 10px 12px; border-radius: 16px; border: 1px dashed rgba(127,176,255,.4); background: rgba(77,141,255,.07); }
+.addf { width: 100%; background: transparent; border: 0; color: var(--accent2); justify-content: flex-start; padding: 10px 0 6px; box-shadow: none; }
+.qty { gap: 8px; margin: 10px 0; } .qty input { text-align: center; font: 750 22px var(--num); } .qty button { width: 52px; height: 52px; font-size: 24px; border-radius: 16px; flex: none; }
