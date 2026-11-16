@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-16 · Interfaz más viva y resumen para Instagram
+- **Compartir resumen** (en el detalle de cada entreno): PNG sin fondo de 1080 px para poner encima de tus fotos. Letras blancas o negras, diseño vertical o en línea, recorrido opcional (carreras), título y fecha opcionales. Vista previa sobre transparente, foto oscura y foto clara. Compartir (Instagram, Fotos…), copiar o descargar.
+- Cifras por disciplina: carrera (distancia, ritmo, tiempo), bici (velocidad), natación (ritmo /100 m), CrossFit/HYROX (resultado del WOD, tiempo, FC media o kcal).
+- Hojas tipo iOS: entran con la curva del cajón y se cierran arrastrando hacia abajo (por distancia o velocidad), siguiendo el dedo 1:1.
+- Avisos que suben desde abajo y se descartan deslizando.
+- Barra de pestañas con píldora que se desliza; transiciones entre pantallas hacia el lado de la pestaña; botones que responden al tocar; cifras de Inicio que cuentan al entrar (una vez).
+- Tipografía propia (Barlow / Barlow Condensed), números tabulares, iconos SVG en lugar de emojis, etiquetas sin mayúsculas forzadas. Respeta «Reducir movimiento».
+
 ## 2026-11-11 (noche) · Sincronización del Watch más rápida
 - Intervals.icu se comprueba cada 2 minutos (antes 10) y lo nuevo se procesa en el servidor: al abrir Forja ya está todo. Migración `0019_sync_rapida`.
 - Con la app abierta, se vuelve a mirar cada 2 minutos; al volver a la app, como mucho cada 45 s.

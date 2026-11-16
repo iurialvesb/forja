@@ -1,14 +1,15 @@
 // Perfil, ajustes, integraciones gratuitas (Atajo de Apple Salud, calendario ICS de WodBuster/Google) y onboarding.
 import * as api from './api.js';
 import { get, invalidate, render, go } from './app.js';
-import { html, act, toast, sheet, setSheet, closeSheet, busy, today, addDays, GOAL_MODES } from './ui.js';
+import { raw, html, act, toast, sheet, setSheet, closeSheet, busy, today, addDays, GOAL_MODES } from './ui.js';
+import { ic } from './icons.js';
 
 const uid = () => api.userId();
 const DAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 const GOAL_TYPES = [['half_marathon', 'Media maratón'], ['marathon', 'Maratón'], ['10k', '10K'], ['5k', '5K'], ['hyrox', 'HYROX'], ['crossfit_comp', 'Competición CrossFit'], ['strength', 'Fuerza'], ['general', 'General']];
 
 export async function PROFILE() {
-  const item = (icon, label, fn, sub = '') => html`<div class="item" data-act="${act(fn)}"><div class="ico">${icon}</div><div class="grow"><div>${label}</div>${sub ? html`<div class="xs muted">${sub}</div>` : ''}</div><span class="muted">›</span></div>`;
+  const item = (icon, label, fn, sub = '') => html`<div class="item" data-act="${act(fn)}"><div class="ico">${raw(ic(icon, 19))}</div><div class="grow"><div>${label}</div>${sub ? html`<div class="xs muted">${sub}</div>` : ''}</div><span class="muted">›</span></div>`;
   const tokenRow = await get('ingest_token', async () => (await api.db.select('ingest_tokens', { user_id: `eq.${uid()}` }))[0], 300_000).catch(() => null);
   const icuConn = await get('icuconn', async () => (await api.db.select('intervals_connections', { select: 'athlete_id,last_pull_at,last_error' }))[0], 120_000).catch(() => null);
   const cal = await get('calset', async () => (await api.db.select('calendar_settings', { user_id: `eq.${uid()}` }))[0], 300_000).catch(() => null);
@@ -18,15 +19,15 @@ export async function PROFILE() {
     body: html`
       <p class="muted small">${api.user()?.email ?? ''}</p>
       <h2>Perfil deportivo</h2><div class="card tight list">
-        ${item('🧍', 'Datos personales y físicos', personal)}${item('❤️', 'Frecuencia cardíaca', physiology)}${item('📆', 'Disponibilidad semanal', availability)}
-        ${item('⚙️', 'Preferencias de entrenamiento', preferences)}${item('🩹', 'Lesiones y molestias', injuries)}</div>
-      <h2>Planificación</h2><div class="card tight list">${item('🏁', 'Objetivos y competiciones', goals)}</div>
+        ${item('user', 'Datos personales y físicos', personal)}${item('heart', 'Frecuencia cardíaca', physiology)}${item('calendar', 'Disponibilidad semanal', availability)}
+        ${item('sliders', 'Preferencias de entrenamiento', preferences)}${item('bandage', 'Lesiones y molestias', injuries)}</div>
+      <h2>Planificación</h2><div class="card tight list">${item('flag', 'Objetivos y competiciones', goals)}</div>
       <h2>Conexiones</h2><div class="card tight list">
-        ${item('⌚', 'Apple Watch automático (HealthFit + Intervals.icu)', watchSync, icuConn ? (icuConn.last_error ? `⚠️ ${icuConn.last_error}` : `Conectado${icuConn.last_pull_at ? ` · última recogida ${new Date(icuConn.last_pull_at).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}` : ''}`) : 'Sin conectar')}
-        ${item('📲', 'Apple Salud (Atajo)', health, tokenRow?.last_used_at ? `Último envío: ${new Date(tokenRow.last_used_at).toLocaleString('es-ES')}` : 'Sin configurar')}
-        ${item('🗓️', 'Calendario y WodBuster', calendar, cal?.ics_urls?.length ? `${cal.ics_urls.length} calendario(s)` : 'Sin configurar')}
-        ${item('🔔', 'Notificaciones', notifications)}</div>
-      <h2>Privacidad y datos</h2><div class="card tight list">${item('🔒', 'Privacidad e IA', privacy)}${item('📦', 'Exportar mis datos', exportData)}</div>
+        ${item('watch', 'Apple Watch automático (HealthFit + Intervals.icu)', watchSync, icuConn ? (icuConn.last_error ? icuConn.last_error : `Conectado${icuConn.last_pull_at ? ` · última recogida ${new Date(icuConn.last_pull_at).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}` : ''}`) : 'Sin conectar')}
+        ${item('phone', 'Apple Salud (Atajo)', health, tokenRow?.last_used_at ? `Último envío: ${new Date(tokenRow.last_used_at).toLocaleString('es-ES')}` : 'Sin configurar')}
+        ${item('calendar', 'Calendario y WodBuster', calendar, cal?.ics_urls?.length ? `${cal.ics_urls.length} calendario(s)` : 'Sin configurar')}
+        ${item('bell', 'Notificaciones', notifications)}</div>
+      <h2>Privacidad y datos</h2><div class="card tight list">${item('lock', 'Privacidad e IA', privacy)}${item('box', 'Exportar mis datos', exportData)}</div>
       <button class="block danger" data-act="${act(async () => { await api.signOut(); invalidate(); location.hash = ''; render(); })}">Cerrar sesión</button>
       <p class="xs muted" style="text-align:center">Para instalarla: en Safari, botón Compartir → «Añadir a pantalla de inicio».</p>`,
   };

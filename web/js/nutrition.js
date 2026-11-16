@@ -3,7 +3,8 @@ import * as api from './api.js';
 import { get, invalidate, render } from './app.js';
 import { parseFoodText, matchFood, foodTokens } from './engine/foodText.js';
 import { normalizePantry, unitWord, isLiquid, usePresets } from './engine/pantry.js';
-import { html, act, toast, sheet, setSheet, closeSheet, busy, today, addDays, monday, dayName, shortDate, n0, bar, ring, resizeImage, SLOTS, slotName, GOAL_MODES } from './ui.js';
+import { raw, html, act, toast, sheet, setSheet, closeSheet, busy, today, addDays, monday, dayName, shortDate, n0, bar, ring, resizeImage, SLOTS, slotName, GOAL_MODES } from './ui.js';
+import { ic } from './icons.js';
 
 const uid = () => api.userId();
 let tab = 'hoy', menuWeek = 0, shopWeek = 7, batchWeek = 7;
@@ -15,7 +16,7 @@ export async function NUTRITION(params = []) {
   if (params[0] && TABS.some(([k]) => k === params[0])) { tab = params[0]; history.replaceState(null, '', '#/nutricion'); }
   const chips = html`<div class="chips">${TABS.map(([k, l]) => html`<button class="chip ${tab === k ? 'on' : ''}" data-act="${act(() => { tab = k; render(); })}">${l}</button>`)}</div>`;
   const body = await ({ hoy, menu, compra, batch, despensa, suplementos })[tab]();
-  return { title: 'Nutrición', right: html`<button class="icon-btn" data-act="${act(settings)}">🎯</button>`, body: html`${chips}${body}` };
+  return { title: 'Nutrición', right: html`<button class="icon-btn" aria-label="Objetivos de nutrición" data-act="${act(settings)}">${raw(ic('target', 19))}</button>`, body: html`${chips}${body}` };
 }
 
 // ---------------- DIARIO (estilo MyFitnessPal) ----------------
@@ -53,7 +54,7 @@ async function hoy() {
         <div class="grow eq"><div><span class="muted">Objetivo</span><b>${n0(T.kcal)}</b></div><div><span class="muted">− Comido</span><b>${n0(S.kcal)}</b></div><div class="tot"><span>= Restante</span><b style="color:${left < 0 ? 'var(--amber)' : '#fff'}">${n0(left)}</b></div></div></div>
       <div class="macros3">${mb('Proteína', S.protein, T.protein, '#7fb0ff')}${mb('Hidratos', S.carbs, T.carbs, '#fbbf24')}${mb('Grasa', S.fat, T.fat, '#f472b6')}</div>
     </div>
-    ${advice && date >= today() ? html`<div class="card tight small" style="border-color:rgba(127,176,255,.35)">💡 ${advice}</div>` : ''}
+    ${advice && date >= today() ? html`<div class="card tight small" style="border-color:rgba(127,176,255,.35)">${raw(ic('bulb', 17))} ${advice}</div>` : ''}
     ${slots.map((slot) => mealSection(slot, date, logs.filter((l) => (l.slot ?? OTHER) === slot), d.meals.find((m) => m.slot === slot), isOpt(slot)))}
     <button class="block" data-act="${act(() => addFood(OTHER, date))}">＋ Algo más (picoteo, bebida…)</button>
     <details><summary>Por qué estos objetivos</summary>${d.target.explanation.map((e) => html`<p class="small muted">${e}</p>`)}</details>`;
@@ -137,7 +138,7 @@ async function addFood(slot, date) {
     el.innerHTML = html`${!q.trim() && rs.length ? html`<div class="xs muted" style="margin:8px 2px">RECIENTES</div>` : ''}
       ${rs.map(({ f, grams: g }) => html`<div class="entry" data-act="${act(() => { pick = f; useUnits = !!f.unitGrams && (!g || Math.abs(g / f.unitGrams - Math.round(g / f.unitGrams)) < 0.05); grams = g ?? f.unitGrams ?? 100; draw(); })}"><div class="grow"><div class="en">${f.name}</div><div class="xs muted">${f.brand ? `${f.brand} · ` : ''}${n0(f.per100.kcal)} kcal/100 g${g ? ` · ${Math.round(g)} g la última vez` : ''}</div></div><span class="muted">›</span></div>`)}
       ${q.trim() && !rs.length ? html`<p class="small muted" style="padding:8px 2px">No lo tengo guardado.</p>` : ''}
-      ${q.trim() ? html`<button class="block" data-act="${act(() => searchWeb())}">${searching ? html`<span class="spinner"></span> Buscando…` : `🔎 Buscar «${q.trim()}» en Open Food Facts / USDA`}</button>` : ''}
+      ${q.trim() ? html`<button class="block" data-act="${act(() => searchWeb())}">${searching ? html`<span class="spinner"></span> Buscando…` : html`${raw(ic('search', 17))} Buscar «${q.trim()}» en Open Food Facts / USDA`}</button>` : ''}
       ${web ? web.map((it) => html`<div class="entry" data-act="${act(() => { pick = { id: it.foodId, name: it.name, per100: { kcal: it.macros.kcal * 100 / it.grams, protein: it.macros.protein * 100 / it.grams, carbs: it.macros.carbs * 100 / it.grams, fat: it.macros.fat * 100 / it.grams } }; grams = it.grams; useUnits = false; draw(); })}"><div class="grow"><div class="en">${it.name}</div><div class="xs muted">${Math.round(it.grams)} g · ${n0(it.macros.kcal)} kcal</div></div><span class="muted">›</span></div>`) : ''}`.s;
   };
   const searchWeb = async () => {
@@ -149,7 +150,7 @@ async function addFood(slot, date) {
   const draw = () => {
     if (!pick) {
       setSheet(html`<input id="fq" type="search" placeholder="Buscar alimento (huevo, arroz, yogur…)" value="${q}" autocomplete="off">
-        <div class="grid3" style="margin-top:8px"><button class="sm" data-act="${act(() => logFood(slot === OTHER ? undefined : slot, { date }))}">✍️ Escribir</button><button class="sm" data-act="${act(() => logFood(slot === OTHER ? undefined : slot, { date, scan: true }))}">▦ Código</button><button class="sm" data-act="${act(() => copyYesterday(slot, date))}">⟲ Como ayer</button></div>
+        <div class="grid3" style="margin-top:8px"><button class="sm" data-act="${act(() => logFood(slot === OTHER ? undefined : slot, { date }))}">${raw(ic('pen', 17))} Escribir</button><button class="sm" data-act="${act(() => logFood(slot === OTHER ? undefined : slot, { date, scan: true }))}">▦ Código</button><button class="sm" data-act="${act(() => copyYesterday(slot, date))}">⟲ Como ayer</button></div>
         <div id="fres"></div>`);
       const inp = document.getElementById('fq');
       inp.oninput = () => { q = inp.value; web = null; list(); };
@@ -198,11 +199,11 @@ const mealAction = (m, action, extra = {}) => async (b) => busy(b, async () => {
 function mealCard(m) {
   const st = m.status;
   return html`<div class="card tight">
-    <div class="row"><b style="color:var(--accent)" class="small grow">${slotName(m.slot)} ${m.locked ? '🔒' : ''}</b><span class="xs muted">${n0(m.macros.kcal)} kcal · P${n0(m.macros.protein)} C${n0(m.macros.carbs)} G${n0(m.macros.fat)}</span></div>
+    <div class="row"><b style="color:var(--accent)" class="small grow">${slotName(m.slot)} ${m.locked ? raw(ic('lock', 17)) : ''}</b><span class="xs muted">${n0(m.macros.kcal)} kcal · P${n0(m.macros.protein)} C${n0(m.macros.carbs)} G${n0(m.macros.fat)}</span></div>
     <div style="font-weight:600;${st === 'skipped' ? 'text-decoration:line-through;opacity:.6' : ''}">${m.title}</div>
     <div class="small muted">${m.ingredients.map((i) => `${i.name} ${Math.round(i.grams)} g`).join(' · ')}</div>
     <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap">
-      ${st === 'eaten' ? html`<span class="ok small">✅ Cumplido</span><button class="sm ghost" data-act="${act(mealAction(m, 'reset'))}">Deshacer</button>`
+      ${st === 'eaten' ? html`<span class="ok small">${raw(ic('check', 17))} Cumplido</span><button class="sm ghost" data-act="${act(mealAction(m, 'reset'))}">Deshacer</button>`
         : st === 'skipped' ? html`<span class="bad small">✕ No comido</span><button class="sm ghost" data-act="${act(mealAction(m, 'reset'))}">Deshacer</button>`
         : html`<button class="sm" style="color:var(--green)" data-act="${act(mealAction(m, 'eaten'))}">✓ Cumplido</button>
           <button class="sm" data-act="${act(() => partial(m))}">◐ A medias</button>
@@ -220,14 +221,14 @@ async function editMeal(m) {
   const recipes = await get('recipes', () => api.db.select('recipes', { select: 'id,name,tags', order: 'created_at.desc', limit: 40 }));
   const ing = m.ingredients.map((i) => ({ ...i }));
   sheet(`${slotName(m.slot)} · ${dayName(m.date)}`, html`
-    <button class="block primary" data-act="${act(() => logFood(m.slot, { plannedMealId: m.id, date: m.date, replace: true }))}">🔁 He comido otra cosa en su lugar</button>
+    <button class="block primary" data-act="${act(() => logFood(m.slot, { plannedMealId: m.id, date: m.date, replace: true }))}">${raw(ic('repeat', 17))} He comido otra cosa en su lugar</button>
     <p class="xs muted">P. ej. «una coca de tomate de la panadería y un café con leche»: lo calculo y reajusto el resto del día.</p>
     <h3>Cantidades</h3>
     ${ing.map((i, k) => html`<div class="row"><span class="grow small">${i.name}</span><input style="width:90px" type="number" inputmode="numeric" value="${Math.round(i.grams)}" data-change="${act((el) => { ing[k].grams = +el.value; })}"> g
       <button class="sm ghost danger" data-act="${act((b) => { ing.splice(k, 1); b.closest('.row').remove(); })}">✕</button></div>`)}
     <p class="xs muted">Al guardar ajusto las comidas que te quedan para cuadrar macros y calorías.</p>
     <button class="primary block" data-act="${act(async (b) => { await mealAction(m, 'edit', { ingredients: ing })(b); closeSheet(); })}">Guardar y reajustar el día</button>
-    <button class="block" data-act="${act(async (b) => { await mealAction(m, m.locked ? 'unlock' : 'lock')(b); closeSheet(); })}">${m.locked ? 'Desbloquear' : '🔒 Fijar esta comida tal cual'}</button>
+    <button class="block" data-act="${act(async (b) => { await mealAction(m, m.locked ? 'unlock' : 'lock')(b); closeSheet(); })}">${m.locked ? 'Desbloquear' : html`${raw(ic('lock', 17))} Fijar esta comida tal cual`}</button>
     ${m.status !== 'planned' ? html`<button class="block" data-act="${act(async (b) => { await mealAction(m, 'reset')(b); closeSheet(); })}">Volver a la propuesta original</button>` : ''}
     <h3 style="margin-top:14px">Cambiar por otro plato</h3>
     ${recipes.map((r) => html`<button class="block" data-act="${act(async (b) => { await mealAction(m, 'swap', { recipeId: r.id })(b); closeSheet(); })}">${r.name}</button>`)}
@@ -287,8 +288,8 @@ export function logFood(slot, opts = {}) {
   const drawStatic = () => setSheet(html`
     <label>Comida</label><select id="lslot" data-change="${act((el) => { sel = el.value; slotTouched = true; })}">${SLOTS.map((s) => html`<option value="${s}" ${s === sel ? 'selected' : ''}>${slotName(s)}</option>`)}</select>
     <label>${opts.replace ? '¿Qué has comido en su lugar?' : '¿Qué has comido?'}</label><textarea id="ltext" placeholder="${opts.replace ? 'Ej.: una coca de tomate de la panadería y un café con leche' : 'Ej.: wrap de avena Hacendado, canónigos, un huevo revuelto y medio aguacate'}">${lastText}</textarea>
-    <div class="grid2"><label class="btn" style="margin:0">📷 Foto del plato<input type="file" accept="image/*" id="lphoto" hidden></label>
-      <button data-act="${act(async () => { const { scanBarcode } = await import('./scanner.js'); const c = await scanBarcode(); if (c) busy(null, async () => { const r = await api.fn('nutrition-log', { action: 'parse', barcode: c.trim() }); extra.push(...r.items); questions = r.questions || []; draw(); }); })}">📷 Código de barras</button></div>
+    <div class="grid2"><label class="btn" style="margin:0">${raw(ic('camera', 17))} Foto del plato<input type="file" accept="image/*" id="lphoto" hidden></label>
+      <button data-act="${act(async () => { const { scanBarcode } = await import('./scanner.js'); const c = await scanBarcode(); if (c) busy(null, async () => { const r = await api.fn('nutrition-log', { action: 'parse', barcode: c.trim() }); extra.push(...r.items); questions = r.questions || []; draw(); }); })}">${raw(ic('barcode', 17))} Código de barras</button></div>
     <div id="lres"></div>
     <p class="xs muted">Se interpreta al instante en el móvil. Lo que no conozco lo busco en USDA y Open Food Facts (la IA solo traduce qué y cuánto).</p>`);
   const draw = () => {
@@ -297,7 +298,7 @@ export function logFood(slot, opts = {}) {
     const all = [...items, ...extra];
     el.innerHTML = html`
     ${pending.length ? html`<p class="small muted"><span class="spinner"></span> Buscando: ${pending.join(' · ')}</p>` : ''}
-    ${questions.map((qq) => html`<p class="alert small">❓ ${qq}</p>`)}
+    ${questions.map((qq) => html`<p class="alert small">${raw(ic('alert', 17))} ${qq}</p>`)}
     ${all.length ? html`<h3 style="margin-top:12px">Alimentos <small class="muted">${n0(total().kcal)} kcal · P ${n0(total().protein)} g</small></h3>${all.map((i) => html`<div class="row"><span class="grow small">${i.name} ${i.gramsConfidence === 'estimado' ? html`<span class="tag amber">estimado</span>` : ''}</span>
         <input style="width:80px" type="number" inputmode="decimal" value="${Math.round(i.grams)}" data-change="${act((inp) => { const g = +inp.value; if (i.macros && i.grams) { const k = g / i.grams; i.macros = { kcal: i.macros.kcal * k, protein: i.macros.protein * k, carbs: i.macros.carbs * k, fat: i.macros.fat * k }; } i.grams = g; i.gramsConfidence = 'dicho'; draw(); })}"> g <button class="sm ghost danger" data-act="${act(() => { const k = items.indexOf(i); if (k >= 0) items.splice(k, 1); else extra.splice(extra.indexOf(i), 1); draw(); })}">✕</button></div>`)}
       <label class="check"><input type="checkbox" id="lded" ${opts.replace ? '' : 'checked'}> Descontar de mi despensa (si lo has preparado en casa)</label>
@@ -338,7 +339,7 @@ async function menu() {
           if (m) return html`<div class="card tight row" data-act="${act(() => editMeal(m))}"><div class="grow"><div class="xs" style="color:var(--accent)">${slotName(m.slot)}</div><div class="small" style="font-weight:600">${m.title}</div></div><span class="xs muted">${n0(m.macros.kcal)} kcal</span>${m.status !== 'planned' ? ' ✎' : ''}</div>`;
           return html`<div class="card tight row" style="border-style:dashed;opacity:.75"><div class="grow"><div class="xs" style="color:var(--accent)">${slotName(sl)}</div><div class="small muted">${fixed.includes(sl) ? 'Sin planificar' : 'Opcional'}</div></div><button class="sm ghost" data-act="${act(() => logFood(sl, { date: d.date }))}">＋</button></div>`; });
       })()}
-      ${d.alerts.map((a) => html`<div class="small alert">⚠️ ${a.message}</div>`)}`)}`;
+      ${d.alerts.map((a) => html`<div class="small alert">${raw(ic('alert', 17))} ${a.message}</div>`)}`)}`;
 }
 
 // ---------------- COMPRA ----------------
@@ -388,16 +389,16 @@ async function batch() {
         const r = await api.fn('menu-plan', { weekStart: mon }); invalidate('nutweek', 'shopping', 'recipes'); render();
         toast([`Menú creado: ${r.meals} comidas`, ...(r.unresolved?.length ? [`Sin datos nutricionales: ${r.unresolved.join(', ')}`] : []), ...(r.notes || [])].join(' · '), 9000);
       }))}">Generar menú y batch cooking</button>
-      <button class="block" data-act="${act(describeCooking)}">🍳 Ya he cocinado: te cuento qué y cuándo lo como</button></div>
+      <button class="block" data-act="${act(describeCooking)}">${raw(ic('pan', 17))} Ya he cocinado: te cuento qué y cuándo lo como</button></div>
     ${p ? html`
-      <div class="card tight row">${w.batchCooked ? html`<div class="grow"><b class="ok">✅ Batch hecho</b><div class="xs muted">Ya descontado de tu despensa. Esas comidas no se vuelven a descontar al marcarlas.</div></div><button class="sm ghost" data-act="${act((b) => busy(b, async () => { await api.fn('menu-plan', { action: 'uncooked', weekStart: mon }); invalidate('nutweek', 'pantry', 'shopping'); render(); toast('Devuelto a la despensa'); }))}">Deshacer</button>`
+      <div class="card tight row">${w.batchCooked ? html`<div class="grow"><b class="ok">${raw(ic('check', 17))} Batch hecho</b><div class="xs muted">Ya descontado de tu despensa. Esas comidas no se vuelven a descontar al marcarlas.</div></div><button class="sm ghost" data-act="${act((b) => busy(b, async () => { await api.fn('menu-plan', { action: 'uncooked', weekStart: mon }); invalidate('nutweek', 'pantry', 'shopping'); render(); toast('Devuelto a la despensa'); }))}">Deshacer</button>`
         : html`<div class="grow small">¿Ya lo has cocinado?</div><button class="sm primary" data-act="${act((b) => busy(b, async () => {
           const r = await api.fn('menu-plan', { action: 'cooked', weekStart: mon }); invalidate('nutweek', 'pantry', 'shopping'); render();
           toast([`Descontado de tu despensa: ${r.used?.length ?? 0} productos`, ...(r.missing?.length ? [`No tenías: ${r.missing.map((x) => x.name).join(', ')}`] : [])].join(' · '), 8000);
-        }))}">✅ He hecho el batch</button>`}</div>
+        }))}">${raw(ic('check', 17))} He hecho el batch</button>`}</div>
       <h2>Plan de cocina <small>≈ ${Math.round(p.totalMinutes)} min · ${dayName(p.cookDate, true)}</small></h2>
       <div class="card tight">${p.tasks.map((t) => html`<div class="row top" style="padding:6px 0"><b style="width:38px;color:var(--accent)" class="small">${Math.round(t.start)}′</b><div class="grow"><div class="small">${t.text}</div><div class="xs muted">${t.recipe}${t.equipment ? ` · ${t.equipment}` : ''} · ${t.hands === 'pasiva' ? 'puedes hacer otra cosa' : 'manos ocupadas'}</div></div></div>`)}</div>
-      ${p.warnings.map((x) => html`<p class="alert small">⚠️ ${x}</p>`)}
+      ${p.warnings.map((x) => html`<p class="alert small">${raw(ic('alert', 17))} ${x}</p>`)}
       <h2>Cantidades totales</h2>${p.totals.map((t) => html`<div class="card tight"><b class="small">${t.recipe}</b><div class="xs muted">${t.ingredients.map((i) => `${i.name} ${i.grams} g`).join(' · ')}</div></div>`)}
       <h2>Táperes <small>${p.containers.length}</small></h2>${p.containers.map((c) => html`<div class="card tight"><div class="row"><b class="small grow">${dayName(c.date)} · ${slotName(c.slot)}</b><span class="tag ${c.storage === 'congelador' ? 'blue' : 'green'}">${c.storage}</span></div><div class="small">${c.recipe}</div><div class="xs muted">${c.contents.map((i) => `${i.name} ${i.grams} g`).join(' · ')}</div>${c.note ? html`<div class="xs alert">${c.note}</div>` : ''}</div>`)}`
       : html`<div class="card muted small">Aún no hay plan de batch para esta semana.</div>`}`;
@@ -411,21 +412,21 @@ function describeCooking() {
       const t = document.getElementById('ctext').value.trim(); if (!t) return;
       try { localStorage.setItem('forja:cooked', t); } catch { /* */ }
       closeSheet();
-      toast('🍳 Organizando lo que has cocinado… Puedes seguir usando Forja: te aviso al terminar (suele tardar 20-60 s).', 6000);
+      toast('Organizando lo que has cocinado… Puedes seguir usando Forja: te aviso al terminar (suele tardar 20-60 s).', 6000);
       api.fn('menu-plan', { action: 'describe', text: t }).then((r) => {
         try { localStorage.removeItem('forja:cooked'); } catch { /* */ }
         invalidate('nutweek', 'shopping', 'pantry'); render();
-        toast([`✅ ${r.meals.length} comidas añadidas a tu menú`, ...(r.pantryUsed?.length ? [`Descontado de casa: ${[...new Set(r.pantryUsed.map((u) => u.from))].join(', ')}`] : []), ...(r.unresolved?.length ? [`Sin datos nutricionales: ${r.unresolved.join(', ')}`] : []), ...(r.questions || [])].join(' · '), 10000);
+        toast([`${r.meals.length} comidas añadidas a tu menú`, ...(r.pantryUsed?.length ? [`Descontado de casa: ${[...new Set(r.pantryUsed.map((u) => u.from))].join(', ')}`] : []), ...(r.unresolved?.length ? [`Sin datos nutricionales: ${r.unresolved.join(', ')}`] : []), ...(r.questions || [])].join(' · '), 10000);
       }).catch((e) => toast(`No he podido organizarlo: ${e.message}. Tu texto está guardado: vuelve a «Ya he cocinado» y pulsa otra vez.`, 10000));
     })}">Añadir a mi menú</button>
-    <p class="xs muted">Esas comidas quedan fijadas (🔒): si luego generas el menú, solo se completan las que falten (almuerzos, postres…).</p>`);
+    <p class="xs muted">Esas comidas quedan fijadas (${raw(ic('lock', 17))}): si luego generas el menú, solo se completan las que falten (almuerzos, postres…).</p>`);
 }
 
 // ---------------- DESPENSA ----------------
-const prodImg = (url, alt) => (url ? html`<img src="${url}" alt="${alt ?? ''}" loading="lazy">` : html`<div class="noimg">🥫</div>`);
+const prodImg = (url, alt) => (url ? html`<img src="${url}" alt="${alt ?? ''}" loading="lazy">` : html`<div class="noimg">${raw(ic('food', 17))}</div>`);
 const qtyText = (i) => [i.units ? `${i.units} ud${i.unitGrams || i.unit_grams ? ` × ${i.unitGrams ?? i.unit_grams} g` : ''}` : '', i.quantityG ?? i.quantity_g ? `${i.quantityG ?? i.quantity_g} g` : ''].filter(Boolean).join(' · ');
 
-const LOCS = [['congelador', '❄️ Congelador'], ['nevera', '🧊 Nevera'], ['despensa', '🗄 Despensa']];
+const LOCS = [['congelador', 'Congelador'], ['nevera', 'Nevera'], ['despensa', 'Despensa']];
 let ploc = 'todo';
 async function despensa() {
   let items = await get('pantry', () => api.db.select('pantry_items', { order: 'name' }));
@@ -437,9 +438,9 @@ async function despensa() {
   return html`
     <div class="psearch"><input id="pq" type="search" placeholder="Buscar en casa…" autocomplete="off" oninput="for (const r of document.querySelectorAll('.pitem')) r.style.display = r.dataset.name.includes(this.value.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')) ? '' : 'none'"></div>
     <div class="chips">${[['todo', 'Todo'], ...LOCS].map(([l, lb]) => html`<button class="chip ${ploc === l ? 'on' : ''}" data-act="${act(() => { ploc = l; render(); })}">${lb} <span class="muted">${l === 'todo' ? items.length : items.filter((i) => i.location === l).length}</span></button>`)}</div>
-    ${soon.length ? html`<div class="card tight" style="border-color:rgba(251,191,36,.35)"><div class="small alert">⏰ Caduca pronto: ${soon.map((i) => `${i.name} (${i.expires_on <= today() ? 'hoy' : shortDate(i.expires_on)})`).join(', ')}</div>
-      <button class="sm" style="margin-top:8px" data-act="${act((b) => recipeFor(b, soon.map((i) => i.id)))}">👩‍🍳 Proponme una receta con esto</button></div>` : ''}
-    <div class="grid2"><button class="primary" data-act="${act(addPantry)}">＋ Añadir</button><button data-act="${act(() => scanToPantry())}">📷 Escanear</button></div>
+    ${soon.length ? html`<div class="card tight" style="border-color:rgba(251,191,36,.35)"><div class="small alert">${raw(ic('clock', 17))} Caduca pronto: ${soon.map((i) => `${i.name} (${i.expires_on <= today() ? 'hoy' : shortDate(i.expires_on)})`).join(', ')}</div>
+      <button class="sm" style="margin-top:8px" data-act="${act((b) => recipeFor(b, soon.map((i) => i.id)))}">${raw(ic('pan', 17))} Proponme una receta con esto</button></div>` : ''}
+    <div class="grid2"><button class="primary" data-act="${act(addPantry)}">＋ Añadir</button><button data-act="${act(() => scanToPantry())}">${raw(ic('barcode', 17))} Escanear</button></div>
     ${locs.map(([loc, label]) => html`<div data-loc="${loc}" class="ploc"><h2>${label} <small>${items.filter((i) => i.location === loc).length}</small></h2>
       <div class="card tight list">${items.filter((i) => i.location === loc).map((i) => pantryRow(i))}
         ${!items.filter((i) => i.location === loc).length ? html`<div class="item muted small">Vacío${ploc === 'todo' ? ' · arrastra aquí con ⠿' : ''}</div>` : ''}</div></div>`)}
@@ -452,11 +453,11 @@ async function recipeFor(btn, ids) {
     if (!r.recipe) return toast(r.note ?? 'No se me ocurre nada con eso');
     const x = r.recipe;
     sheet(x.title, html`<p class="small muted">${x.servings ?? 1} ración(es)${x.minutes ? ` · ${x.minutes} min` : ''} · gasta: ${r.uses.join(', ')}</p>
-      <h3>Ingredientes</h3>${x.ingredients.map((i) => html`<div class="row small"><span class="grow">${i.fromPantry ? '🏠 ' : ''}${i.name}</span><b>${Math.round(i.grams)} g</b></div>`)}
+      <h3>Ingredientes</h3>${x.ingredients.map((i) => html`<div class="row small"><span class="grow">${i.fromPantry ? html`${raw(ic('home', 17))} ` : ''}${i.name}</span><b>${Math.round(i.grams)} g</b></div>`)}
       <h3>Pasos</h3><ol class="small">${x.steps.map((st) => html`<li>${st}</li>`)}</ol>
       ${x.tip ? html`<p class="small" style="color:var(--accent)">${x.tip}</p>` : ''}
       <button class="block primary" data-act="${act(() => { closeSheet(); logFood(undefined, { prefill: `${x.title}: ${x.ingredients.map((i) => `${i.name} ${Math.round(i.grams / (x.servings || 1))} g`).join(', ')}` }); })}">Lo he comido: apuntarlo</button>
-      <p class="xs muted">🏠 = lo tienes en casa.</p>`);
+      <p class="xs muted">${raw(ic('home', 17))} = lo tienes en casa.</p>`);
   });
 }
 
@@ -609,8 +610,8 @@ function addPantry() {
       catch (e) { status = ''; draw(); throw e; }
       status = ''; draw(); matchAll();
     }))}">Organizar</button>
-    <div class="grid2"><button data-act="${act(async () => { const it = await scanToPantry(parsed); if (it) { it.matched = true; draw(); } })}">📷 Código de barras</button>
-      <label class="btn" style="margin:0">🖼 Foto<input type="file" accept="image/*" id="pphoto" hidden></label></div>
+    <div class="grid2"><button data-act="${act(async () => { const it = await scanToPantry(parsed); if (it) { it.matched = true; draw(); } })}">${raw(ic('barcode', 17))} Código de barras</button>
+      <label class="btn" style="margin:0">${raw(ic('image', 17))} Foto<input type="file" accept="image/*" id="pphoto" hidden></label></div>
     ${status ? html`<p class="small"><span class="spinner"></span> ${status}</p>` : ''}
     ${parsed.length ? html`<h3 style="margin-top:12px">Revisa (${parsed.length})</h3>${parsed.map((p, k) => { if (!p.mode) Object.assign(p, normalizePantry({ name: p.name, units: p.units, packUnits: p.packUnits, unitGrams: p.unitGrams, quantityG: p.quantityG, packageG: p.packageG, unitLabel: p.unitLabel })); return html`<div class="card tight">
         <div class="prod">${prodImg(p.imageUrl, p.name)}<div class="grow"><input value="${p.name}" data-change="${act((el) => { parsed[k].name = el.value; parsed[k].matched = false; })}">
@@ -655,7 +656,7 @@ async function suplementos() {
   const KINDS = [['creatina', 'Creatina'], ['aminoacidos', 'Aminoácidos (EAA/BCAA)'], ['colageno', 'Colágeno'], ['vitamina_c', 'Vitamina C'], ['magnesio', 'Magnesio'], ['omega3', 'Omega-3'], ['vitamina_d', 'Vitamina D'], ['proteina', 'Proteína en polvo'], ['electrolitos', 'Electrolitos'], ['cafeina', 'Cafeína'], ['otro', 'Otro']];
   return html`
     <h2>Hoy</h2>
-    ${w.supplements.recs.map((r) => html`<div class="card tight"><div class="row"><span>${r.take ? '✅' : '➖'}</span><b class="grow">${r.name}</b>
+    ${w.supplements.recs.map((r) => html`<div class="card tight"><div class="row"><span>${r.take ? raw(ic('check', 17)) : raw(ic('minus', 17))}</span><b class="grow">${r.name}</b>
         ${r.take && r.supplementId ? (taken.has(r.supplementId) ? html`<span class="ok small">Tomado</span>` : html`<button class="sm" data-act="${act((b) => busy(b, async () => {
           await api.db.upsert('supplement_logs', [{ user_id: uid(), date: today(), supplement_id: r.supplementId, taken: true }], 'user_id,date,supplement_id');
           const s = mine.find((x) => x.id === r.supplementId); if (s?.stock > 0) await api.db.update('supplements', { stock: s.stock - 1 }, { id: `eq.${s.id}` });

@@ -46,19 +46,18 @@ export async function HOME() {
   return {
     title: h < 14 ? 'Buenos días' : h < 21 ? 'Buenas tardes' : 'Buenas noches',
     sub: dayName(t, true),
-    right: html`<button class="icon-btn" data-act="${act(() => go('perfil'))}">${raw(ic('user', 20))}</button>`,
+    right: html`<button class="icon-btn" aria-label="Perfil" data-act="${act(() => go('perfil'))}">${raw(ic('user', 20))}</button>`,
     body: html`
       <div class="hero" data-act="${act(checkIn)}">
         <div class="row" style="position:relative;z-index:1">
           ${ring((readiness?.score ?? 0) / 100, levelColor(lvl) === 'var(--muted)' ? '#7fb0ff' : levelColor(lvl), readiness ? readiness.score : '–', 104, 'de 100')}
-          <div class="grow"><div class="k">Recuperación</div>
-            <div class="big" style="color:${lvl ? levelColor(lvl) : '#fff'}">${{ verde: 'Listo para entrenar', ambar: 'Con precaución', rojo: 'Prioriza recuperar' }[lvl] ?? 'Haz el check-in'}</div>
+          <div class="grow"><div class="status" style="color:${lvl ? levelColor(lvl) : '#fff'}">${{ verde: 'Listo para entrenar', ambar: 'Con precaución', rojo: 'Prioriza recuperar' }[lvl] ?? 'Haz el check-in'}</div>
             <div class="small" style="color:rgba(220,232,255,.78)">${readiness?.reasons?.[0] ?? 'Toca para contarme cómo estás hoy.'}</div></div>
         </div>
         <div class="mini">
-          <div><div class="l">${raw(ic('moon', 13))} Sueño</div><div class="v">${H.sleep ? fmtSleep(H.sleep.h) : '–'}</div></div>
-          <div><div class="l">${raw(ic('pulse', 13))} VFC</div><div class="v">${H.hrv ? Math.round(H.hrv.v) : '–'}<small> ms</small></div></div>
-          <div><div class="l">${raw(ic('heart', 13))} Reposo</div><div class="v">${H.rhr ? H.rhr.v : '–'}<small> ppm</small></div></div>
+          <div><div class="l">${raw(ic('moon', 13))} Sueño</div><div class="v">${H.sleep ? html`<span data-count="${H.sleep.h}" data-fmt="sleep">${fmtSleep(H.sleep.h)}</span>` : '–'}</div></div>
+          <div><div class="l">${raw(ic('pulse', 13))} VFC</div><div class="v">${H.hrv ? html`<span data-count="${Math.round(H.hrv.v)}">${Math.round(H.hrv.v)}</span>` : '–'}<small> ms</small></div></div>
+          <div><div class="l">${raw(ic('heart', 13))} Reposo</div><div class="v">${H.rhr ? html`<span data-count="${H.rhr.v}">${H.rhr.v}</span>` : '–'}<small> ppm</small></div></div>
         </div>
       </div>
       ${noWod.map((s) => html`<div class="card tight row" style="border-color:rgba(127,176,255,.45)"><span class="bub" style="width:40px;height:40px;background:var(--accentSoft);color:var(--accent2)">${raw(ic('watch', 22))}</span><div class="grow"><b class="small">${s.title ?? 'CrossFit'} · ${timeOf(s.started_at)}</b><div class="xs muted">Del Apple Watch, sin el WOD. Pega la pizarra y queda todo junto.</div></div><button class="sm primary" data-act="${act(() => addWodTo(s))}">Añadir WOD</button></div>`)}
@@ -66,7 +65,7 @@ export async function HOME() {
       ${todayCard(t, todays, nd, nut, supLogs)}
       <div class="tiles">
         ${tile('Sueño', 'moon', 'var(--purple)', H.sleep ? fmtSleep(H.sleep.h) : '–', H.sleep ? `media 7 días ${fmtSleep(H.sleep.avg7)}${H.sleep.score ? ` · nota ${H.sleep.score}` : ''}` : 'Sin datos del Watch', spark(H.sleepSeries, '#a78bfa', 'bar'), 'salud')}
-        ${tile('Pasos', 'steps', 'var(--green)', H.steps ? n0(H.steps.v) : '–', H.steps ? `media ${n0(H.steps.avg7)}` : 'Sin datos', spark(H.stepsSeries, '#34d399', 'bar'), 'salud')}
+        ${tile('Pasos', 'steps', 'var(--green)', H.steps ? html`<span data-count="${Math.round(H.steps.v)}">${n0(H.steps.v)}</span>` : '–', H.steps ? `media ${n0(H.steps.avg7)}` : 'Sin datos', spark(H.stepsSeries, '#34d399', 'bar'), 'salud')}
         ${tile('Actividad', 'flame', 'var(--pink)', html`${n0(minByDay.reduce((a, b) => a + b, 0))}<small> min</small>`, `${thisWeek.length} ${thisWeek.length === 1 ? 'entreno' : 'entrenos'} esta semana`, spark(minByDay, '#f472b6', 'bar'), 'entrenos')}
         ${tile('Peso', 'scale', 'var(--amber)', w.length ? html`${(+w[w.length - 1].weight_kg).toLocaleString('es-ES', { maximumFractionDigits: 1 })}<small> kg</small>` : '–', w.length >= 2 ? `${(w[w.length - 1].weight_kg - w[Math.max(0, w.length - 8)].weight_kg) > 0 ? '+' : ''}${(w[w.length - 1].weight_kg - w[Math.max(0, w.length - 8)].weight_kg).toLocaleString('es-ES', { maximumFractionDigits: 1 })} kg últimas semanas` : 'Apunta tu peso', spark(w.slice(-20).map((x) => +x.weight_kg), '#fbbf24'), 'entrenos/progreso')}
       </div>
@@ -189,17 +188,17 @@ function todayCard(t, todays, nd, nut, supLogs) {
   return html`<div class="card">
     <div class="row"><h3 class="grow">Hoy <small class="muted" style="font-weight:400">${dayName(t, true)}</small></h3>${items.length ? html`<span class="tag ${doneN === items.length ? 'green' : 'accent'}">${doneN}/${items.length}</span>` : ''}</div>
     ${items.length ? bar(doneN, items.length, 'var(--green)') : ''}
-    <div class="xs muted" style="margin-top:8px">ENTRENO</div>
+    <div class="xs muted" style="margin-top:8px">Entreno</div>
     ${todays.length ? todays.map((s) => { const st = planState(s); const rec = !s.from_calendar && !s.reserved && s.discipline === 'crossfit' && s.status !== 'done';
       return html`<div class="lrow ${s.status === 'done' ? 'done' : ''}">${ck(s.status === 'done', () => (s.status === 'done' ? plannedDetail(s) : markDone(s)), 'Hecho')}
         <div class="grow" data-act="${act(() => plannedDetail(s))}"><div class="small" style="font-weight:600">${cleanTitle(s.title)}</div><div class="xs muted">${[s.start_local ?? (s.slot === 'am' ? 'Mañana' : 'Tarde'), s.est_minutes ? `${s.est_minutes} min` : null, s.planned_km ? `${(+s.planned_km).toFixed(1)} km` : null].filter(Boolean).join(' · ')}</div></div>
-        ${rec ? html`<button class="sm" title="Ya la he reservado en WodBuster" data-act="${act(() => toggleReserved(s))}">🎟 Reservé</button>` : st.tag}</div>`; })
+        ${rec ? html`<button class="sm" title="Ya la he reservado en WodBuster" data-act="${act(() => toggleReserved(s))}">${raw(ic('ticket', 17))} Reservé</button>` : st.tag}</div>`; })
       : html`<div class="small muted">Descanso. Camina, duerme bien y come suficiente.</div>`}
-    ${nd ? html`<div class="row xs muted" style="margin-top:10px"><span class="grow">COMIDAS</span><span>${n0(nd.totals.kcal)} / ${n0(nd.target.macros.kcal)} kcal · P ${n0(nd.totals.protein)}/${n0(nd.target.macros.protein)} g</span></div>
+    ${nd ? html`<div class="row xs muted" style="margin-top:10px"><span class="grow">Comidas</span><span>${n0(nd.totals.kcal)} / ${n0(nd.target.macros.kcal)} kcal · P ${n0(nd.totals.protein)}/${n0(nd.target.macros.protein)} g</span></div>
       ${meals.length ? meals.map((m) => html`<div class="lrow ${m.status === 'eaten' ? 'done' : m.status === 'skipped' ? 'skipped' : ''}">${ck(m.status === 'eaten' || m.status === 'edited', mealCk(m), 'Comido')}
         <div class="grow" data-act="${act(() => go('nutricion/hoy'))}"><div class="small"><b style="color:var(--accent)">${slotName(m.slot)}</b> · ${m.title}</div></div></div>`) : html`<div class="small muted">Sin menú para hoy. <a href="#/nutricion/batch">Genéralo</a>.</div>`}
-      ${nd.alerts?.[0] && !nd.adjustments?.length ? html`<div class="xs alert">⚠️ ${nd.alerts[0].message}</div>` : ''}` : ''}
-    ${supps.length ? html`<div class="xs muted" style="margin-top:10px">SUPLEMENTOS</div>${supps.map((r) => html`<div class="lrow ${taken.has(r.supplementId) ? 'done' : ''}">${r.supplementId ? ck(taken.has(r.supplementId), supCk(r), 'Tomado') : html`<span class="ck">·</span>`}
+      ${nd.alerts?.[0] && !nd.adjustments?.length ? html`<div class="xs alert">${raw(ic('alert', 17))} ${nd.alerts[0].message}</div>` : ''}` : ''}
+    ${supps.length ? html`<div class="xs muted" style="margin-top:10px">Suplementos</div>${supps.map((r) => html`<div class="lrow ${taken.has(r.supplementId) ? 'done' : ''}">${r.supplementId ? ck(taken.has(r.supplementId), supCk(r), 'Tomado') : html`<span class="ck">·</span>`}
       <div class="grow"><div class="small">${r.name}</div>${r.when ? html`<div class="xs muted">${r.when}</div>` : ''}</div></div>`)}` : ''}
   </div>`;
 }
@@ -224,7 +223,7 @@ function planState(s) {
 export const plannedCard = (s) => { const st = planState(s); return html`
   <div class="card row" data-act="${act(() => plannedDetail(s))}" style="${st.dim ? 'opacity:.55' : ''}">
     ${icon(s.discipline)}
-    <div class="grow"><div style="font-weight:700">${cleanTitle(s.title)} ${s.status === 'modified' ? '🔄' : ''}</div>
+    <div class="grow"><div style="font-weight:700">${cleanTitle(s.title)} ${s.status === 'modified' ? raw(ic('repeat', 17)) : ''}</div>
       <div class="small muted">${[s.start_local ?? (s.slot === 'am' ? 'Mañana' : 'Tarde'), s.est_minutes ? `${s.est_minutes} min` : null, s.planned_km ? `${(+s.planned_km).toFixed(1)} km` : null].filter(Boolean).join(' · ')}</div>
       ${/pendiente de reserva|recomendado/i.test(s.title ?? '') && !s.from_calendar && !s.reserved && s.status !== 'done' ? html`<div class="xs muted">Aún no tienes clase reservada en WodBuster ese día: es la que te recomienda el plan.</div>` : s.objective ? html`<div class="small muted">${s.objective}</div>` : ''}
       <div class="row" style="gap:6px;margin-top:4px">${st.tag}${s.status !== 'done' ? intensityTag(s.intensity) : ''}</div></div>
@@ -246,10 +245,10 @@ function plannedDetail(s) {
     <div class="stats"><div class="stat"><div class="l">Duración</div><div class="v">${s.est_minutes ?? '–'}<span class="u"> min</span></div></div>
       ${s.planned_km ? html`<div class="stat"><div class="l">Distancia</div><div class="v">${(+s.planned_km).toFixed(1)}<span class="u"> km</span></div></div>` : ''}
       <div class="stat"><div class="l">Piernas</div><div class="v">${s.leg_stress ?? 0}<span class="u">/3</span></div></div></div>
-    <div class="card tight"><div class="small" style="color:var(--accent);font-weight:700">💡 Por qué esta sesión</div><div class="small">${s.rationale ?? ''}</div></div>
+    <div class="card tight"><div class="small" style="color:var(--accent);font-weight:700">${raw(ic('bulb', 17))} Por qué esta sesión</div><div class="small">${s.rationale ?? ''}</div></div>
     <h3>Sesión</h3>${steps(s.steps)}
     ${s.status === 'planned' || s.status === 'modified' ? html`<button class="block primary" data-act="${act(() => markDone(s))}">✓ La he hecho</button>` : ''}
-    ${s.discipline === 'crossfit' && !s.from_calendar && s.status !== 'done' && s.date >= today() ? html`<button class="block" data-act="${act(async () => { await toggleReserved(s); closeSheet(); })}">${s.reserved ? 'Quitar «reservada»' : '🎟 Ya la he reservado en WodBuster'}</button>` : ''}
+    ${s.discipline === 'crossfit' && !s.from_calendar && s.status !== 'done' && s.date >= today() ? html`<button class="block" data-act="${act(async () => { await toggleReserved(s); closeSheet(); })}">${s.reserved ? 'Quitar «reservada»' : html`${raw(ic('ticket', 17))} Ya la he reservado en WodBuster`}</button>` : ''}
     ${s.status === 'done' ? html`<button class="block" data-act="${act((b) => busy(b, async () => { await api.fn('replan', { trigger: 'undone', plannedId: s.id }); closeSheet(); invalidate('planned'); render(); }))}">Desmarcar como hecha</button>` : ''}
     ${(s.status === 'planned' || s.status === 'modified') && s.date >= today() ? html`<button class="block danger" data-act="${act((b) => busy(b, async () => {
       const r = await api.fn('replan', { trigger: 'missed', plannedId: s.id }); closeSheet(); toast(r.changes?.[0]?.reason ?? 'Plan recolocado', 6000); invalidate('planned', 'changes'); render();
@@ -282,9 +281,10 @@ async function sessionDetail(id) {
   setSheet(html`
     <h3>${s.title ?? s.discipline}</h3><p class="small muted">${dayName(s.started_at.slice(0, 10), true)} · ${timeOf(s.started_at)} · ${({ healthkit: 'Apple Salud', manual: 'Registro manual', photo: 'Foto' })[s.primary_source] ?? s.primary_source}</p>
     <div class="stats"><div class="stat"><div class="l">Duración</div><div class="v">${dur(s.duration_s)}</div></div>
-      ${s.distance_m > 0 ? html`<div class="stat"><div class="l">Distancia</div><div class="v">${(s.distance_m / 1000).toFixed(2)}<span class="u"> km</span></div></div>` : ''}
+      ${s.distance_m > 0 ? html`<div class="stat"><div class="l">Distancia</div><div class="v">${(s.distance_m / 1000).toFixed(2).replace('.', ',')}<span class="u"> km</span></div></div>` : ''}
       ${s.avg_hr ? html`<div class="stat"><div class="l">FC media</div><div class="v" style="color:var(--red)">${s.avg_hr}</div></div>` : ''}
       ${s.rpe ? html`<div class="stat"><div class="l">RPE</div><div class="v">${s.rpe}</div></div>` : ''}</div>
+    <button class="block share-btn" data-act="${act(async () => { const { openShare } = await import('./share.js'); openShare(s, blocks); })}">${raw(ic('image', 18))} Compartir resumen</button>
     ${s.discipline === 'running' && s.distance_m > 0 ? html`<p class="small">Ritmo medio: <b>${pace(s.duration_s / (s.distance_m / 1000))}</b></p>` : ''}
     ${s.internal_load ? html`<p class="small muted">Carga ${n0(s.internal_load)} UA · fatiga de piernas ${n0(s.leg_index)}</p>` : ''}
     ${watch}
@@ -299,7 +299,7 @@ async function sessionDetail(id) {
       ${b.result_text ? html`<div class="ok small">Resultado: ${b.result_text}</div>` : ''}</div>`;
     })}
     ${!hasLog && GYM.includes(s.discipline) ? html`<button class="block primary" data-act="${act(() => addWodTo(s))}">✎ Añadir el WOD (texto, foto o a mano)</button>` : ''}
-    ${watchMate ? html`<button class="block primary" data-act="${act((b) => busy(b, async () => { await joinWithWatch(id, watchMate.id); closeSheet(); invalidate('sessions', 'planned', 'readiness', 'insights', 'exhist'); render(); toast('Unido al entreno del Apple Watch'); }))}">⌚ Unir con el Apple Watch (${timeOf(watchMate.started_at)} · ${Math.round(watchMate.duration_s / 60)} min${watchMate.avg_hr ? ` · ${watchMate.avg_hr} ppm` : ''})</button>` : ''}
+    ${watchMate ? html`<button class="block primary" data-act="${act((b) => busy(b, async () => { await joinWithWatch(id, watchMate.id); closeSheet(); invalidate('sessions', 'planned', 'readiness', 'insights', 'exhist'); render(); toast('Unido al entreno del Apple Watch'); }))}">${raw(ic('watch', 18))} Unir con el Apple Watch (${timeOf(watchMate.started_at)} · ${Math.round(watchMate.duration_s / 60)} min${watchMate.avg_hr ? ` · ${watchMate.avg_hr} ppm` : ''})</button>` : ''}
     <div class="grid2">${hasLog ? html`<button data-act="${act(() => editSession(id))}">✎ Editar registro</button>` : ''}<button data-act="${act(async () => { const t = prompt('Nombre del entreno', s.title ?? ''); if (t == null || !t.trim()) return; await api.db.update('sessions', { title: t.trim() }, { id: `eq.${id}` }); invalidate('sessions'); render(); sessionDetail(id); })}">Renombrar</button><button data-act="${act(() => sessionEdits(id))}">Historial de cambios</button></div>
     <button class="block danger" data-act="${act((btn) => busy(btn, async () => { await api.db.update('sessions', { deleted_at: new Date().toISOString() }, { id: `eq.${id}` }); closeSheet(); invalidate('sessions'); render(); toast('Entreno eliminado'); }))}">Eliminar</button>`);
 }
@@ -388,18 +388,18 @@ export async function WORKOUTS(params = []) {
     after: openWod ? () => { history.replaceState(null, '', '#/entrenos'); startFromText(); } : undefined,
     body: html`${seg}
       ${await draftBanner()}
-      <button class="primary block" data-act="${act(() => startFromText())}">📋 Pegar entreno (Strava, notas, WhatsApp)</button>
-      <div class="grid2"><button data-act="${act(() => startFromPhoto())}">📷 Foto de pizarra</button><button data-act="${act(manualMenu)}">✍️ Manual</button></div>
+      <button class="primary block" data-act="${act(() => startFromText())}">${raw(ic('clipboard', 17))} Pegar entreno (Strava, notas, WhatsApp)</button>
+      <div class="grid2"><button data-act="${act(() => startFromPhoto())}">${raw(ic('camera', 17))} Foto de pizarra</button><button data-act="${act(manualMenu)}">${raw(ic('pen', 17))} Manual</button></div>
       ${Object.keys(byWeek).sort().reverse().map((w) => html`<h2>Semana del ${shortDate(w)} <small>${byWeek[w].length} sesiones</small></h2>${byWeek[w].map(sessionRow)}`)}
       ${!list.length ? html`<div class="card muted">Aún no hay entrenamientos.</div>` : ''}`,
   };
 }
 
 function addWorkoutMenu() {
-  sheet('Registrar entreno', html`<button class="block primary" data-act="${act(() => startFromText())}">📋 Pegar texto</button><button class="block" data-act="${act(() => startFromPhoto())}">📷 Foto de pizarra o captura</button><button class="block" data-act="${act(() => startManual())}">🏋️ CrossFit por bloques (fuerza, WOD…)</button><button class="block" data-act="${act(manualWorkout)}">✍️ Otra actividad</button>`);
+  sheet('Registrar entreno', html`<button class="block primary" data-act="${act(() => startFromText())}">${raw(ic('clipboard', 17))} Pegar texto</button><button class="block" data-act="${act(() => startFromPhoto())}">${raw(ic('camera', 17))} Foto de pizarra o captura</button><button class="block" data-act="${act(() => startManual())}">${raw(ic('dumbbell', 17))} CrossFit por bloques (fuerza, WOD…)</button><button class="block" data-act="${act(manualWorkout)}">${raw(ic('pen', 17))} Otra actividad</button>`);
 }
 function manualMenu() {
-  sheet('Registro manual', html`<button class="block primary" data-act="${act(() => startManual())}">🏋️ CrossFit por bloques (fuerza, WOD, endurance)</button><button class="block" data-act="${act(manualWorkout)}">✍️ Otra actividad (carrera, pádel, natación…)</button>`);
+  sheet('Registro manual', html`<button class="block primary" data-act="${act(() => startManual())}">${raw(ic('dumbbell', 17))} CrossFit por bloques (fuerza, WOD, endurance)</button><button class="block" data-act="${act(manualWorkout)}">${raw(ic('pen', 17))} Otra actividad (carrera, pádel, natación…)</button>`);
 }
 
 /** Compatibilidad: otras pantallas abren el pegado de texto. */
@@ -411,7 +411,7 @@ function manualWorkout() {
   sheet('Registro manual', html`<form data-submit="${act((v, f) => busy(f.querySelector('button'), async () => {
       const r = await api.fn('ingest-session', { session: { id: crypto.randomUUID(), startedAt: new Date(v.start).toISOString(), durationS: +v.minutes * 60, discipline: v.discipline, title: v.title || undefined, rpe: +v.rpe, distanceM: v.km ? +String(v.km).replace(',', '.') * 1000 : undefined, elevationGainM: v.elev ? +v.elev : undefined, isRace: !!v.race, isTimeTrial: !!v.test, source: 'manual', notes: v.notes || undefined } });
       closeSheet(); invalidate('sessions', 'planned', 'readiness', 'changes'); render();
-      toast([r.merged ? 'Fusionado sin duplicar' : 'Guardado', ...r.prs.map((p) => `🏆 ${p}`), ...r.changes.filter((c) => c.action !== 'mark_done').map((c) => c.reason)].join(' · '), 7000);
+      toast([r.merged ? 'Fusionado sin duplicar' : 'Guardado', ...r.prs.map((p) => `${p}`), ...r.changes.filter((c) => c.action !== 'mark_done').map((c) => c.reason)].join(' · '), 7000);
     }))}">
     <label>Disciplina</label><select name="discipline">${D.map(([k, l]) => html`<option value="${k}">${l}</option>`)}</select>
     <label>Título (opcional)</label><input name="title">
@@ -442,7 +442,7 @@ async function progress() {
     <div class="card"><h3>Km por semana</h3>${barChart(r.weeks.map((w) => ({ value: w.km, label: shortDate(w.week) })))}</div>
     ${r.runs.length >= 3 ? html`<div class="card"><h3>Evolución del ritmo</h3>${lineChart([{ color: 'var(--blue)', fmt: pace, points: r.runs.slice(-30).map((x) => ({ x: shortDate(x.date), y: x.paceSecPerKm })) }], { invert: true })}</div>` : ''}
     <h2>Fuerza</h2>
-    <button class="block" data-act="${act(() => exerciseHistory())}">📈 Historial por ejercicio (pesos y repeticiones)</button>
+    <button class="block" data-act="${act(() => exerciseHistory())}">${raw(ic('activity', 17))} Historial por ejercicio (pesos y repeticiones)</button>
     ${d.lifts.length ? d.lifts.map((l) => html`<div class="card"><h3>${l.name}</h3>
       <div class="stats"><div class="stat"><div class="l">1RM real</div><div class="v">${l.bestActual1RM ? l.bestActual1RM.kg : '–'}<span class="u"> kg</span></div></div>
         <div class="stat"><div class="l">Estimado</div><div class="v" style="color:var(--amber)">${l.bestE1RM ? l.bestE1RM.kg.toFixed(1) : '–'}</div></div>
@@ -511,12 +511,12 @@ export async function COACH() {
       const r = await api.fn('coach', { threadId, message: t });
       threadId = r.threadId; chat[chat.length - 1] = { role: 'bot', text: r.reply };
       if (r.tools?.includes('ajustar_plan')) invalidate('planned', 'changes');
-    } catch (e) { chat[chat.length - 1] = { role: 'bot', text: `⚠️ ${e.message}`, retry: t }; }
+    } catch (e) { chat[chat.length - 1] = { role: 'bot', text: e.message, retry: t }; }
     render();
   };
   return {
     title: 'Coach',
-    right: html`<button class="icon-btn" data-act="${act(() => { chat = []; threadId = null; render(); })}">🆕</button>`,
+    right: html`<button class="icon-btn" data-act="${act(() => { chat = []; threadId = null; render(); })}" aria-label="Nueva conversación">${raw(ic('plus', 20))}</button>`,
     body: html`<div style="padding-bottom:70px">
       ${!chat.length ? html`<p class="muted">Pregúntame lo que quieras. Respondo con tus datos reales.</p>${SUGG.map((s) => html`<button class="chip" style="margin:4px 4px 0 0" data-act="${act(() => send(s))}">${s}</button>`)}
         <h2>Resúmenes semanales</h2>

@@ -165,6 +165,14 @@ await shot('#/entrenos', '05e-historial-ejercicio', async () => { await page.get
 await shot('#/entrenos', '05f-carrera-watch', async () => { await reopen(); await page.getByRole('button', { name: 'Historial', exact: true }).click(); await page.waitForTimeout(400); await page.locator('#view .card.row').filter({ hasText: 'Carrera' }).first().click(); await page.waitForTimeout(800); });
 await page.evaluate(() => { const p = document.querySelector('#sheet .panel'); if (p) p.scrollTop = 900; }); await page.screenshot({ path: `${OUT}/05g-carrera-watch-2.png` });
 await page.evaluate(() => { const p = document.querySelector('#sheet .panel'); if (p) p.scrollTop = 2200; }); await page.screenshot({ path: `${OUT}/05h-carrera-watch-3.png` });
+{ // Resumen para compartir: PNG transparente, letras blancas/negras
+  await page.getByRole('button', { name: /Compartir resumen/ }).click(); await page.waitForSelector('.share-prev img', { timeout: 8000 }); await page.waitForTimeout(400);
+  await page.screenshot({ path: `${OUT}/26-compartir.png` });
+  const info = await page.evaluate(() => new Promise((ok) => { const im = document.querySelector('.share-prev img'); const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight; const x = c.getContext('2d'); x.drawImage(im, 0, 0); ok({ w: c.width, h: c.height, corner: x.getImageData(0, 0, 1, 1).data[3] }); }));
+  if (info.w !== 1080 || info.corner !== 0) errors.push(`PNG de compartir: ${JSON.stringify(info)}`); else console.log(`PNG sin fondo OK (${info.w}×${info.h})`);
+  await page.getByRole('button', { name: 'Negras' }).click(); await page.getByRole('button', { name: 'Foto clara' }).click(); await page.getByRole('button', { name: 'Vertical' }).click(); await page.waitForTimeout(300);
+  await page.screenshot({ path: `${OUT}/26b-compartir-negras.png` });
+}
 await shot('#/entrenos', '05i-anadir-wod', async () => { await reopen(); await page.getByRole('button', { name: 'Historial', exact: true }).click(); await page.waitForTimeout(400); await page.locator('#view .card.row').filter({ hasText: 'Afternoon Workout' }).first().click(); await page.waitForTimeout(800); await page.evaluate(() => { const p = document.querySelector('#sheet .panel'); if (p) p.scrollTop = 9999; }); });
 await (async () => {
   posted.length = 0;
@@ -235,7 +243,7 @@ await page.evaluate(() => window.scrollTo(0, 700)); await page.screenshot({ path
 await shot('#/objetivo/g2', '19-hyrox-registro', async () => { await page.getByRole('button', { name: 'Simulación completa' }).click(); await page.waitForSelector('#logger'); await page.locator('input[data-lf="split"]').first().fill('4:55'); await page.locator('input[data-lf="split"]').nth(1).fill('5:10'); });
 await page.evaluate(() => { const p = document.querySelector('#sheet .panel'); if (p) p.scrollTop = 1500; }); await page.screenshot({ path: `${OUT}/19b-hyrox-registro-2.png` });
 { const sum = await page.locator('[id^="hx-"]').first().innerText(); if (!/10:05/.test(sum)) console.log('✗ suma HYROX', sum); else console.log('Suma de parciales HYROX OK:', sum); }
-await page.getByRole('button', { name: '⏱' }).first().click(); await page.waitForTimeout(300); await page.screenshot({ path: `${OUT}/20-temporizador.png` });
+await page.getByRole('button', { name: 'Cronómetro' }).first().click(); await page.waitForTimeout(300); await page.screenshot({ path: `${OUT}/20-temporizador.png` });
 // Cronómetro por tramos: 16 «Siguiente tramo» de 5:00 → la suma de parciales debe dar 1:20:00.
 await page.evaluate(() => { const o = performance.now.bind(performance); let add = 0; performance.now = () => o() + add; window.__adv = (s) => { add += s * 1000; }; });
 await page.locator('#timer [data-t="go"]').click(); await page.evaluate(() => window.__adv(10)); await page.waitForTimeout(150);
@@ -248,7 +256,7 @@ await shot('#/coach', '22-coach-resumen');
 await shot('#/inicio', '23-inicio-abajo', async () => { await page.evaluate(() => window.scrollTo(0, 900)); });
 { // Registrar comida: interpretación instantánea en el móvil
   await page.goto('http://forja.test/index.html#/inicio'); await page.waitForTimeout(200); await page.goto('http://forja.test/index.html#/nutricion/hoy'); await page.waitForTimeout(700);
-  await page.locator('.addf').first().click(); await page.waitForTimeout(300); await page.getByRole('button', { name: '✍️ Escribir' }).click(); await page.waitForTimeout(400);
+  await page.locator('.addf').first().click(); await page.waitForTimeout(300); await page.getByRole('button', { name: 'Escribir' }).click(); await page.waitForTimeout(400);
   let calls = 0; page.on('request', (r) => { if (r.url().includes('/functions/v1/nutrition-log')) calls++; });
   const t0 = Date.now();
   await page.locator('#ltext').pressSequentially('wrap de avena de hacendado, canonigos, un huevo revuelto y medio aguacate como almuerzo', { delay: 5 });
@@ -263,24 +271,27 @@ await shot('#/inicio', '23-inicio-abajo', async () => { await page.evaluate(() =
 }
 // ---------- Recorrido automático: pulsa TODOS los botones de cada pantalla (y los de las hojas que abren) ----------
 if (process.env.MONKEY) {
+  const T0 = Date.now();
   page.on('dialog', (d) => d.accept(d.type() === 'prompt' ? 'Prueba' : undefined).catch(() => {}));
-  const screens = [['#/inicio'], ['#/salud'], ['#/objetivo/g1'], ['#/objetivo/g2'], ['#/plan'], ['#/entrenos'], ['#/entrenos', 'Historial'], ['#/entrenos', 'Progreso'], ['#/nutricion', 'Hoy'], ['#/nutricion', 'Menú'], ['#/nutricion', 'Compra'], ['#/nutricion', 'Batch'], ['#/nutricion', 'Despensa'], ['#/nutricion', 'Suplementos'], ['#/coach'], ['#/perfil']];
+  const screens = [['#/inicio'], ['#/salud'], ['#/objetivo/g1'], ['#/objetivo/g2'], ['#/plan'], ['#/entrenos'], ['#/entrenos', 'Historial'], ['#/entrenos', 'Progreso'], ['#/nutricion', 'Diario'], ['#/nutricion', 'Menú'], ['#/nutricion', 'Compra'], ['#/nutricion', 'Batch'], ['#/nutricion', 'Despensa'], ['#/nutricion', 'Suplementos'], ['#/coach'], ['#/perfil']];
   let clicks = 0; const seen = new Set();
   const go = async (route, tab) => {
     await page.evaluate(() => { const sh = document.getElementById('sheet'); if (sh) sh.hidden = true; document.querySelectorAll('.scan-ov').forEach((x) => x.remove()); });
     await page.goto(`http://forja.test/index.html${route === '#/inicio' ? '#/plan' : '#/inicio'}`); await page.waitForTimeout(150);
     await page.goto(`http://forja.test/index.html${route}`); await page.waitForTimeout(450);
-    if (tab) { await page.getByRole('button', { name: tab, exact: true }).first().click().catch(() => {}); await page.waitForTimeout(350); }
+    if (tab) { await page.getByRole('button', { name: tab, exact: true }).first().click({ timeout: 3000 }).catch(() => { errors.push(`pestaña «${tab}» no encontrada`); }); await page.waitForTimeout(350); }
   };
-  for (const [route, tab] of screens) {
+  for (const [route, tab] of screens.filter(([r, t]) => !process.env.MONKEY_ONLY || `${r}${t ?? ''}`.includes(process.env.MONKEY_ONLY))) {
+    console.log(`monkey ${route} ${tab ?? ''} · ${clicks} clics · ${Math.round((Date.now() - T0) / 1000)} s`);
     await go(route, tab);
     const n = await page.locator('#view [data-act]').count();
     for (let i = 0; i < n; i++) {
       await go(route, tab);
       const el = page.locator('#view [data-act]').nth(i);
-      const label = ((await el.innerText().catch(() => '')) || '').trim().slice(0, 40).replace(/\s+/g, ' ');
+      const label = ((await el.innerText({ timeout: 1500 }).catch(() => '')) || '').trim().slice(0, 40).replace(/\s+/g, ' ');
       const key = `${route}${tab ?? ''}:${label}`; if (seen.has(key) || /^(Plan|Inicio|Entrenos|Nutrición|Coach)$/.test(label)) continue; seen.add(key);
       const before = errors.length;
+      if (process.env.MONKEY_V) console.log('  clic', label, Math.round((Date.now() - T0) / 1000));
       await el.click({ timeout: 2000 }).catch(() => {}); clicks++; await page.waitForTimeout(350);
       // un nivel dentro de la hoja que se abra
       const sheetOpen = await page.evaluate(() => !document.getElementById('sheet')?.hidden);
@@ -288,7 +299,7 @@ if (process.env.MONKEY) {
         const m = await page.locator('#sheet [data-act]').count();
         for (let j = 0; j < Math.min(m, 14); j++) {
           const b = page.locator('#sheet [data-act]').nth(j);
-          const lb = ((await b.innerText().catch(() => '')) || '').trim().slice(0, 30);
+          const lb = ((await b.innerText({ timeout: 1500 }).catch(() => '')) || '').trim().slice(0, 30);
           if (/Eliminar|Desconectar|Descartar|Borrar|Cerrar sesi/i.test(lb)) continue;
           await b.click({ timeout: 1500 }).catch(() => {}); clicks++; await page.waitForTimeout(250);
           if (await page.evaluate(() => document.getElementById('sheet')?.hidden)) break;

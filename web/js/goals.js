@@ -1,7 +1,8 @@
 // Pantalla de objetivo: Media Maratón (o cualquier carrera) y HYROX.
 import * as api from './api.js';
 import { get, go, invalidate, render } from './app.js';
-import { html, act, sheet, closeSheet, busy, toast, dayName, shortDate, pace, dur, barChart, lineChart, bar, daysUntil } from './ui.js';
+import { raw, html, act, sheet, closeSheet, busy, toast, dayName, shortDate, pace, dur, barChart, lineChart, bar, daysUntil } from './ui.js';
+import { ic } from './icons.js';
 import { startHyrox } from './logbook.js';
 
 const clockH = (s) => (s == null ? '–' : dur(s));
@@ -15,7 +16,7 @@ export async function GOAL(params = []) {
   const tabs = goals.length > 1 ? html`<div class="chips">${goals.map((x) => html`<button class="chip ${x.id === g.id ? 'on' : ''}" data-act="${act(() => go(`objetivo/${x.id}`))}">${x.name}</button>`)}</div>` : '';
   const head = html`<div class="card center"><div class="small muted">${dayName(g.date, true)}</div>
     <div style="font-size:52px;font-weight:800;line-height:1.1">${o.daysLeft}</div><div class="muted">días · ${o.weeksLeft} semanas</div>
-    <button class="sm ghost" data-act="${act(() => editTarget(g, o))}">🎯 ${g.target_time_s ? `Objetivo ${clockH(g.target_time_s)}` : 'Poner tiempo objetivo'}</button></div>
+    <button class="sm ghost" data-act="${act(() => editTarget(g, o))}">${raw(ic('target', 17))} ${g.target_time_s ? `Objetivo ${clockH(g.target_time_s)}` : 'Poner tiempo objetivo'}</button></div>
     <div class="card tight"><div class="small" style="color:var(--accent);font-weight:700">Cómo vas</div><div>${o.verdict}</div></div>`;
   const body = o.kind === 'race' ? race(g, o) : hyrox(g, o, r.splits);
   return { title: g.name, right: html`<button class="icon-btn" data-act="${act(() => go('inicio'))}">✕</button>`, body: html`${tabs}${head}${body}${milestones(o)}${nextKey(o)}` };
@@ -53,7 +54,7 @@ function hyrox(g, o, splits) {
     <div class="card tight"><div class="row"><h3 class="grow">Estaciones</h3><span class="xs muted">${divisionName(o.division)}</span></div>
       <div class="xs muted">Mejor parcial frente al reparto de tu objetivo.</div>${rows}
       <div class="grid2" style="margin-top:8px"><button class="sm primary" data-act="${act(() => startHyrox(8))}">Simulación completa</button><button class="sm" data-act="${act(() => startHyrox(4))}">Media (4 estaciones)</button></div>
-      <p class="xs muted">Apunta el tiempo de cada tramo (m:ss); con ⏱ cronometras la simulación entera.</p></div>
+      <p class="xs muted">Apunta el tiempo de cada tramo (m:ss); con ${raw(ic('clock', 17))} cronometras la simulación entera.</p></div>
     ${sims.length >= 2 ? html`<div class="card"><h3>Simulaciones</h3>${lineChart([{ color: 'var(--accent)', points: sims.map((s) => ({ x: shortDate(s.date), y: Math.round(s.totalS / 60) })) }], { height: 120, invert: true })}<p class="xs muted">Minutos totales: más arriba = más rápido.</p></div>` : ''}
     ${splits?.length ? html`<details class="card tight"><summary class="small">Reparto completo del objetivo (${clockH(g.target_time_s)})</summary>${splits.map((s) => html`<div class="row small"><span class="grow">${s.name}</span><b>${dur(s.seconds)}</b></div>`)}</details>` : ''}`;
 }
@@ -61,7 +62,7 @@ function hyrox(g, o, splits) {
 const divisionName = (d) => ({ open_men: 'Open hombres', open_women: 'Open mujeres', pro_men: 'Pro hombres', pro_women: 'Pro mujeres', doubles_men: 'Dobles hombres', doubles_women: 'Dobles mujeres', doubles_mixed: 'Dobles mixto' })[d] ?? d;
 
 function milestones(o) {
-  return html`<h2>Hitos</h2><div class="card tight">${o.milestones.map((m) => html`<div class="row" style="padding:6px 0"><span>${m.done ? '✅' : daysUntil(m.date) < 0 ? '⚠️' : '○'}</span><div class="grow small">${m.label}</div><span class="xs muted">${shortDate(m.date)}</span></div>`)}</div>`;
+  return html`<h2>Hitos</h2><div class="card tight">${o.milestones.map((m) => html`<div class="row" style="padding:6px 0"><span>${m.done ? raw(ic('check', 17)) : daysUntil(m.date) < 0 ? raw(ic('alert', 17)) : '○'}</span><div class="grow small">${m.label}</div><span class="xs muted">${shortDate(m.date)}</span></div>`)}</div>`;
 }
 function nextKey(o) {
   if (!o.nextKey.length) return '';

@@ -1,3 +1,4 @@
+import { ic } from './icons.js';
 // Utilidades de interfaz: plantillas seguras, acciones, hojas modales, avisos, formato y gráficos SVG.
 
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -23,20 +24,94 @@ document.addEventListener('submit', (e) => {
   e.preventDefault(); handlers.get(f.dataset.submit)?.(Object.fromEntries(new FormData(f)), f, e);
 });
 
+// Aviso (al estilo Sonner): sube desde abajo con una transición (interrumpible), se pausa si la app está en segundo
+// plano y se descarta deslizándolo hacia abajo, por donde entró.
 export function toast(msg, ms = 3500) {
-  const t = document.getElementById('toast'); t.textContent = msg; t.hidden = false;
-  clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, ms);
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.transform = ''; t.hidden = false;
+  requestAnimationFrame(() => t.setAttribute('data-on', ''));
+  clearTimeout(toast.t);
+  const hide = () => { t.removeAttribute('data-on'); clearTimeout(toast.h); toast.h = setTimeout(() => { if (!t.hasAttribute('data-on')) t.hidden = true; }, 420); };
+  const arm = (left) => { clearTimeout(toast.t); toast.t = setTimeout(() => (document.hidden ? arm(1500) : hide()), left); };
+  arm(ms);
+  if (!t.dataset.swipe) {
+    t.dataset.swipe = '1'; let y0 = null, t0 = 0, dy = 0;
+    t.addEventListener('pointerdown', (e) => { y0 = e.clientY; t0 = performance.now(); dy = 0; t.setPointerCapture(e.pointerId); t.style.transition = 'none'; });
+    t.addEventListener('pointermove', (e) => { if (y0 == null) return; dy = e.clientY - y0; t.style.transform = `translate(-50%, ${dy > 0 ? dy : dy * 0.2}px)`; });
+    t.addEventListener('pointerup', () => { if (y0 == null) return; const v = dy / Math.max(1, performance.now() - t0); y0 = null; t.style.transition = ''; t.style.transform = '';
+      if (dy > 40 || v > 0.11) { clearTimeout(toast.t); hide(); } });
+  }
 }
 
-let sheetClose = null;
+// Hoja inferior (al estilo Vaul): entra con la curva del cajón de iOS y se cierra tocando fuera, con «Cerrar» o
+// arrastrándola hacia abajo. Mientras el dedo está abajo la hoja ES el dedo (1:1, sin animación); al soltar decide la
+// distancia o la velocidad. Si se abre otra hoja mientras una se cierra, se reutiliza sin parpadeo.
+let sheetClose = null, closing = 0;
 export function sheet(title, body, onClose) {
   const el = document.getElementById('sheet');
-  el.innerHTML = html`<div class="panel"><div class="grab"></div><div class="head"><h3>${title}</h3><button class="ghost" data-act="${act(closeSheet)}">Cerrar</button></div><div id="sheet-body">${body}</div></div>`.s;
+  clearTimeout(closing);
+  const wasOpen = !el.hidden && el.dataset.state === 'open';
+  el.innerHTML = html`<div class="panel"><div class="grab" aria-hidden="true"></div><div class="head"><h3>${title}</h3><button class="ghost" data-act="${act(closeSheet)}">Cerrar</button></div><div id="sheet-body">${body}</div></div>`.s;
   el.hidden = false; sheetClose = onClose ?? null;
+  if (wasOpen) el.dataset.state = 'open';
+  else { el.dataset.state = 'closed'; void el.offsetHeight; requestAnimationFrame(() => { el.dataset.state = 'open'; }); }
   el.onclick = (e) => { if (e.target === el) closeSheet(); };
+  dragToClose(el);
 }
 export function setSheet(body) { const b = document.getElementById('sheet-body'); if (b) b.innerHTML = flat(body); }
-export function closeSheet() { const el = document.getElementById('sheet'); el.hidden = true; el.innerHTML = ''; el.onchange = null; const c = sheetClose; sheetClose = null; c?.(); }
+export function closeSheet() {
+  const el = document.getElementById('sheet');
+  if (el.hidden) return;
+  el.onchange = null; const c = sheetClose; sheetClose = null;
+  el.dataset.state = 'closing';
+  const panel = el.querySelector('.panel'); if (panel) { panel.classList.remove('dragging'); panel.style.transform = ''; }
+  clearTimeout(closing);
+  closing = setTimeout(() => { el.hidden = true; el.innerHTML = ''; el.dataset.state = 'closed'; }, 290);
+  c?.();
+}
+function dragToClose(el) {
+  const panel = el.querySelector('.panel'); if (!panel) return;
+  let y0 = null, x0 = 0, t0 = 0, dy = 0, live = false;
+  const start = (x, y, fromHandle) => { y0 = y; x0 = x; t0 = performance.now(); dy = 0; live = fromHandle; };
+  const move = (x, y, e) => {
+    if (y0 == null) return;
+    const d = y - y0;
+    if (!live) { if (panel.scrollTop <= 0 && d > 8 && Math.abs(x - x0) < d) { live = true; y0 = y; } else return; }
+    e?.cancelable && e.preventDefault();
+    dy = y - y0;
+    panel.classList.add('dragging');
+    panel.style.transform = `translateY(${dy > 0 ? dy : -Math.sqrt(-dy) * 2}px)`;           // hacia arriba, con resistencia
+    el.style.backgroundColor = `rgba(2,6,16,${0.62 * Math.max(0, 1 - dy / panel.offsetHeight)})`;
+  };
+  const end = () => {
+    if (y0 == null) return;
+    const v = dy / Math.max(1, performance.now() - t0); y0 = null;
+    if (!live) return;
+    live = false; panel.classList.remove('dragging'); el.style.backgroundColor = '';
+    if (dy > panel.offsetHeight * 0.3 || v > 0.5) { panel.style.transform = 'translateY(100%)'; closeSheet(); }
+    else panel.style.transform = '';
+  };
+  const handle = (t) => !!t.closest?.('.grab, .head') && !t.closest('button');
+  panel.addEventListener('touchstart', (e) => { if (e.touches.length === 1) start(e.touches[0].clientX, e.touches[0].clientY, handle(e.target)); }, { passive: true });
+  panel.addEventListener('touchmove', (e) => { if (e.touches.length === 1) move(e.touches[0].clientX, e.touches[0].clientY, e); }, { passive: false });
+  panel.addEventListener('touchend', end); panel.addEventListener('touchcancel', end);
+  panel.addEventListener('pointerdown', (e) => { if (e.pointerType === 'mouse' && handle(e.target)) { start(e.clientX, e.clientY, true); panel.setPointerCapture(e.pointerId); } });
+  panel.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') move(e.clientX, e.clientY, e); });
+  panel.addEventListener('pointerup', (e) => { if (e.pointerType === 'mouse') end(); });
+}
+
+/** Cuenta de 0 al valor (una vez, al llegar a Inicio). data-count = valor, data-dec = decimales, data-fmt = 'sleep'. */
+export function countUp(root) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  for (const el of root.querySelectorAll('[data-count]')) {
+    const to = +el.dataset.count, dec = +(el.dataset.dec ?? 0), fmtK = el.dataset.fmt; if (!Number.isFinite(to)) continue;
+    const f = (v) => (fmtK === 'sleep' ? `${Math.floor(v)}h ${String(Math.round((v % 1) * 60)).padStart(2, '0')}` : v.toLocaleString('es-ES', { minimumFractionDigits: dec, maximumFractionDigits: dec }));
+    const t0 = performance.now(), D = 700;
+    const step = (now) => { const k = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - k, 4); el.textContent = f(to * e); if (k < 1) requestAnimationFrame(step); };
+    el.textContent = f(0); requestAnimationFrame(step);
+  }
+  for (const arc of root.querySelectorAll('.ring .arc')) { const fin = arc.getAttribute('stroke-dasharray'); arc.style.transition = 'none'; arc.setAttribute('stroke-dasharray', `0 999`); void arc.getBoundingClientRect(); requestAnimationFrame(() => { arc.style.transition = ''; arc.setAttribute('stroke-dasharray', fin); }); }
+}
 
 export async function busy(btn, fn) {
   const label = btn?.innerHTML; if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
@@ -58,11 +133,11 @@ export const n0 = (x) => (x == null || Number.isNaN(+x) ? '–' : Math.round(+x)
 
 // ---------- Componentes ----------
 export const DISC = {
-  running: ['🏃', 'var(--blue)'], crossfit: ['🏋️', 'var(--accent2)'], hyrox: ['🛷', 'var(--purple)'], hybrid: ['🛷', 'var(--purple)'], strength: ['💪', 'var(--amber)'],
-  weightlifting: ['🏋️', 'var(--amber)'], mobility: ['🧘', 'var(--green)'], yoga: ['🧘', 'var(--green)'], cycling: ['🚴', 'var(--blue)'], swimming: ['🏊', 'var(--blue)'],
-  walking: ['🚶', 'var(--green)'], hiking: ['🥾', 'var(--green)'], padel: ['🎾', 'var(--green)'], tennis: ['🎾', 'var(--green)'], skiing: ['⛷️', 'var(--blue)'], dance: ['💃', 'var(--purple)'], other: ['⚡', 'var(--muted)'],
+  running: ['run', 'var(--blue)'], crossfit: ['dumbbell', 'var(--accent2)'], hyrox: ['sled', 'var(--purple)'], hybrid: ['sled', 'var(--purple)'], strength: ['dumbbell', 'var(--amber)'],
+  weightlifting: ['dumbbell', 'var(--amber)'], mobility: ['yoga', 'var(--green)'], yoga: ['yoga', 'var(--green)'], cycling: ['bike', 'var(--blue)'], swimming: ['swim', 'var(--blue)'],
+  walking: ['walk', 'var(--green)'], hiking: ['mountain', 'var(--green)'], padel: ['zap', 'var(--green)'], tennis: ['zap', 'var(--green)'], skiing: ['mountain', 'var(--blue)'], dance: ['activity', 'var(--purple)'], other: ['activity', 'var(--muted)'],
 };
-export const icon = (d) => { const c = (DISC[d] || DISC.other)[1]; return html`<div class="ico" style="background:color-mix(in srgb, ${c} 16%, transparent);color:${c}">${(DISC[d] || DISC.other)[0]}</div>`; };
+export const icon = (d) => { const [i, c] = DISC[d] || DISC.other; return html`<div class="ico" style="background:color-mix(in srgb, ${c} 16%, transparent);color:${c}">${raw(ic(i, 21))}</div>`; };
 export const intensityTag = (i) => html`<span class="tag ${i === 'alta' ? 'red' : i === 'moderada' ? 'amber' : 'green'}">${i || ''}</span>`;
 export const levelColor = (l) => (l === 'verde' ? 'var(--green)' : l === 'ambar' ? 'var(--amber)' : l === 'rojo' ? 'var(--red)' : 'var(--muted)');
 

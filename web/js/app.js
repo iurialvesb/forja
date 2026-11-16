@@ -1,6 +1,6 @@
 // Forja · web app (PWA). Rutas, sesión, caché de datos y arranque.
 import * as api from './api.js';
-import { html, raw, act, toast, busy, today, addDays, closeSheet } from './ui.js';
+import { html, raw, act, toast, busy, today, addDays, closeSheet, countUp } from './ui.js';
 import { ic } from './icons.js';
 import { HOME, PLAN, WORKOUTS, COACH, HEALTH } from './screens.js';
 import { NUTRITION } from './nutrition.js';
@@ -19,9 +19,10 @@ function writeP(key, v, t) {
   catch { try { for (const k of Object.keys(localStorage)) if (k.startsWith(LS)) localStorage.removeItem(k); } catch { /* */ } }
 }
 let dirty = false;
+const sheetOpen = () => { const s = document.getElementById('sheet'); return !s.hidden && s.dataset.state !== 'closing'; };
 function changed() {
   // Repinta solo si no estás escribiendo ni con una hoja abierta (si no, al cerrarla).
-  if (!document.getElementById('sheet').hidden || /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName ?? '')) { dirty = true; return; }
+  if (sheetOpen() || /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName ?? '')) { dirty = true; return; }
   clearTimeout(changed.t); changed.t = setTimeout(() => render({ soft: true }), 120);
 }
 export const flushDirty = () => { if (dirty) { dirty = false; changed(); } };
@@ -59,7 +60,17 @@ const ROUTES = { inicio: HOME, plan: PLAN, entrenos: WORKOUTS, nutricion: NUTRIT
 export const go = (path) => { if (location.hash !== `#/${path}`) location.hash = `#/${path}`; else render(); };
 const route = () => { const [name = 'inicio', ...rest] = location.hash.replace(/^#\/?/, '').split('/'); return { name, params: rest }; };
 
-let rendering = 0, lastRoute = '';
+let rendering = 0, lastRoute = '', countedHome = false;
+const SUBS = { perfil: 'inicio', salud: 'inicio', objetivo: 'inicio' };
+const tabIndex = (name) => TABS.findIndex(([k]) => k === (SUBS[name] ?? name));
+// La barra de pestañas se construye una vez; al navegar solo se mueve la píldora (transición, interrumpible).
+function paintTabs(tabs, name) {
+  if (!tabs.querySelector('.pill')) tabs.innerHTML = '<span class="pill" aria-hidden="true"></span>' + TABS.map(([k, i, l]) => `<a href="#/${k}" data-k="${k}">${ic(i, 23)}<span>${l}</span></a>`).join('');
+  const idx = tabIndex(name);
+  tabs.querySelectorAll('a').forEach((a, n) => { a.classList.toggle('on', n === idx); if (n === idx) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+  tabs.style.setProperty('--i', Math.max(0, idx));
+  tabs.querySelector('.pill').style.opacity = idx < 0 ? '0' : '1';
+}
 const SKELETON = '<div class="sk" style="height:190px;border-radius:28px"></div><div class="sk" style="height:120px"></div><div class="tiles"><div class="sk" style="height:120px;margin:0"></div><div class="sk" style="height:120px;margin:0"></div></div><div class="sk" style="height:160px"></div>';
 export async function render(opts = {}) {
   const my = ++rendering;
@@ -69,17 +80,25 @@ export async function render(opts = {}) {
   const r = route();
   const key = `${r.name}/${r.params.join('/')}`, isNew = key !== lastRoute && !opts.soft;
   const screen = ROUTES[r.name] ?? HOME;
-  tabs.innerHTML = TABS.map(([k, i, l]) => `<a href="#/${k}" class="${(r.name === k || (k === 'inicio' && (r.name === 'perfil' || r.name === 'salud' || r.name === 'objetivo'))) ? 'on' : ''}">${ic(i, 23)}${l}</a>`).join('');
+  paintTabs(tabs, r.name);
   tabs.style.display = r.name === 'onboarding' ? 'none' : 'flex';
   // Si la pantalla tarda (primera vez sin datos guardados), se ve el esqueleto en vez de una página en blanco.
-  const sk = isNew ? setTimeout(() => { if (my === rendering) { view.classList.remove('enter'); view.innerHTML = SKELETON; } }, 90) : 0;
+  const sk = isNew ? setTimeout(() => { if (my === rendering) view.innerHTML = SKELETON; }, 90) : 0;
   try {
     const out = await screen(r.params);
     clearTimeout(sk);
     if (my !== rendering) return;
-    top.innerHTML = html`<h1>${out.sub ? html`<span class="sub">${out.sub}</span>` : ''}${out.title}</h1>${out.right ?? ''}`.s;
-    if (isNew) { view.classList.remove('enter'); void view.offsetWidth; view.classList.add('enter'); } else view.classList.remove('enter');
-    view.innerHTML = String(out.body);
+    const swap = () => {
+      top.innerHTML = html`<h1>${out.sub ? html`<span class="sub">${out.sub}</span>` : ''}${out.title}</h1>${out.right ?? ''}`.s;
+      view.innerHTML = String(out.body);
+    };
+    // Cambio de pantalla: transición de vista (se desliza hacia el lado de la pestaña). Repintados suaves: sin animación.
+    const from = tabIndex(lastRoute.split('/')[0]), to = tabIndex(r.name);
+    if (isNew && lastRoute && document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      document.documentElement.dataset.dir = to > from ? '1' : to < from ? '-1' : (r.params.length ? '1' : '-1');
+      try { await document.startViewTransition(swap).updateCallbackDone; } catch { swap(); }
+    } else swap();
+    if (r.name === 'inicio' && !countedHome) { countedHome = true; countUp(view); }
     lastRoute = key;
     out.after?.();
   } catch (e) {
@@ -89,7 +108,7 @@ export async function render(opts = {}) {
     view.innerHTML = html`<div class="card"><h3>No se pudo cargar</h3><p class="muted">${e.message}</p><button class="block" data-act="${act(() => { invalidate(); render(); })}">Reintentar</button></div>`.s;
   }
 }
-window.addEventListener('hashchange', () => { if (!document.getElementById('sheet').hidden) closeSheet(); window.scrollTo(0, 0); render(); });
+window.addEventListener('hashchange', () => { if (sheetOpen()) closeSheet(); window.scrollTo(0, 0); render(); });
 
 // ---------- Acceso ----------
 function renderAuth(mode = 'login') {
@@ -128,8 +147,8 @@ export async function backgroundSync(force = false) {
       api.fn('process-inbox').catch(() => ({})),
       api.fn('calendar-sync', {}).catch(() => null),
     ]);
-    if (icu?.activities) toast(`⌚ ${icu.activities} entreno${icu.activities > 1 ? 's' : ''} nuevo${icu.activities > 1 ? 's' : ''} del Apple Watch`, 5000);
-    if (icu?.prs?.length || inbox.prs?.length) toast(`🏆 Nuevo récord: ${(icu?.prs ?? inbox.prs)[0]}`, 6000);
+    if (icu?.activities) toast(`${icu.activities} entreno${icu.activities > 1 ? 's' : ''} nuevo${icu.activities > 1 ? 's' : ''} del Apple Watch`, 5000);
+    if (icu?.prs?.length || inbox.prs?.length) toast(`Nuevo récord: ${(icu?.prs ?? inbox.prs)[0]}`, 6000);
     else if (cal?.replanned) toast('Plan reorganizado con tu calendario');
     const news = icu?.activities || icu?.days || inbox.processed || cal?.replanned;
     if (news) { invalidate('sessions', 'readiness', 'health', 'changes', 'insights', 'planned'); render({ soft: true }); }

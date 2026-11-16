@@ -2,7 +2,8 @@
 // lee las fotos en segundo plano, permite corregir la estructura y se guarda solo (borrador) mientras registras.
 import * as api from './api.js';
 import { get, invalidate, render } from './app.js';
-import { html, act, toast, sheet, setSheet, closeSheet, busy, today, timeOf, shortDate, dayName, resizeImage, lineChart } from './ui.js';
+import { raw, html, act, toast, sheet, setSheet, closeSheet, busy, today, timeOf, shortDate, dayName, resizeImage, lineChart } from './ui.js';
+import { ic } from './icons.js';
 import { parseWorkoutText } from './engine/workoutText.js';
 import { buildLog, buildBlock, addGroup, regroup, statusFor, amrapResult, logToSession, fmtClock, parseClock, newBlock, emptyLog, summarizeLog, logFromSaved, displayName, hyroxBlock, hyroxTotal } from './engine/logbook.js';
 import { openTimer } from './timer.js';
@@ -55,9 +56,9 @@ function withLink(d, link) {
 export function addWodTo(s) {
   const link = { id: s.id, date: new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date(s.started_at)), time: timeOf(s.started_at), min: Math.round(s.duration_s / 60), title: s.title && !/cross ?training|funcional|functional/i.test(s.title) ? s.title : 'CrossFit' };
   sheet('Añadir el WOD', html`<p class="small muted">Se guarda dentro de este entreno del Apple Watch: conserva su FC, zonas, calorías y tiempos.</p>
-    <button class="block primary" data-act="${act(() => startFromText('', link))}">📋 Pegar texto (Strava, notas, WhatsApp)</button>
-    <button class="block" data-act="${act(() => startFromPhoto(link))}">📷 Foto de la pizarra</button>
-    <button class="block" data-act="${act(() => startManual(link))}">✍️ Por bloques, a mano</button>`);
+    <button class="block primary" data-act="${act(() => startFromText('', link))}">${raw(ic('clipboard', 17))} Pegar texto (Strava, notas, WhatsApp)</button>
+    <button class="block" data-act="${act(() => startFromPhoto(link))}">${raw(ic('camera', 17))} Foto de la pizarra</button>
+    <button class="block" data-act="${act(() => startManual(link))}">${raw(ic('pen', 17))} Por bloques, a mano</button>`);
 }
 
 /** Une un registro manual con el entreno del Apple Watch del mismo día (y quita el duplicado). */
@@ -180,7 +181,7 @@ function rowView(bi, gi, ri, r, b) {
     <div class="grow"><div class="small" style="font-weight:600">${r.exercise}</div><div class="xs muted">obj. ${targetHint(r) || '—'}${r.notes ? ` · ${r.notes}` : ''}</div></div>
     <input class="num" inputmode="decimal" data-lf="done" data-b="${bi}" data-g="${gi}" data-r="${ri}" value="${r.done ?? ''}" placeholder="${UNIT[r.unit]}"><span class="xs muted u">${UNIT[r.unit]}</span>
     ${showKg(r) && !b?.hyrox ? html`<input class="num" inputmode="decimal" data-lf="kg" data-b="${bi}" data-g="${gi}" data-r="${ri}" value="${r.doneKg ?? ''}" placeholder="kg"><span class="xs muted u">kg</span>` : ''}
-    ${b?.hyrox ? html`<input class="num" style="width:70px" inputmode="numeric" data-lf="split" data-b="${bi}" data-g="${gi}" data-r="${ri}" value="${fmtClock(r.splitS)}" placeholder="m:ss"><span class="xs muted u">⏱</span>` : ''}
+    ${b?.hyrox ? html`<input class="num" style="width:70px" inputmode="numeric" data-lf="split" data-b="${bi}" data-g="${gi}" data-r="${ri}" value="${fmtClock(r.splitS)}" placeholder="m:ss"><span class="xs muted u">${raw(ic('clock', 17))}</span>` : ''}
   </div>`;
 }
 
@@ -229,9 +230,9 @@ function blockView(bi, b) {
     <div class="row" style="gap:6px"><input class="grow title-in" data-bf="title" data-b="${bi}" value="${b.title}">
       <div class="seg mini"><button class="${b.scaling === 'rx' ? 'on' : ''}" data-act="${act(() => { b.scaling = 'rx'; persist(); draw(); })}">RX</button><button class="${b.scaling === 'scaled' ? 'on' : ''}" data-act="${act(() => { b.scaling = 'scaled'; persist(); draw(); })}">Scaled</button></div></div>
     <div class="row xs muted" style="gap:8px"><span class="tag accent">${PARTS.find((p) => p[0] === b.part)?.[1] ?? b.part}</span><span class="grow">${fmtLabel(b)}</span>
-      ${timerMode(b) ? html`<button class="sm ghost" data-act="${act(() => startTimer(bi, b))}">⏱</button>` : ''}
+      ${timerMode(b) ? html`<button class="sm ghost" aria-label="Cronómetro" data-act="${act(() => startTimer(bi, b))}">${raw(ic('clock', 17))}</button>` : ''}
       <button class="sm ghost" data-act="${act(() => { open ? editing.delete(b.id) : editing.add(b.id); draw(); })}">${open ? 'Cerrar' : '✎ Estructura'}</button>
-      <button class="sm ghost" data-act="${act(() => { if (confirm('¿Quitar este bloque?')) { D.blocks.splice(bi, 1); persist(); draw(); } })}">🗑</button></div>
+      <button class="sm ghost" data-act="${act(() => { if (confirm('¿Quitar este bloque?')) { D.blocks.splice(bi, 1); persist(); draw(); } })}" aria-label="Quitar bloque">${raw(ic('trash', 17))}</button></div>
     ${open ? structureEditor(bi, b) : ''}
     ${b.groups.length ? html`<button class="sm ghost" data-act="${act(() => { for (const g of b.groups) for (const r of g.rows) if (!r.rest && r.status === 'pending') r.status = statusFor({ ...r, status: 'done' }); persist(); draw(); })}">✓ Marcar todo como hecho</button>` : html`<p class="small muted">Añade los ejercicios con «✎ Estructura».</p>`}
     ${b.groups.map((g, gi) => html`<div class="lgroup"><div class="xs muted glabel">${g.label}</div>${g.rows.map((r, ri) => rowView(bi, gi, ri, r, b))}</div>`)}
@@ -392,7 +393,7 @@ async function save(btn) {
     if (D.importId) api.db.update('photo_imports', { status: 'confirmed', session_id: r.sessionId }, { id: `eq.${D.importId}` }).catch(() => {});
     const lines = summarizeLog(D); const wasEdit = !!D.editId;
     dropDraft(); closeSheet(); invalidate('sessions', 'planned', 'readiness', 'changes', 'insights', 'records', 'exhist'); render();
-    toast([wasEdit ? 'Cambios guardados' : r.merged ? 'Unido a tu sesión del Watch' : 'Entreno guardado', ...lines, ...r.prs.map((p) => `🏆 ${p}`), ...r.changes.filter((c) => c.action !== 'mark_done').map((c) => c.reason)].join(' · '), 8000);
+    toast([wasEdit ? 'Cambios guardados' : r.merged ? 'Unido a tu sesión del Watch' : 'Entreno guardado', ...lines, ...r.prs.map((p) => `${p}`), ...r.changes.filter((c) => c.action !== 'mark_done').map((c) => c.reason)].join(' · '), 8000);
   });
 }
 

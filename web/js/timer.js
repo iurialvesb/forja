@@ -100,7 +100,7 @@ function draw() {
     state.sig = sig;
     q('.tm-actions').innerHTML = `<button data-t="go" class="${!state.start ? 'primary' : ''}">${!state.start ? '▶ Empezar' : state.paused ? '▶ Seguir' : 'Ⅱ Pausa'}</button>
       ${canRound && state.start ? '<button data-t="round">+1 ronda</button>' : ''}
-      ${canLap ? `<button data-t="lap" class="primary" style="min-width:220px">⏭ ${state.laps.length + 1 >= state.opts.laps.length ? 'Terminar' : 'Siguiente tramo'}</button>` : ''}
+      ${canLap ? `<button data-t="lap" class="primary" style="min-width:220px">${state.laps.length + 1 >= state.opts.laps.length ? 'Terminar' : 'Siguiente tramo'}</button>` : ''}
       ${state.mode === 'for_time' && state.start && !state.opts.laps ? '<button data-t="done" class="green">✓ Terminado</button>' : ''}`;
   }
 }
