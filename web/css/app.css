@@ -33,7 +33,7 @@ main { flex: 1; padding: 4px 16px calc(100px + var(--safe-bottom)); }
 /* Barra de pestañas flotante */
 #tabs { position: fixed; bottom: calc(10px + var(--safe-bottom)); left: 12px; right: 12px; z-index: 6; display: flex; padding: 6px; border-radius: 26px; background: rgba(14,24,48,.82); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); border: 1px solid var(--line2); box-shadow: 0 12px 40px rgba(0,0,0,.5); }
 #tabs a { flex: 1; text-align: center; color: rgba(205,218,245,.72); text-decoration: none; font-size: 11.5px; font-weight: 600; padding: 7px 0 5px; border-radius: 20px; transition: color .2s, background .2s; display: flex; flex-direction: column; align-items: center; gap: 2px; }
-#tabs a .ic { transition: transform .2s; }
+#tabs a .ic { transition: transform 160ms var(--ease-out); }
 #tabs a.on { color: #fff; background: linear-gradient(180deg, rgba(77,141,255,.32), rgba(77,141,255,.14)); }
 #tabs a.on .ic { transform: translateY(-1px) scale(1.06); color: var(--accent2); }
 #tabs a:active .ic { transform: scale(.9); }
@@ -104,7 +104,7 @@ input[type=checkbox] { width: 22px; height: 22px; accent-color: var(--accent); }
 input[type=range] { padding: 0; accent-color: var(--accent); }
 .check { display: flex; align-items: center; gap: 10px; padding: 8px 0; color: var(--text); font-size: 15px; margin: 0; font-weight: 500; }
 .bar { height: 8px; border-radius: 99px; background: rgba(140,170,255,.12); overflow: hidden; }
-.bar > i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--accentDeep), var(--accent2)); transition: width .6s cubic-bezier(.2,.8,.2,1); }
+.bar > i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--accentDeep), var(--accent2)); }
 .ring { width: 92px; height: 92px; flex: none; }
 .ring .arc { animation: ringIn .9s cubic-bezier(.2,.8,.2,1) both; }
 @keyframes ringIn { from { stroke-dasharray: 0 999; } }
@@ -234,26 +234,32 @@ html.offline #top::after { content: 'Sin conexión'; position: absolute; right: 
 .sect { font: 600 13px var(--body); color: var(--muted); margin: 14px 0 2px; }
 .ico .ic { width: 21px; height: 21px; }
 
+/* Sensación de app instalada (mobile-native) */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+html, body { overscroll-behavior: none; }
+button, a, [role="button"], [data-act], summary, .chip, label.check { touch-action: manipulation; }
+button, [role="button"], .chip, #tabs a, summary, .day, .seg button { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+#sheet .panel, .hscroll, .chips { overscroll-behavior: contain; }
+
 /* ============ Movimiento (Emil Kowalski): respuesta inmediata, curvas propias, nada de keyframes en lo que se toca ============ */
 button, .btn, .chip, .tile, .card[data-act], .entry, .day, #tabs a { transition: transform 160ms var(--ease-out), background-color 200ms ease, color 200ms ease, opacity 200ms ease; }
 button:active, .btn:active, .chip:active, .day:active { transform: scale(0.97); }
 .tile:active, .card[data-act]:active { transform: scale(0.985); }
 @media (hover: hover) and (pointer: fine) { button:hover, .btn:hover { background-color: var(--card3); } button.primary:hover { filter: brightness(1.08); } }
-.bar > i { transition: width 600ms var(--ease-out); }
 
 /* Cambio de pantalla: la cabecera y la barra se quedan; el contenido entra desde el lado de la pestaña */
 @view-transition { navigation: none; }
 #top { view-transition-name: top; } #tabs { view-transition-name: tabs; } #view { view-transition-name: view; }
 ::view-transition-group(top), ::view-transition-group(tabs) { animation: none; }
-::view-transition-old(view) { animation: vt-out 160ms var(--ease-out) both; }
-::view-transition-new(view) { animation: vt-in 280ms var(--ease-out) both; }
-@keyframes vt-out { to { opacity: 0; transform: translateX(calc(var(--dir, 1) * -14px)); filter: blur(2px); } }
-@keyframes vt-in { from { opacity: 0; transform: translateX(calc(var(--dir, 1) * 18px)); filter: blur(2px); } }
+::view-transition-old(view) { animation: vt-out 120ms var(--ease-out) both; }
+::view-transition-new(view) { animation: vt-in 200ms var(--ease-out) both; }
+@keyframes vt-out { to { opacity: 0; transform: translateX(calc(var(--dir, 1) * -8px)); } }
+@keyframes vt-in { from { opacity: 0; transform: translateX(calc(var(--dir, 1) * 12px)); } }
 html[data-dir="-1"] { --dir: -1; }
 
 /* Barra de pestañas: una píldora que se desliza a la pestaña activa */
 #tabs { isolation: isolate; }
-#tabs .pill { position: absolute; z-index: -1; top: 6px; bottom: 6px; left: 6px; width: calc((100% - 12px) / 5); transform: translateX(calc(var(--i, 0) * 100%)); border-radius: 20px; background: linear-gradient(180deg, rgba(77,141,255,.34), rgba(77,141,255,.14)); box-shadow: inset 0 1px 0 rgba(255,255,255,.12); transition: transform 380ms var(--ease-in-out), width 380ms var(--ease-in-out); }
+#tabs .pill { position: absolute; z-index: -1; top: 6px; bottom: 6px; left: 6px; width: calc((100% - 12px) / 5); transform: translateX(calc(var(--i, 0) * 100%)); border-radius: 20px; background: linear-gradient(180deg, rgba(77,141,255,.34), rgba(77,141,255,.14)); box-shadow: inset 0 1px 0 rgba(255,255,255,.12); transition: transform 260ms var(--ease-in-out); }
 #tabs a.on { background: none; }
 #tabs a > span { position: relative; }
 
@@ -273,13 +279,17 @@ html[data-dir="-1"] { --dir: -1; }
 #toast[data-on] { transform: translate(-50%, 0); opacity: 1; visibility: visible; }
 
 /* Una vez por sesión: el anillo y las cifras de Inicio se cuentan */
-.ring .arc { animation: none; transition: stroke-dasharray 900ms var(--ease-out); }
+.ring .arc { animation: none; transition: stroke-dasharray 700ms var(--ease-out); }
 
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-old(view), ::view-transition-new(view) { animation: vt-fade 150ms ease both; }
   @keyframes vt-fade { from { opacity: 0; } }
   #sheet .panel { transition: opacity 200ms ease; transform: none !important; opacity: 0; } #sheet[data-state="open"] .panel { opacity: 1; }
   #tabs .pill { transition: none; }
+  #toast { transition: opacity 300ms ease; transform: translate(-50%, 0); }
+  .ring .arc { transition: none; }
+  .sk { animation: none; }
+  button:active, .btn:active, .chip:active, .day:active, .tile:active, .card[data-act]:active { transform: none; opacity: .8; }
 }
 
 /* Compartir resumen: vista previa del PNG sobre cuadros (transparencia), foto oscura o clara */

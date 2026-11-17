@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-17 · Movimiento y sensación nativa (Emil Kowalski)
+- Cambio de pantalla más rápido (120/200 ms, 8–12 px) y sin desenfoque de pantalla completa: es lo que más se repite al día.
+- Píldora de pestañas 260 ms con curva de movimiento en pantalla; icono de pestaña con la curva propia.
+- Fuera la transición de anchura de las barras (animaba layout y nunca llegaba a verse). Anillo sincronizado con la cuenta de cifras (700 ms).
+- «Reducir movimiento» completo: avisos y pulsaciones con opacidad en vez de desplazamiento/escala; sin brillo animado en los esqueletos.
+- Sensación de app instalada: ya se puede hacer zoom con dos dedos (quitado maximum-scale=1); sin rebote ni «tirar para recargar» de la página, las hojas y carruseles no arrastran la página; sin retardo de toque, sin seleccionar texto ni menú de copiar al mantener pulsado un botón; el teclado de Android redimensiona la vista; sin inflado de letra en horizontal.
+
 ## 2026-11-17 · Accesibilidad y uso con una mano (ui-ux-pro-max)
 - Nueva auditoría automática (`AUDIT=1 node web-test/run.mjs`): contraste AA, objetivos de toque, nombres accesibles, iconos decorativos y desbordes, en 390 px, 375 px, horizontal y texto grande. Resultado: 0 fallos (antes 246 de contraste y 261 de toque).
 - Contraste AA: azul de botones y pestañas activas más profundo (texto blanco ≥ 4,5:1), etiquetas de la barra inferior más claras y a 11,5 px, fechas y textos de los objetivos legibles.
