@@ -27,7 +27,8 @@ export const rowToMeal = (r: any): PlannedMeal => ({ id: r.id, date: r.date, slo
 export interface DayView { date: string; target: DayTarget; meals: PlannedMeal[]; totals: Macros; eaten: Macros; alerts: Alert[]; adjustments: MealAdjustment[]; adherence: { mealsDone: number; mealsTotal: number; score: number } }
 
 /** Calcula la semana: objetivos según entreno, reequilibrio de comidas pendientes y avisos. Guarda los cambios. */
-export async function computeWeek(sb: SupabaseClient, ctx: AthleteContext, weekStart = mondayOf(ctx.today), persist = true) {
+// persist: true = guarda y espera; 'background' = guarda sin hacer esperar a la respuesta (EdgeRuntime.waitUntil).
+export async function computeWeek(sb: SupabaseClient, ctx: AthleteContext, weekStart = mondayOf(ctx.today), persist: boolean | 'background' = true) {
   const st = await loadSettings(sb, ctx);
   const end = addDays(weekStart, 6);
   const [ps, meals, logs, sess] = await Promise.all([
@@ -67,14 +68,21 @@ export async function computeWeek(sb: SupabaseClient, ctx: AthleteContext, weekS
   }
   const balance = weekBalance(days.map((d) => ({ date: d.date, target: d.target.macros, totals: d.totals, past: d.date < ctx.today })));
   if (persist) {
-    await sb.from('day_targets').upsert(days.map((d) => ({ user_id: ctx.userId, date: d.date, kcal: d.target.macros.kcal, protein: d.target.macros.protein, carbs: d.target.macros.carbs, fat: d.target.macros.fat, fiber: d.target.macros.fiber, load: d.target.load, explanation: d.target.explanation, computed_at: new Date().toISOString() })));
-    for (const d of days.filter((x) => x.date >= ctx.today)) for (const m of d.meals) {
-      const orig = mealRows.find((o) => o.id === m.id);
-      if (orig && JSON.stringify(orig.ingredients) !== JSON.stringify(m.ingredients)) await sb.from('planned_meals').update({ ingredients: m.ingredients }).eq('id', m.id);
-    }
+    // Todas las escrituras en paralelo (antes, una detrás de otra).
     const todays = days.filter((d) => d.date >= ctx.today).flatMap((d) => d.alerts);
-    await sb.from('nutrition_alerts').delete().gte('date', ctx.today).eq('read', false);
-    if (todays.length || balance.message) await sb.from('nutrition_alerts').insert([...todays, ...(balance.message ? [{ level: 'info', date: ctx.today, message: balance.message }] : [])].map((a: any) => ({ user_id: ctx.userId, date: a.date, slot: a.slot ?? null, level: a.level, message: a.message })));
+    const changedMeals = days.filter((x) => x.date >= ctx.today).flatMap((d) => d.meals)
+      .filter((m) => { const orig = mealRows.find((o) => o.id === m.id); return orig && JSON.stringify(orig.ingredients) !== JSON.stringify(m.ingredients); });
+    const writes = Promise.all([
+      sb.from('day_targets').upsert(days.map((d) => ({ user_id: ctx.userId, date: d.date, kcal: d.target.macros.kcal, protein: d.target.macros.protein, carbs: d.target.macros.carbs, fat: d.target.macros.fat, fiber: d.target.macros.fiber, load: d.target.load, explanation: d.target.explanation, computed_at: new Date().toISOString() }))),
+      ...changedMeals.map((m) => sb.from('planned_meals').update({ ingredients: m.ingredients }).eq('id', m.id)),
+      (async () => {
+        await sb.from('nutrition_alerts').delete().gte('date', ctx.today).eq('read', false);
+        if (todays.length || balance.message) await sb.from('nutrition_alerts').insert([...todays, ...(balance.message ? [{ level: 'info', date: ctx.today, message: balance.message }] : [])].map((a: any) => ({ user_id: ctx.userId, date: a.date, slot: a.slot ?? null, level: a.level, message: a.message })));
+      })(),
+    ]);
+    const er = (globalThis as any).EdgeRuntime;
+    if (persist === 'background' && er?.waitUntil) er.waitUntil(writes.catch((e) => console.error('computeWeek persist', e)));
+    else await writes;
   }
   return { settings: st, days, balance, foods };
 }

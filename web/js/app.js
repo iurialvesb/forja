@@ -3,7 +3,7 @@ import * as api from './api.js';
 import { html, raw, act, toast, busy, today, addDays, closeSheet, countUp } from './ui.js';
 import { ic } from './icons.js';
 import { HOME, PLAN, WORKOUTS, COACH, HEALTH } from './screens.js';
-import { NUTRITION } from './nutrition.js';
+import { NUTRITION, prefetchNutrition } from './nutrition.js';
 import { PROFILE, ONBOARDING } from './profile.js';
 import { GOAL } from './goals.js';
 
@@ -46,12 +46,28 @@ export async function get(key, fetcher, maxAge = 60_000) {
   if (p) { cache.set(key, p); if (Date.now() - p.t >= maxAge) revalidate(key, fetcher).catch(() => {}); return p.v; }
   return revalidate(key, fetcher);
 }
+// «Invalidar» ya no borra: marca como caducado. La pantalla se pinta al instante con lo que había y se refresca
+// sola en cuanto llega lo nuevo (antes cada acción dejaba la pantalla en blanco 2–4 s esperando al servidor).
 export function invalidate(...prefixes) {
   const hit = (k) => !prefixes.length || prefixes.some((p) => k.startsWith(p));
-  for (const k of [...cache.keys()]) if (hit(k)) cache.delete(k);
-  try { for (const k of Object.keys(localStorage)) if (k.startsWith(LS) && hit(k.slice(LS.length))) localStorage.removeItem(k); } catch { /* */ }
+  for (const [k, c] of cache) if (hit(k)) c.t = 0;
+  try {
+    for (const k of Object.keys(localStorage)) {
+      if (!k.startsWith(LS) || !hit(k.slice(LS.length))) continue;
+      if (cache.has(k.slice(LS.length))) localStorage.removeItem(k);          // la copia en memoria manda
+      else { const x = JSON.parse(localStorage.getItem(k)); localStorage.setItem(k, JSON.stringify({ v: x.v, t: 0 })); }
+    }
+  } catch { /* */ }
 }
-export function clearCache() { invalidate(); }
+/** Cambio optimista: modifica lo guardado y repinta ya; el servidor confirma después. */
+export function patch(key, fn) {
+  const c = cache.get(key) ?? readP(key); if (!c) return false;
+  const v = fn(c.v) ?? c.v; cache.set(key, { v, t: c.t }); writeP(key, v, c.t); return true;
+}
+export function clearCache() {
+  cache.clear();
+  try { for (const k of Object.keys(localStorage)) if (k.startsWith(LS)) localStorage.removeItem(k); } catch { /* */ }
+}
 
 // ---------- Navegación ----------
 const TABS = [['inicio', 'home', 'Inicio'], ['plan', 'calendar', 'Plan'], ['entrenos', 'activity', 'Entrenos'], ['nutricion', 'food', 'Nutrición'], ['coach', 'chat', 'Coach']];
@@ -177,6 +193,8 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catc
       if (prof && !prof.birth_date && route().name !== 'onboarding') return go('onboarding');
     } catch { /* sin conexión */ }
     backgroundSync(true);
+    // Deja Nutrición lista antes de que la abras (semana, diario de hoy y tus alimentos).
+    (window.requestIdleCallback ?? ((f) => setTimeout(f, 800)))(() => prefetchNutrition());
   }
 })();
 

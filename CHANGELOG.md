@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-17 · Nutrición instantánea
+- Diagnóstico con los registros reales: cada función del servidor arranca en frío (~2 s; nutrition-day 2,0–2,2 s) y cada acción del Diario esperaba a dos llamadas seguidas (guardar + recalcular la semana) con la pantalla bloqueada.
+- Acciones optimistas: «Me lo he comido», «No», «Deshacer», añadir, cambiar, mover, quitar y copiar de ayer se ven al instante (8–17 ms medidos con red simulada de 2 s); el servidor confirma por detrás y, si falla, se avisa y se vuelve a lo guardado. Lo pendiente se ve atenuado y no se puede editar hasta confirmarse.
+- La caché ya no se borra tras cada cambio: se marca caducada, se pinta lo que había y se refresca sola (antes, pantalla de carga de 2–4 s tras cada acción).
+- Nutrición se precarga al abrir la app (semana, diario de hoy, recientes y alimentos) y el día anterior/siguiente se deja listo para las flechas.
+- Servidor: lecturas en paralelo en nutrition-day y en el contexto; las escrituras del reequilibrio (objetivos, menú, avisos) en paralelo y sin hacer esperar a la respuesta.
+- Sugerencias del menú más limpias: título, kcal e ingredientes en una línea y un único botón ✓; el resto de opciones (a medias, cambiar, hoy no) al tocar la sugerencia.
+- Prueba de velocidad percibida: `SPEED=1 node web-test/run.mjs`.
+
 ## 2026-11-17 · Movimiento y sensación nativa (Emil Kowalski)
 - Cambio de pantalla más rápido (120/200 ms, 8–12 px) y sin desenfoque de pantalla completa: es lo que más se repite al día.
 - Píldora de pestañas 260 ms con curva de movimiento en pantalla; icono de pestaña con la curva propia.

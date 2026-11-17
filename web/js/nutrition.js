@@ -1,6 +1,6 @@
 // Nutrición: hoy (chequeo diario), menú semanal, compra, batch cooking, despensa y suplementos.
 import * as api from './api.js';
-import { get, invalidate, render } from './app.js';
+import { get, invalidate, render, patch } from './app.js';
 import { parseFoodText, matchFood, foodTokens } from './engine/foodText.js';
 import { normalizePantry, unitWord, isLiquid, usePresets } from './engine/pantry.js';
 import { raw, html, act, toast, sheet, setSheet, closeSheet, busy, today, addDays, monday, dayName, shortDate, n0, bar, ring, resizeImage, SLOTS, slotName, GOAL_MODES } from './ui.js';
@@ -24,6 +24,23 @@ export async function NUTRITION(params = []) {
 // Cada alimento se cambia o se borra por separado; «＋ Añadir» busca al instante en tus alimentos y recientes.
 let dDate = null;
 const OTHER = 'otros';
+// ---------- Optimista: la pantalla cambia al tocar; el servidor confirma por detrás ----------
+const r1 = (v) => Math.round(v * 10) / 10;
+const totals = (items) => items.reduce((a, x) => ({ kcal: a.kcal + (x.macros?.kcal ?? 0), protein: a.protein + (x.macros?.protein ?? 0), carbs: a.carbs + (x.macros?.carbs ?? 0), fat: a.fat + (x.macros?.fat ?? 0) }), { kcal: 0, protein: 0, carbs: 0, fat: 0 });
+function addLocalLog(date, slot, items, extra = {}) {
+  const t = totals(items);
+  patch(`flogs:${date}`, (logs) => [...logs, { id: `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, date, slot: slot === OTHER ? null : slot, items, kcal: r1(t.kcal), protein: r1(t.protein), carbs: r1(t.carbs), fat: r1(t.fat), source: 'manual', pending: true, ...extra }]);
+}
+/** Lanza la escritura sin bloquear. Al terminar refresca en silencio; si falla, lo dice y vuelve a lo del servidor. */
+function bg(work, keys, onDone) {
+  Promise.resolve().then(work).then((r) => { invalidate(...keys); render({ soft: true }); onDone?.(r); })
+    .catch((e) => { invalidate(...keys); render({ soft: true }); toast(`No se pudo guardar: ${e.message}`, 6000); });
+}
+
+export function prefetchNutrition() {
+  Promise.allSettled([week(monday()), logsOf(today()), recentFoods(), catalogCache ?? foodCatalog().then((c) => (catalogCache = c))]);
+}
+
 const logsOf = (date) => get(`flogs:${date}`, () => api.db.select('food_logs', { date: `eq.${date}`, order: 'created_at' }), 60_000);
 const recentFoods = () => get('flogs:recent', async () => {
   const rows = await api.db.select('food_logs', { select: 'items,slot,date', date: `gte.${addDays(today(), -45)}`, order: 'created_at.desc', limit: 400 }).catch(() => []);
@@ -36,6 +53,7 @@ const sumLogs = (logs) => logs.reduce((a, l) => ({ kcal: a.kcal + +l.kcal, prote
 async function hoy() {
   const date = dDate ?? today();
   const [w, logs] = await Promise.all([week(monday(date)), logsOf(date)]);
+  setTimeout(() => { logsOf(addDays(date, -1)); logsOf(addDays(date, 1)); }, 400);   // el día de al lado ya listo al pulsar ‹ ›
   const d = w.days.find((x) => x.date === date);
   if (!d) return html`<div class="card muted">Sin datos para ese día.</div>`;
   const T = d.target.macros, S = sumLogs(logs), left = T.kcal - S.kcal;
@@ -68,10 +86,12 @@ function mealSection(slot, date, logs, planned, optional) {
   const sugg = planned && planned.status !== 'eaten' && planned.status !== 'skipped' && !logs.some((l) => l.planned_meal_id === planned.id);
   return html`<div class="card meal">
     <div class="row mhead"><b class="grow">${slot === OTHER ? 'Otros' : slotName(slot)}${optional ? html` <span class="xs muted">opcional</span>` : ''}</b><span class="mk">${kcal ? `${n0(kcal)} kcal` : ''}</span></div>
-    ${entries.map(({ log, k, it }) => html`<div class="entry" data-act="${act(() => editEntry(log, k, date))}"><div class="grow"><div class="en">${it.name}</div><div class="xs muted">${fmtAmount(it)}${log.source === 'menu' ? ' · del menú' : ''}</div></div><div class="ek">${n0(it.macros?.kcal ?? 0)}</div></div>`)}
-    ${sugg ? html`<div class="sugg"><div class="row"><div class="grow"><div class="small" style="font-weight:650">${planned.title}</div><div class="xs" style="color:var(--accent2)">Sugerido en tu menú${planned.fromBatch ? ' · del batch' : ''}</div>
-          <div class="xs muted">${planned.ingredients.map((i) => `${i.name} ${Math.round(i.grams)} g`).join(' · ')}</div></div><div class="ek muted">${n0(planned.macros.kcal)}</div></div>
-        <div class="row" style="gap:6px;margin-top:8px"><button class="sm primary" data-act="${act(mealAction(planned, 'eaten'))}">✓ Me lo he comido</button><button class="sm" data-act="${act(() => editMeal(planned))}">Cambiar</button><button class="sm ghost" data-act="${act(mealAction(planned, 'skip'))}">No</button></div></div>` : ''}
+    ${entries.map(({ log, k, it }) => html`<div class="entry ${log.pending ? 'pending' : ''}" data-act="${act(() => editEntry(log, k, date))}"><div class="grow"><div class="en">${it.name}</div><div class="xs muted">${fmtAmount(it)}${log.source === 'menu' ? ' · del menú' : ''}</div></div><div class="ek">${n0(it.macros?.kcal ?? 0)}</div></div>`)}
+    ${sugg ? html`<div class="sugg">
+        <div class="grow" data-act="${act(() => suggOptions(planned))}"><div class="st">${planned.title}</div>
+          <div class="xs"><span style="color:var(--accent2)">Sugerido${planned.fromBatch ? ' · del batch' : ''}</span><span class="muted"> · ${n0(planned.macros.kcal)} kcal</span></div>
+          <div class="xs muted ing">${planned.ingredients.map((i) => `${i.name} ${Math.round(i.grams)} g`).join(' · ')}</div></div>
+        <button class="eat" aria-label="Me lo he comido: ${planned.title}" data-act="${act(mealAction(planned, 'eaten'))}">${raw(ic('check', 22))}</button></div>` : ''}
     ${planned?.status === 'skipped' && !entries.length ? html`<div class="xs muted" style="padding:6px 0">Menú descartado · <a data-act="${act(mealAction(planned, 'reset'))}">recuperar</a></div>` : ''}
     <button class="addf" data-act="${act(() => addFood(slot, date))}">${raw(ic('plus', 17))} Añadir alimento</button>
   </div>`;
@@ -83,6 +103,7 @@ const catalogUnit = (id) => catalogCache?.find((f) => f.id === id)?.unitGrams;
 
 /** Cambiar cantidad, mover o borrar un alimento del diario. */
 async function editEntry(log, k, date) {
+  if (log.pending) return toast('Guardando… en un segundo lo puedes cambiar', 2000);
   const cat = catalogCache ?? (catalogCache = await foodCatalog());
   const it = { ...log.items[k] }; const food = cat.find((f) => f.id === it.foodId);
   const per100 = food?.per100 ?? (it.macros && it.grams ? Object.fromEntries(Object.entries(it.macros).map(([x, v]) => [x, (v * 100) / it.grams])) : null);
@@ -105,18 +126,23 @@ async function saveEntry(log, k, item, slot, date) {
   const items = (log.items ?? []).map((x) => ({ ...x }));
   const moved = item && (slot === OTHER ? null : slot) !== (log.slot ?? null);
   if (!item || moved) items.splice(k, 1); else items[k] = item;
-  const tot = items.reduce((a, x) => ({ kcal: a.kcal + (x.macros?.kcal ?? 0), protein: a.protein + (x.macros?.protein ?? 0), carbs: a.carbs + (x.macros?.carbs ?? 0), fat: a.fat + (x.macros?.fat ?? 0) }), { kcal: 0, protein: 0, carbs: 0, fat: 0 });
-  const r = (v) => Math.round(v * 10) / 10;
-  if (moved) await api.db.insert('food_logs', [{ user_id: uid(), date, slot: slot === OTHER ? null : slot, items: [item], kcal: r(item.macros.kcal), protein: r(item.macros.protein), carbs: r(item.macros.carbs), fat: r(item.macros.fat), source: 'manual' }]);
-  if (!items.length) {
-    if (log.planned_meal_id) await api.fn('meal-update', { mealId: log.planned_meal_id, action: 'reset' });   // devuelve a la despensa lo descontado
-    else await api.db.remove('food_logs', { id: `eq.${log.id}` });
-  } else {
-    await api.db.update('food_logs', { items, kcal: r(tot.kcal), protein: r(tot.protein), carbs: r(tot.carbs), fat: r(tot.fat) }, { id: `eq.${log.id}` });
-    // Si viene del menú, el menú se entera (para reajustar el resto del día con lo que de verdad has comido).
-    if (log.planned_meal_id) await api.db.update('planned_meals', { ingredients: items.map(({ foodId, name, grams }) => ({ foodId, name, grams })) }, { id: `eq.${log.planned_meal_id}` });
-  }
-  invalidate(`flogs:${date}`, 'flogs:recent', 'nutweek'); render();
+  const tot = totals(items);
+  // 1) Al instante en pantalla
+  patch(`flogs:${date}`, (logs) => logs.flatMap((l) => (l.id !== log.id ? [l] : items.length ? [{ ...l, items, kcal: r1(tot.kcal), protein: r1(tot.protein), carbs: r1(tot.carbs), fat: r1(tot.fat) }] : [])));
+  if (moved) addLocalLog(date, slot, [item]);
+  render({ soft: true });
+  // 2) Por detrás
+  bg(async () => {
+    if (moved) await api.db.insert('food_logs', [{ user_id: uid(), date, slot: slot === OTHER ? null : slot, items: [item], kcal: r1(item.macros.kcal), protein: r1(item.macros.protein), carbs: r1(item.macros.carbs), fat: r1(item.macros.fat), source: 'manual' }]);
+    if (!items.length) {
+      if (log.planned_meal_id) await api.fn('meal-update', { mealId: log.planned_meal_id, action: 'reset' });   // devuelve a la despensa lo descontado
+      else await api.db.remove('food_logs', { id: `eq.${log.id}` });
+    } else {
+      await api.db.update('food_logs', { items, kcal: r1(tot.kcal), protein: r1(tot.protein), carbs: r1(tot.carbs), fat: r1(tot.fat) }, { id: `eq.${log.id}` });
+      // Si viene del menú, el menú se entera (para reajustar el resto del día con lo que de verdad has comido).
+      if (log.planned_meal_id) await api.db.update('planned_meals', { ingredients: items.map(({ foodId, name, grams }) => ({ foodId, name, grams })) }, { id: `eq.${log.planned_meal_id}` });
+    }
+  }, [`flogs:${date}`, 'flogs:recent', 'nutweek']);
 }
 
 /** Añadir alimento: búsqueda instantánea en tus alimentos (recientes primero) y cantidad. */
@@ -137,7 +163,7 @@ async function addFood(slot, date) {
   const list = () => {
     const el = document.getElementById('fres'); if (!el) return;
     const rs = results();
-    el.innerHTML = html`${!q.trim() && rs.length ? html`<div class="xs muted" style="margin:8px 2px">RECIENTES</div>` : ''}
+    el.innerHTML = html`${!q.trim() && rs.length ? html`<div class="xs muted" style="margin:8px 2px">Recientes</div>` : ''}
       ${rs.map(({ f, grams: g }) => html`<div class="entry" data-act="${act(() => { pick = f; useUnits = !!f.unitGrams && (!g || Math.abs(g / f.unitGrams - Math.round(g / f.unitGrams)) < 0.05); grams = g ?? f.unitGrams ?? 100; draw(); })}"><div class="grow"><div class="en">${f.name}</div><div class="xs muted">${f.brand ? `${f.brand} · ` : ''}${n0(f.per100.kcal)} kcal/100 g${g ? ` · ${Math.round(g)} g la última vez` : ''}</div></div><span class="muted">›</span></div>`)}
       ${q.trim() && !rs.length ? html`<p class="small muted" style="padding:8px 2px">No lo tengo guardado.</p>` : ''}
       ${q.trim() ? html`<button class="block" data-act="${act(() => searchWeb())}">${searching ? html`<span class="spinner"></span> Buscando…` : html`${raw(ic('search', 17))} Buscar «${q.trim()}» en Open Food Facts / USDA`}</button>` : ''}
@@ -170,11 +196,14 @@ async function addFood(slot, date) {
         <button data-act="${act(() => { grams = g + (useUnits ? u : g >= 100 ? 10 : 5); draw(); })}">+</button></div>
       ${!useUnits ? html`<div class="chips">${[50, 100, 150, 200, 250].map((x) => html`<button class="chip ${Math.round(g) === x ? 'on' : ''}" data-act="${act(() => { grams = x; draw(); })}">${x} g</button>`)}</div>` : ''}
       <label class="check"><input type="checkbox" id="fded" ${ded() ? 'checked' : ''} onchange="try{localStorage.setItem('forja:deduct', this.checked ? '1' : '0')}catch{}"> Descontar de mi despensa</label>
-      <button class="primary block" data-act="${act((b) => busy(b, async () => {
-        const r = await api.fnQueued('nutrition-log', { action: 'confirm', date, slot: slot === OTHER ? null : slot, items: [{ foodId: pick.id, name: pick.name, grams: Math.round(g) }], source: 'manual', deductPantry: document.getElementById('fded').checked });
-        closeSheet(); invalidate(`flogs:${date}`, 'flogs:recent', 'nutweek', 'pantry'); render();
-        toast(r.queued ? 'Sin conexión: se sube al volver la cobertura' : `${pick.name}: ${n0(m.kcal)} kcal a ${slot === OTHER ? 'Otros' : slotName(slot)}`);
-      }))}">Añadir a ${slot === OTHER ? 'Otros' : slotName(slot)}</button>`);
+      <button class="primary block" data-act="${act(() => {
+        const p = pick, gg = Math.round(g), deduct = document.getElementById('fded').checked;
+        addLocalLog(date, slot, [{ foodId: p.id, name: p.name, grams: gg, macros: m, unitGrams: p.unitGrams }]);
+        closeSheet(); render({ soft: true });
+        toast(`${p.name}: ${n0(m.kcal)} kcal a ${slot === OTHER ? 'Otros' : slotName(slot)}`, 2500);
+        bg(() => api.fnQueued('nutrition-log', { action: 'confirm', date, slot: slot === OTHER ? null : slot, items: [{ foodId: p.id, name: p.name, grams: gg }], source: 'manual', deductPantry: deduct }),
+          [`flogs:${date}`, 'flogs:recent', 'nutweek', 'pantry'], (r) => { if (r?.queued) toast('Sin conexión: se sube al volver la cobertura'); });
+      })}">Añadir a ${slot === OTHER ? 'Otros' : slotName(slot)}</button>`);
   };
   sheet(`Añadir a ${slot === OTHER ? 'Otros' : slotName(slot)}`, ''); draw();
 }
@@ -184,19 +213,34 @@ async function copyYesterday(slot, date) {
   const prev = (await logsOf(addDays(date, -1))).filter((l) => (l.slot ?? OTHER) === slot);
   const items = prev.flatMap((l) => l.items ?? []).filter((i) => i.foodId).map(({ foodId, name, grams }) => ({ foodId, name, grams }));
   if (!items.length) return toast(`Ayer no apuntaste nada en ${slot === OTHER ? 'Otros' : slotName(slot)}`);
-  await busy(null, () => api.fn('nutrition-log', { action: 'confirm', date, slot: slot === OTHER ? null : slot, items, source: 'manual', deductPantry: false }));
-  closeSheet(); invalidate(`flogs:${date}`, 'nutweek'); render(); toast(`Copiado de ayer: ${items.map((i) => i.name).join(', ')}`);
+  addLocalLog(date, slot, prev.flatMap((l) => l.items ?? []).filter((i) => i.foodId));
+  closeSheet(); render({ soft: true }); toast(`Copiado de ayer: ${items.map((i) => i.name).join(', ')}`, 2500);
+  bg(() => api.fn('nutrition-log', { action: 'confirm', date, slot: slot === OTHER ? null : slot, items, source: 'manual', deductPantry: false }), [`flogs:${date}`, 'nutweek']);
 }
 
-const mealAction = (m, action, extra = {}) => async (b) => busy(b, async () => {
-  const r = await api.fnQueued('meal-update', { mealId: m.id, action, ...extra });
-  if (r.queued) return toast('Sin conexión: lo apunto y lo sincronizo al volver la cobertura');
-  invalidate('nutweek', `flogs:${m.date}`, 'flogs:recent'); render();
-  const msg = [...(r.pantry?.used?.length ? [`Descontado de casa: ${r.pantry.used.map((u) => `${u.from} ${u.grams} g`).join(', ')}`] : []), ...(r.pantry?.missing?.length ? [`No lo tenías en casa: ${r.pantry.missing.map((x) => x.name).join(', ')}`] : []),
-    ...(r.adjustments || []).map((a) => a.text), ...(r.alerts || []).map((a) => a.message)];
-  if (r.pantry) invalidate('pantry', 'shopping');
-  if (msg.length) toast(msg.join(' · '), 8000);
-});
+const QUICK = new Set(['eaten', 'skip', 'reset']);
+const mealAction = (m, action, extra = {}) => async (b) => {
+  const after = (r) => {
+    if (r?.queued) return toast('Sin conexión: lo apunto y lo sincronizo al volver la cobertura');
+    const msg = [...(r?.pantry?.used?.length ? [`Descontado de casa: ${r.pantry.used.map((u) => `${u.from} ${u.grams} g`).join(', ')}`] : []), ...(r?.pantry?.missing?.length ? [`No lo tenías en casa: ${r.pantry.missing.map((x) => x.name).join(', ')}`] : []),
+      ...(r?.adjustments || []).map((a) => a.text), ...(r?.alerts || []).map((a) => a.message)];
+    if (r?.pantry) invalidate('pantry', 'shopping');
+    if (msg.length) toast(msg.join(' · '), 6000);
+  };
+  const keys = ['nutweek', `flogs:${m.date}`, 'flogs:recent'];
+  if (!QUICK.has(action) || extra.fraction) {           // cambios que calcula el servidor (cambiar plato, a medias…): con indicador
+    return busy(b, async () => { const r = await api.fnQueued('meal-update', { mealId: m.id, action, ...extra }); invalidate(...keys); render({ soft: true }); after(r); });
+  }
+  // Cumplido / No / Deshacer: la pantalla cambia ya
+  const status = action === 'eaten' ? 'eaten' : action === 'skip' ? 'skipped' : 'planned';
+  patch(`nutweek:${monday(m.date)}`, (w) => { for (const d of w.days ?? []) for (const x of d.meals ?? []) if (x.id === m.id) x.status = status; return w; });
+  if (action === 'eaten') {
+    const tg = m.ingredients.reduce((a, i) => a + (+i.grams || 0), 0) || 1;
+    addLocalLog(m.date, m.slot, m.ingredients.map((i) => ({ foodId: i.foodId, name: i.name, grams: i.grams, macros: Object.fromEntries(['kcal', 'protein', 'carbs', 'fat'].map((k) => [k, (m.macros[k] ?? 0) * (+i.grams || 0) / tg])) })), { planned_meal_id: m.id, source: 'menu' });
+  } else patch(`flogs:${m.date}`, (logs) => logs.filter((l) => l.planned_meal_id !== m.id));
+  render({ soft: true });
+  bg(() => api.fnQueued('meal-update', { mealId: m.id, action, ...extra }), keys, after);
+};
 
 function mealCard(m) {
   const st = m.status;
@@ -213,6 +257,15 @@ function mealCard(m) {
       <button class="sm" data-act="${act(() => editMeal(m))}">✎ Cambiar</button>
       ${m.fromBatch ? html`<span class="tag purple">batch</span>` : ''}
     </div></div>`;
+}
+
+/** Al tocar la sugerencia: todas las opciones en una hoja (la tarjeta queda limpia: solo el ✓). */
+function suggOptions(m) {
+  sheet(m.title, html`<p class="small muted" style="margin-top:0">${m.ingredients.map((i) => `${i.name} ${Math.round(i.grams)} g`).join(' · ')} · ${n0(m.macros.kcal)} kcal</p>
+    <button class="block primary" data-act="${act((b) => { closeSheet(); mealAction(m, 'eaten')(b); })}">${raw(ic('check', 18))} Me lo he comido</button>
+    <button class="block" data-act="${act(() => partial(m))}">Comí una parte o más</button>
+    <button class="block" data-act="${act(() => editMeal(m))}">Cambiar cantidades o plato</button>
+    <button class="block ghost" data-act="${act((b) => { closeSheet(); mealAction(m, 'skip')(b); })}">Hoy no me lo como</button>`);
 }
 
 function partial(m) {

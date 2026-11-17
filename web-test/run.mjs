@@ -111,7 +111,8 @@ await page.route('http://forja.test/**', (route) => {
   const ct = p.endsWith('.js') ? 'text/javascript' : p.endsWith('.css') ? 'text/css' : p.endsWith('.png') ? 'image/png' : p.endsWith('.webmanifest') ? 'application/manifest+json' : 'text/html';
   route.fulfill({ contentType: ct, body: readFileSync(f) });
 });
-await page.route('https://mock.supabase.co/**', (route) => {
+await page.route('https://mock.supabase.co/**', async (route) => {
+  if (globalThis.SLOW) await new Promise((r) => setTimeout(r, route.request().url().includes('/functions/') ? globalThis.SLOW.fn : globalThis.SLOW.rest));
   const u = new URL(route.request().url());
   const parts = u.pathname.split('/').filter(Boolean);
   if (parts[0] === 'rest') { const t = parts[2]; let rows = REST[t] ?? [];
@@ -251,7 +252,7 @@ await shot('#/perfil', '13-perfil');
 await shot('#/perfil', '14b-watch', () => page.getByText('Apple Watch automático').click());
 await shot('#/perfil', '14-atajo', () => page.getByText('Apple Salud (Atajo)').click());
 await shot('#/inicio', '15-checkin', () => page.locator('#view .hero').first().click());
-await shot('#/nutricion', '16-editar-comida', async () => { await page.getByRole('button', { name: 'Diario', exact: true }).click(); await page.waitForTimeout(500); await page.getByRole('button', { name: 'Cambiar', exact: true }).first().click(); });
+await shot('#/nutricion', '16-editar-comida', async () => { await page.getByRole('button', { name: 'Diario', exact: true }).click(); await page.waitForTimeout(500); await page.locator('.sugg .grow').first().click(); await page.waitForTimeout(450); await page.screenshot({ path: `${OUT}/16a-opciones-sugerencia.png` }); await page.getByRole('button', { name: 'Cambiar cantidades o plato' }).click(); await page.waitForTimeout(400); });
 await shot('#/salud', '25-salud');
 await page.evaluate(() => window.scrollTo(0, 900)); await page.screenshot({ path: `${OUT}/25b-salud-abajo.png` });
 await shot('#/objetivo/g1', '17-objetivo-media');
@@ -285,6 +286,38 @@ await shot('#/inicio', '23-inicio-abajo', async () => { await page.evaluate(() =
   await page.locator('#ltext').pressSequentially(', una coca de tomate', { delay: 5 }); await page.waitForTimeout(1600);
   const n2 = await page.locator('#lres .row').count(); console.log(n2 === 5 && calls === 1 ? 'Lo desconocido se busca aparte OK' : `✗ búsqueda aparte: ${n2} alimentos, ${calls} llamadas`);
   await page.screenshot({ path: `${OUT}/24b-comida-busqueda.png` });
+}
+// ---------- Velocidad percibida con red real (2 s funciones con arranque en frío, 250 ms tablas) ----------
+if (process.env.SPEED) {
+  globalThis.SLOW = { fn: 2000, rest: 250 };
+  // Mide dentro de la página: desde el toque (el.click) hasta que la pantalla refleja el cambio. Sin esperas de Playwright.
+  const tap = (label, sel, cond, pre) => page.evaluate(async ([sel, cond, pre]) => {
+    const pick = () => (typeof sel === 'string' ? document.querySelector(sel) : null) ?? [...document.querySelectorAll(sel.css)].find((e) => e.textContent.includes(sel.text));
+    const ok = new Function('pre', `return (${cond})(pre)`);
+    const preV = pre ? new Function(`return (${pre})()`)() : null;
+    const el = pick(); if (!el) return -1;
+    const t0 = performance.now(); el.click();
+    while (!ok(preV)) { if (performance.now() - t0 > 15000) return 99999; await new Promise((r) => requestAnimationFrame(r)); }
+    return Math.round(performance.now() - t0);
+  }, [sel, cond, pre]).then((ms) => console.log(`VELOCIDAD ${label}: ${ms} ms`));
+  await page.goto('http://forja.test/index.html#/inicio'); await page.waitForTimeout(3000);
+  { const t0 = Date.now(); await page.goto('http://forja.test/index.html#/nutricion'); await page.waitForFunction(() => !!document.querySelector('.eq b')); console.log(`VELOCIDAD abrir Nutrición: ${Date.now() - t0} ms`); }
+  await page.waitForTimeout(2500);
+  await tap('«Me lo he comido»', '.sugg button.eat', "(n) => document.querySelectorAll('.sugg').length < n", "() => document.querySelectorAll('.sugg').length");
+  await page.waitForTimeout(2500);
+  await tap('abrir «Añadir alimento»', '.addf', "() => !!document.querySelector('#fres .entry')");
+  await page.waitForTimeout(600);
+  await tap('elegir alimento', '#fres .entry', "() => !!document.querySelector('#sheet .qty')");
+  await tap('guardar alimento', { css: '#sheet button.primary.block', text: 'Añadir a' }, "(n) => document.querySelectorAll('#view .entry').length > n", "() => document.querySelectorAll('#view .entry').length");
+  await page.waitForTimeout(2500);
+  await tap('abrir alimento del diario', '#view .entry', "() => !!document.querySelector('#sheet button.danger')");
+  await page.waitForTimeout(600);
+  await tap('quitar alimento', { css: '#sheet button', text: 'Quitar del diario' }, "(n) => document.querySelectorAll('#view .entry').length < n", "() => document.querySelectorAll('#view .entry').length");
+  await page.waitForTimeout(2500);
+  await tap('cambiar de pestaña a Menú', { css: '.subtabs .chip', text: 'Menú' }, "() => document.querySelector('.subtabs .chip.on')?.textContent.includes('Menú') && !document.querySelector('.sk')");
+  await tap('volver a Diario', { css: '.subtabs .chip', text: 'Diario' }, "() => !!document.querySelector('.eq b')");
+  await tap('día anterior', '.daynav button', "() => document.querySelector('.daynav b')?.textContent === 'Ayer'");
+  globalThis.SLOW = null;
 }
 // ---------- Auditoría UX (ui-ux-pro-max): contraste, tamaño de toque, nombres accesibles, iconos decorativos, desbordes ----------
 if (process.env.AUDIT) {

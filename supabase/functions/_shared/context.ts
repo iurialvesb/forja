@@ -67,6 +67,7 @@ export function rowToSession(r: any): Session {
 export async function loadContext(sb: SupabaseClient, userId: string, now = new Date()): Promise<AthleteContext> {
   const today = todayMadrid(now);
   const since = addDays(today, -180);
+  const calSetP = sb.from('calendar_settings').select('*').eq('user_id', userId).maybeSingle();
   const [prof, phys, avail, inj, goals, sess, health, checkin, mem, bm] = await Promise.all([
     sb.from('profiles').select('*').eq('id', userId).single(),
     sb.from('physiology').select('*').eq('user_id', userId).lte('effective_from', today).order('effective_from', { ascending: false }).limit(1),
@@ -81,7 +82,7 @@ export async function loadContext(sb: SupabaseClient, userId: string, now = new 
   ]);
   for (const r of [prof, phys, avail, inj, goals, sess, health, mem, bm]) if (r.error) throw r.error;
   // Calendario (clases reservadas de WodBuster / Google / iCloud y agenda ocupada): próximas 3 semanas.
-  const { data: calSet } = await sb.from('calendar_settings').select('*').eq('user_id', userId).maybeSingle();
+  const { data: calSet } = await calSetP;
   let calendar: AthleteContext['calendar'];
   if (calSet) {
     const { data: evs } = await sb.from('calendar_events').select('*').eq('user_id', userId).gte('start_at', addDays(today, -1)).lte('start_at', addDays(today, 22));

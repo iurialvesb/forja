@@ -367,3 +367,11 @@ button.sm.ghost { min-width: 40px; }
 }
 /* Texto grande: el aviso del Watch pasa el botón debajo en vez de estrujar el título */
 .card.notice { flex-wrap: wrap; } .card.notice .grow { flex: 1 1 150px; min-width: 0; } .card.notice > button { margin-left: auto; }
+.entry.pending .ek { opacity: .55; }
+/* Sugerencia del menú: limpia, un solo gesto (✓); el resto, al tocarla */
+.sugg { display: flex; align-items: center; gap: 12px; }
+.sugg .st { font-weight: 650; font-size: 15px; }
+.sugg .ing { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.sugg .grow { min-width: 0; cursor: pointer; }
+button.eat { flex: none; width: 48px; height: 48px; padding: 0; border-radius: 50%; color: var(--green); background: rgba(52,211,153,.1); border-color: rgba(52,211,153,.35); }
+@media (hover: hover) and (pointer: fine) { button.eat:hover { background: rgba(52,211,153,.18); } }

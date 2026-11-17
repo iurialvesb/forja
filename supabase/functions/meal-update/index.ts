@@ -52,7 +52,7 @@ Deno.serve(handler(async (req) => {
   }
   await sb.from('planned_meals').update(upd).eq('id', meal.id);
   const ctx = await loadContext(sb, userId);
-  const week = await computeWeek(sb, ctx, mondayOf(meal.date));
+  const week = await computeWeek(sb, ctx, mondayOf(meal.date), 'background');
   const day = week.days.find((d) => d.date === meal.date)!;
   return json({ pantry, date: meal.date, target: day.target.macros, totals: day.totals, alerts: day.alerts, adjustments: day.adjustments, adherence: day.adherence, balance: week.balance });
 }));
