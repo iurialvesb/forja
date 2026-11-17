@@ -13,7 +13,7 @@ jobs:
         run: |
           S=$(date -u -d '-3 days' +%Y-%m-%dT%H:%M:%SZ); E=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           lg() { echo "== $1"; curl -s -G "https://api.supabase.com/v1/projects/$REF/analytics/endpoints/logs" -H "Authorization: Bearer $TOKEN" --data-urlencode "sql=$2" --data-urlencode "iso_timestamp_start=$S" --data-urlencode "iso_timestamp_end=$E" | jq -c '.result // .' | cut -c1-9000; }
-          lg funcs "select regexp_extract(req.pathname, '/functions/v1/([a-z-]+)') fn, count(*) n, cast(avg(m.execution_time_ms) as int) avg_ms, cast(approx_quantiles(m.execution_time_ms, 100)[offset(50)] as int) p50, cast(approx_quantiles(m.execution_time_ms, 100)[offset(90)] as int) p90, max(m.execution_time_ms) max_ms from function_edge_logs t cross join unnest(t.metadata) m cross join unnest(m.request) req group by fn order by n desc limit 30"
-          lg rest "select regexp_extract(req.path, '/rest/v1/([a-z_]+)') tbl, count(*) n from edge_logs t cross join unnest(t.metadata) m cross join unnest(m.request) req where req.path like '/rest/v1/%' group by tbl order by n desc limit 25"
-          lg boot "select event_message, timestamp from function_logs where event_message like '%boot%' order by timestamp desc limit 5"
+          lg sources "select source_name, count() n from logs group by source_name order by n desc"
+          lg muestra "select source_name, timestamp, event_message, toString(log_attributes) a from logs where source_name ilike '%function%' and event_message ilike '%nutrition%' order by timestamp desc limit 3"
+          lg muestra2 "select source_name, timestamp, event_message, toString(log_attributes) a from logs where source_name ilike '%edge%' and toString(log_attributes) ilike '%functions/v1%' order by timestamp desc limit 2"
           q() { echo "== $1"; curl -s -X POST "https://api.supabase.com/v1/projects/$REF/database/query" -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' -d "$(jq -n --arg q "$2" '{query:$q}')" | jq -c '.' | cut -c1-3000; }
