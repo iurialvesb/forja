@@ -284,7 +284,7 @@ async function sessionDetail(id) {
       ${s.distance_m > 0 ? html`<div class="stat"><div class="l">Distancia</div><div class="v">${(s.distance_m / 1000).toFixed(2).replace('.', ',')}<span class="u"> km</span></div></div>` : ''}
       ${s.avg_hr ? html`<div class="stat"><div class="l">FC media</div><div class="v" style="color:var(--red)">${s.avg_hr}</div></div>` : ''}
       ${s.rpe ? html`<div class="stat"><div class="l">RPE</div><div class="v">${s.rpe}</div></div>` : ''}</div>
-    <button class="block share-btn" data-act="${act(async () => { const { openShare } = await import('./share.js'); openShare(s, blocks); })}">${raw(ic('image', 18))} Compartir resumen</button>
+    <button class="block share-btn" data-act="${act(async () => { const { openShare } = await import('./share.js'); openShare(s, blocks, name); })}">${raw(ic('image', 18))} Compartir resumen</button>
     ${s.discipline === 'running' && s.distance_m > 0 ? html`<p class="small">Ritmo medio: <b>${pace(s.duration_s / (s.distance_m / 1000))}</b></p>` : ''}
     ${s.internal_load ? html`<p class="small muted">Carga ${n0(s.internal_load)} UA · fatiga de piernas ${n0(s.leg_index)}</p>` : ''}
     ${watch}

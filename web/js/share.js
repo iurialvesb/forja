@@ -40,6 +40,46 @@ export function shareStats(s, blocks = []) {
   return out.slice(0, 3);
 }
 
+const KIND = { strength: 'Fuerza', skill: 'Técnica', wod: 'WOD', accessory: 'Accesorios', endurance: 'Resistencia' };
+const FMT = { emom: 'EMOM', amrap: 'AMRAP', for_time: 'For Time', tabata: 'Tabata', chipper: 'Chipper', rounds: 'Rondas', intervals: 'Intervalos' };
+const kg = (x) => `${num(x, x % 1 ? 1 : 0)} kg`;
+
+/** Resumen corto de lo que hiciste: por bloque, una cabecera (formato y resultado) y hasta 4 ejercicios
+ *  agregados (series × reps · kg en fuerza; reps totales · kg en el WOD). Sin calentamiento ni vuelta a la calma. */
+export function workoutLines(blocks = [], sets = [], names = {}) {
+  const out = [];
+  for (const b of blocks) {
+    if (['warmup', 'cooldown'].includes(b.kind)) continue;
+    const rows = sets.filter((x) => x.block_id === b.id && !x.is_warmup && x.status !== 'skipped').sort((a, c) => a.position - c.position);
+    if (!rows.length && !b.result_text && !b.result_time_s && b.result_rounds == null) continue;
+    const fmt = b.format && FMT[b.format] ? `${FMT[b.format]}${b.duration_min && ['amrap', 'emom'].includes(b.format) ? ` ${num(b.duration_min)}'` : ''}` : '';
+    const res = b.result_time_s ? dur(b.result_time_s) : b.result_rounds != null ? `${b.result_rounds}${b.result_reps ? `+${b.result_reps}` : ''} rondas` : '';
+    const own = b.title && !/^(wod|fuerza|strength)$/i.test(b.title.trim()) ? b.title.trim() : '';
+    const byEx = [];
+    for (const x of rows) {
+      const n = names[x.exercise_id] ?? x.user_exercises?.name ?? x.exercise_id; if (!n) continue;
+      let e = byEx.find((y) => y.n === n); if (!e) byEx.push(e = { n, sets: 0, reps: [], kg: 0, cal: 0, m: 0, s: 0 });
+      e.sets++; if (x.reps != null) e.reps.push(+x.reps); if (x.load_kg) e.kg = Math.max(e.kg, +x.load_kg);
+      e.cal += +x.calories || 0; e.m += +x.distance_m || 0; e.s += +x.duration_s || 0;
+    }
+    const strength = b.kind === 'strength' || b.format === 'sets';
+    const items = byEx.slice(0, 4).map((e) => {
+      const same = e.reps.length && e.reps.every((r) => r === e.reps[0]);
+      const q = e.cal ? `${num(e.cal)} cal` : e.m ? (e.m >= 1000 ? `${num(e.m / 1000, 1)} km` : `${num(e.m)} m`) : e.reps.length
+        ? (strength ? (same ? `${e.sets}×${e.reps[0]}` : e.reps.join('-')) : `${e.reps.reduce((a, c) => a + c, 0)} reps`) : e.s ? dur(e.s) : '';
+      return { n: e.n.length > 22 ? e.n.slice(0, 21) + '…' : e.n, q: [q, e.kg ? kg(e.kg) : ''].filter(Boolean).join(' · ') };
+    });
+    if (byEx.length > 4) items.push({ n: `+${byEx.length - 4} más`, q: '' });
+    // Si el título del bloque es el propio ejercicio (Back Squat), no repetirlo: la cabecera dice qué tipo de bloque es.
+    const title = own && !(byEx.length === 1 && byEx[0].n.toLowerCase() === own.toLowerCase()) ? own : '';
+    const head = [title, fmt, res].filter(Boolean).join(' · ') || KIND[b.kind] || 'Bloque';
+    out.push({ head, items });
+  }
+  // Que quepa en una historia: como mucho 3 bloques y 9 líneas de ejercicio.
+  let budget = 9;
+  return out.slice(0, 3).map((g) => { const items = g.items.slice(0, Math.max(0, budget)); budget -= items.length; return { ...g, items }; }).filter((g) => g.items.length || g.head);
+}
+
 function setFont(ctx, weight, size, family, italic = false) { ctx.font = `${italic ? 'italic ' : ''}${weight} ${size}px ${family}`; }
 
 /** Recorrido normalizado a una caja (w × h), conservando proporción. */
@@ -52,8 +92,8 @@ function routePath(route, w, h) {
   return route.map(([a, b]) => [ox + (b * k - x0) * sc, h - oy - (a - y0) * sc]);
 }
 
-/** Dibuja el resumen. opts: { color: 'white'|'black', layout: 'stack'|'row', route: bool, title: bool } */
-export function drawShare(canvas, s, stats, route, opts) {
+/** Dibuja el resumen. opts: { color, layout: 'stack'|'row', route, title, work } · work = workoutLines(...) */
+export function drawShare(canvas, s, stats, route, opts, work = []) {
   const ink = opts.color === 'black' ? '#0a0a0a' : '#ffffff';
   const soft = opts.color === 'black' ? 'rgba(10,10,10,.62)' : 'rgba(255,255,255,.78)';
   const showRoute = opts.route && route?.length > 1;
@@ -61,7 +101,9 @@ export function drawShare(canvas, s, stats, route, opts) {
   // Alto según el contenido: el PNG queda ajustado, sin aire de sobra.
   const routeH = showRoute ? (stack ? 300 : 360) : 0;
   const statH = stack ? 172 : 190;
-  const H = 40 + (opts.title ? 92 : 0) + (showRoute ? routeH + 44 : 0) + (stack ? stats.length * statH : statH) + 96;
+  const showWork = opts.work && work.length > 0;
+  const workH = showWork ? 30 + work.reduce((a, g) => a + 64 + g.items.length * 50 + 18, 0) : 0;
+  const H = 40 + (opts.title ? 92 : 0) + (showRoute ? routeH + 44 : 0) + (stack ? stats.length * statH : statH) + workH + 96;
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, W, H);
@@ -106,6 +148,24 @@ export function drawShare(canvas, s, stats, route, opts) {
     });
   }
   y += stack ? stats.length * statH : statH;
+  if (showWork) {
+    // Lista centrada: cabecera del bloque en condensada cursiva; cada ejercicio «nombre  cantidad · kg».
+    y += 30;
+    ctx.fillStyle = soft; ctx.globalAlpha = 0.5; ctx.fillRect(cx - 60, y - 14, 120, 4); ctx.globalAlpha = 1; ctx.fillStyle = ink;
+    for (const g of work) {
+      setFont(ctx, 700, 50, FONT, true); ctx.textAlign = 'center'; ctx.fillText(g.head.slice(0, 40), cx, y + 50); y += 64;
+      for (const it of g.items) {
+        setFont(ctx, 500, 38, BODY); const nW = ctx.measureText(it.n).width;
+        setFont(ctx, 700, 38, BODY); const qW = it.q ? ctx.measureText('  ' + it.q).width : 0;
+        let x = cx - (nW + qW) / 2; ctx.textAlign = 'left';
+        setFont(ctx, 500, 38, BODY); ctx.fillStyle = soft; ctx.fillText(it.n, x, y + 38);
+        if (it.q) { setFont(ctx, 700, 38, BODY); ctx.fillStyle = ink; ctx.fillText('  ' + it.q, x + nW, y + 38); }
+        ctx.fillStyle = ink; y += 50;
+      }
+      y += 18;
+    }
+    ctx.textAlign = 'center';
+  }
   // Firma pequeña: el rayo de Forja + nombre.
   ctx.fillStyle = soft; setFont(ctx, 800, 38, FONT, true);
   const word = 'FORJA', tw = ctx.measureText(word).width, bolt = 30, gx = cx - (tw + bolt + 10) / 2;
@@ -118,17 +178,24 @@ export function drawShare(canvas, s, stats, route, opts) {
 const toBlob = (canvas) => new Promise((ok) => canvas.toBlob(ok, 'image/png'));
 
 /** Hoja de compartir: vista previa sobre fondo de cuadros / oscuro / claro y botones de compartir, copiar y bajar. */
-export async function openShare(s, blocks = []) {
+export async function openShare(s, blocks = [], names = {}) {
   sheet('Compartir resumen', html`<div class="center"><span class="spinner"></span></div>`);
   await Promise.allSettled([document.fonts?.load(`italic 800 100px ${FONT}`), document.fonts?.load(`600 40px ${BODY}`)]);
   const streams = OUTDOOR.includes(s.discipline) ? await api.db.select('session_streams', { session_id: `eq.${s.id}`, select: 'route' }).then((r) => r[0]).catch(() => null) : null;
   const route = streams?.route ?? null;
-  const stats = shareStats(s, blocks);
-  const o = { color: 'white', layout: route?.length > 1 ? 'row' : 'stack', route: route?.length > 1, title: false, bg: 'checks' };
+  const work = workoutLines(blocks, s.session_sets || [], names);
+  let stats = shareStats(s, blocks);
+  // Con ejercicios, las cifras van en línea (el WOD ya sale en su bloque) y la tarjeta queda compacta.
+  if (work.length) {
+    stats = stats.filter((x) => ['Tiempo', 'FC media', 'Energía', 'Distancia'].includes(x.l));
+    if (stats.length < 3 && s.active_kcal && !stats.some((x) => x.l === 'Energía')) stats.push({ l: 'Energía', v: num(s.active_kcal), u: 'kcal' });
+    stats = stats.slice(0, 3);
+  }
+  const o = { color: 'white', layout: route?.length > 1 || work.length ? 'row' : 'stack', route: route?.length > 1, title: !!work.length, work: !!work.length, bg: 'checks' };
   const canvas = document.createElement('canvas');
   const seg = (key, opts) => html`<div class="seg">${opts.map(([v, l]) => html`<button type="button" class="${o[key] === v ? 'on' : ''}" data-act="${act(() => { o[key] = v; draw(); })}">${l}</button>`)}</div>`;
   const draw = () => {
-    drawShare(canvas, s, stats, route, o);
+    drawShare(canvas, s, stats, route, o, work);
     setSheet(html`
       <div class="share-prev" data-bg="${o.bg}"><img alt="Vista previa del resumen" src="${canvas.toDataURL('image/png')}"></div>
       <div class="share-bgs">${[['checks', 'Transparente'], ['dark', 'Foto oscura'], ['light', 'Foto clara']].map(([v, l]) => html`<button type="button" class="chip ${o.bg === v ? 'on' : ''}" data-act="${act(() => { o.bg = v; draw(); })}">${l}</button>`)}</div>
@@ -136,6 +203,7 @@ export async function openShare(s, blocks = []) {
       <label>Diseño</label>${seg('layout', [['stack', 'Vertical'], ['row', 'En línea']])}
       <div class="row" style="gap:8px;margin:2px 0 14px">
         ${route?.length > 1 ? html`<button type="button" class="chip ${o.route ? 'on' : ''}" data-act="${act(() => { o.route = !o.route; draw(); })}">Recorrido</button>` : ''}
+        ${work.length ? html`<button type="button" class="chip ${o.work ? 'on' : ''}" data-act="${act(() => { o.work = !o.work; draw(); })}">Ejercicios</button>` : ''}
         <button type="button" class="chip ${o.title ? 'on' : ''}" data-act="${act(() => { o.title = !o.title; draw(); })}">Título y fecha</button>
       </div>
       <button class="block primary" data-act="${act(shareIt)}">${raw(ic('share', 18))} Compartir PNG</button>

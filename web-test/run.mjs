@@ -172,6 +172,23 @@ await page.evaluate(() => { const p = document.querySelector('#sheet .panel'); i
   if (info.w !== 1080 || info.corner !== 0) errors.push(`PNG de compartir: ${JSON.stringify(info)}`); else console.log(`PNG sin fondo OK (${info.w}×${info.h})`);
   await page.getByRole('button', { name: 'Negras' }).click(); await page.getByRole('button', { name: 'Foto clara' }).click(); await page.getByRole('button', { name: 'Vertical' }).click(); await page.waitForTimeout(300);
   await page.screenshot({ path: `${OUT}/26b-compartir-negras.png` });
+  // CrossFit: resumen con ejercicios (fuerza 5×5, WOD con resultado)
+  const cf = await page.evaluate(async () => {
+    const { workoutLines, drawShare, shareStats } = await import('./js/share.js');
+    const s = { id: 'x', started_at: '2026-11-17T07:00:00Z', discipline: 'crossfit', title: 'CrossFit', duration_s: 3600, avg_hr: 151, active_kcal: 640 };
+    const blocks = [{ id: 'b0', kind: 'warmup', position: 0 }, { id: 'b1', kind: 'strength', format: 'sets', title: 'Back Squat', position: 1 }, { id: 'b2', kind: 'wod', format: 'amrap', duration_min: 12, title: 'WOD', result_rounds: 7, result_reps: 13, position: 2 }];
+    const sets = [...[1, 2, 3, 4, 5].map((k) => ({ block_id: 'b1', position: k, exercise_id: 'back_squat', reps: 5, load_kg: 80 })),
+      ...[0, 1, 2, 3, 4, 5, 6].flatMap((r) => [{ block_id: 'b2', position: r * 3, exercise_id: 'thruster', reps: 9, load_kg: 43 }, { block_id: 'b2', position: r * 3 + 1, exercise_id: 'pull_up', reps: 12 }, { block_id: 'b2', position: r * 3 + 2, exercise_id: 'row', calories: 15 }])];
+    const work = workoutLines(blocks, sets, { back_squat: 'Back Squat', thruster: 'Thruster', pull_up: 'Pull-up', row: 'Remo' });
+    const stats = shareStats(s, blocks).filter((x) => x.l !== 'WOD');
+    const c = drawShare(document.createElement('canvas'), s, stats, null, { color: 'white', layout: 'row', title: true, work: true }, work);
+    const d = document.createElement('div'); d.className = 'share-prev'; d.dataset.bg = 'dark'; d.style.cssText = 'position:fixed;inset:0;z-index:99;border-radius:0';
+    d.innerHTML = `<img src="${c.toDataURL()}">`; document.body.append(d); await new Promise((r) => setTimeout(r, 200));
+    return work;
+  });
+  console.log('CrossFit resumen:', JSON.stringify(cf));
+  await page.screenshot({ path: `${OUT}/26c-compartir-crossfit.png` });
+  await page.evaluate(() => document.querySelector('.share-prev[style]')?.remove());
 }
 await shot('#/entrenos', '05i-anadir-wod', async () => { await reopen(); await page.getByRole('button', { name: 'Historial', exact: true }).click(); await page.waitForTimeout(400); await page.locator('#view .card.row').filter({ hasText: 'Afternoon Workout' }).first().click(); await page.waitForTimeout(800); await page.evaluate(() => { const p = document.querySelector('#sheet .panel'); if (p) p.scrollTop = 9999; }); });
 await (async () => {

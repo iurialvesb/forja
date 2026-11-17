@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-11-17 · Resumen de CrossFit con ejercicios
+- El PNG de compartir de CrossFit, fuerza o HYROX incluye un resumen de lo que hiciste: por bloque, formato y resultado (AMRAP 12' · 7+13 rondas) y hasta 4 ejercicios con series×reps y kilos (Back Squat 5×5 · 80 kg) o reps totales en el WOD (Thruster 63 reps · 43 kg). Sin calentamiento. Se puede quitar con «Ejercicios».
+
 ## 2026-11-16 · Interfaz más viva y resumen para Instagram
 - **Compartir resumen** (en el detalle de cada entreno): PNG sin fondo de 1080 px para poner encima de tus fotos. Letras blancas o negras, diseño vertical o en línea, recorrido opcional (carreras), título y fecha opcionales. Vista previa sobre transparente, foto oscura y foto clara. Compartir (Instagram, Fotos…), copiar o descargar.
 - Cifras por disciplina: carrera (distancia, ritmo, tiempo), bici (velocidad), natación (ritmo /100 m), CrossFit/HYROX (resultado del WOD, tiempo, FC media o kcal).
