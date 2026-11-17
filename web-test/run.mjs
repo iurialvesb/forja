@@ -286,6 +286,73 @@ await shot('#/inicio', '23-inicio-abajo', async () => { await page.evaluate(() =
   const n2 = await page.locator('#lres .row').count(); console.log(n2 === 5 && calls === 1 ? 'Lo desconocido se busca aparte OK' : `✗ búsqueda aparte: ${n2} alimentos, ${calls} llamadas`);
   await page.screenshot({ path: `${OUT}/24b-comida-busqueda.png` });
 }
+// ---------- Auditoría UX (ui-ux-pro-max): contraste, tamaño de toque, nombres accesibles, iconos decorativos, desbordes ----------
+if (process.env.AUDIT) {
+  const screens = [['#/inicio'], ['#/salud'], ['#/objetivo/g1'], ['#/plan'], ['#/entrenos'], ['#/entrenos', 'Progreso'], ['#/nutricion', 'Diario'], ['#/nutricion', 'Menú'], ['#/nutricion', 'Compra'], ['#/nutricion', 'Batch'], ['#/nutricion', 'Despensa'], ['#/nutricion', 'Suplementos'], ['#/coach'], ['#/perfil']];
+  const AUD = async () => page.evaluate(() => {
+    const out = { contrast: [], touch: [], name: [], deco: [], overflow: [] };
+    const rgb = (c) => { const m = c.match(/rgba?\(([^)]+)\)/); if (!m) return null; const v = m[1].split(/[ ,/]+/).filter(Boolean).map(Number); return [v[0], v[1], v[2], v[3] ?? 1]; };
+    const lum = ([r, g, b]) => { const f = (x) => { x /= 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
+    const bgOf = (el) => {
+      const layers = [];
+      for (let e = el; e; e = e.parentElement) {
+        const cs = getComputedStyle(e);
+        if (cs.backgroundImage !== 'none') { const g = (cs.backgroundImage.match(/rgba?\([^)]+\)|#[0-9a-f]{6}/gi) || []).map((x) => (x[0] === '#' ? [parseInt(x.slice(1, 3), 16), parseInt(x.slice(3, 5), 16), parseInt(x.slice(5, 7), 16), 1] : rgb(x))).filter(Boolean); if (g.length) layers.push([0, 1, 2, 3].map((i) => g.reduce((x, y) => x + y[i], 0) / g.length)); }
+        const c = rgb(cs.backgroundColor); if (c && c[3] > 0) layers.push(c);
+        if (layers.length && layers[layers.length - 1][3] >= 0.98) break;
+      }
+      let acc = [6, 11, 23];
+      for (const L of layers.reverse()) acc = [0, 1, 2].map((i) => L[i] * L[3] + acc[i] * (1 - L[3]));
+      return acc;
+    };
+    const vis = (el) => { const r = el.getBoundingClientRect(); const cs = getComputedStyle(el); return r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && +cs.opacity > 0.2 && !el.closest('[hidden],#tabs .pill') && !el.closest('details:not([open]) > :not(summary)'); };
+    const desc = (el) => `${el.tagName.toLowerCase()}${el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\s+/).slice(0, 2).join('.') : ''} «${(el.innerText || el.getAttribute('aria-label') || '').trim().slice(0, 30)}»`;
+    // Contraste de texto
+    for (const el of document.querySelectorAll('#view *, #top *, #tabs *')) {
+      if (!vis(el) || ![...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) continue;
+      if (el.closest('svg') || el.closest('.dim,.done,.skipped') || el.closest('[style*="opacity"]')) continue;
+      const cs = getComputedStyle(el); const fg = rgb(cs.color); if (!fg) continue;
+      const bg = bgOf(el); const a = fg[3] * (+cs.opacity || 1); const mix = [0, 1, 2].map((i) => fg[i] * a + bg[i] * (1 - a));
+      const L1 = lum(mix), L2 = lum(bg); const cr = (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05);
+      const fs = parseFloat(cs.fontSize), bold = +cs.fontWeight >= 700; const need = fs >= 24 || (fs >= 18.66 && bold) ? 3 : 4.5;
+      if (cr < need - 0.05) out.contrast.push(`${desc(el)} ${cr.toFixed(2)}:1 (${fs}px)`);
+    }
+    // Objetivos de toque ≥ 44 px (lado menor ≥ 40 y área equivalente)
+    for (const el of document.querySelectorAll('#view button, #view a, #view [data-act], #top button, #tabs a, #view input[type=checkbox], #view summary')) {
+      if (!vis(el)) continue; const r = el.getBoundingClientRect();
+      if (el.closest('.card[data-act]') && el.matches('.card[data-act] *') && !el.matches('button,a,summary')) continue;
+      if (el.matches('input') && el.closest('label')) continue;
+      if (Math.min(r.width, r.height) < 40) out.touch.push(`${desc(el)} ${Math.round(r.width)}×${Math.round(r.height)}`);
+    }
+    // Botones solo-icono con nombre; iconos decorativos ocultos al lector
+    for (const b of document.querySelectorAll('button, a')) { if (!vis(b)) continue; const t = (b.innerText || '').trim(); if (!t && !b.getAttribute('aria-label') && !b.title) out.name.push(desc(b) + ' ' + b.outerHTML.slice(0, 60)); }
+    for (const svg of document.querySelectorAll('#view svg, #top svg, #tabs svg')) { if (!vis(svg) || svg.closest('.ring,.chart,.spark,svg svg') || svg.getAttribute('aria-hidden') === 'true' || svg.getAttribute('role') === 'img') continue; if (svg.closest('button,a,.l,.tag,.bub,.ico,summary,.small,div')) { out.deco.push(desc(svg.parentElement)); } }
+    // Desbordes horizontales
+    if (document.documentElement.scrollWidth > innerWidth + 1) out.overflow.push(`página ${document.documentElement.scrollWidth}px > ${innerWidth}px`);
+    for (const el of document.querySelectorAll('#view *')) { if (el.closest('.hscroll,.chips,.days,pre,.scroll-x,table')) continue; const r = el.getBoundingClientRect(); if (r.right > innerWidth + 2 && vis(el) && getComputedStyle(el).position !== 'fixed') { out.overflow.push(desc(el) + ` → ${Math.round(r.right)}`); if (out.overflow.length > 6) break; } }
+    for (const k of Object.keys(out)) out[k] = [...new Set(out[k])];
+    return out;
+  });
+  const sizes = [['390', { width: 390, height: 844 }], ['375', { width: 375, height: 667 }], ['horizontal', { width: 844, height: 390 }]];
+  const total = { contrast: new Set(), touch: new Set(), name: new Set(), deco: new Set(), overflow: new Set() };
+  for (const [lbl, vp] of sizes) {
+    await page.setViewportSize(vp);
+    for (const [route, tab] of screens) {
+      await page.evaluate(() => { const sh = document.getElementById('sheet'); if (sh) { sh.hidden = true; sh.innerHTML = ''; } });
+      await page.goto(`http://forja.test/index.html${route === '#/inicio' ? '#/plan' : '#/inicio'}`); await page.waitForTimeout(120);
+      await page.goto(`http://forja.test/index.html${route}`); await page.waitForTimeout(500);
+      if (tab) { await page.getByRole('button', { name: tab, exact: true }).first().click({ timeout: 3000 }).catch(() => {}); await page.waitForTimeout(350); }
+      const r = await AUD();
+      for (const k of Object.keys(r)) for (const x of r[k]) total[k].add(`[${lbl} ${route}${tab ? ' ' + tab : ''}] ${x}`);
+      if (lbl !== '390') await page.screenshot({ path: `${OUT}/aud-${lbl}-${(route + (tab ?? '')).replace(/[#/ ]+/g, '_')}.png` });
+    }
+  }
+  // Texto grande (200 %): ¿se rompe algo?
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addStyleTag({ content: 'html { font-size: 200% !important } body { zoom: 1.35 }' });
+  for (const [route] of [['#/inicio'], ['#/nutricion']]) { await page.goto(`http://forja.test/index.html${route}`); await page.waitForTimeout(600); const r = await AUD(); for (const x of r.overflow) total.overflow.add(`[texto grande ${route}] ${x}`); await page.screenshot({ path: `${OUT}/aud-texto-grande-${route.replace(/[#/]+/g, '')}.png` }); }
+  for (const [k, v] of Object.entries(total)) { console.log(`AUDIT ${k}: ${v.size}`); [...v].slice(0, 60).forEach((x) => console.log('   ', x)); }
+}
 // ---------- Recorrido automático: pulsa TODOS los botones de cada pantalla (y los de las hojas que abren) ----------
 if (process.env.MONKEY) {
   const T0 = Date.now();

@@ -92,7 +92,7 @@ export const goalCard = (g, phases, today) => {
   const hy = g.type === 'hyrox';
   return html`<div class="card goalc ${hy ? 'hy' : ''}" data-act="${act(() => go(`objetivo/${g.id}`))}">
     <h3 style="margin:0 0 2px">${g.name}</h3>
-    <div class="small" style="margin-bottom:10px;color:${hy ? 'var(--purple)' : 'var(--blue)'}">${shortDate(g.date)}${/hyrox|marat|carrera|10k|5k/i.test(g.name) ? '' : ` · ${hy ? 'HYROX' : 'Carrera'}`}</div>
+    <div class="small" style="margin-bottom:10px;font-weight:600;color:${hy ? '#c4b5fd' : '#7dd3fc'}">${shortDate(g.date)}${/hyrox|marat|carrera|10k|5k/i.test(g.name) ? '' : ` · ${hy ? 'HYROX' : 'Carrera'}`}</div>
     <div class="row" style="align-items:flex-end"><div class="kpi">${daysUntil(g.date)}<small> días</small></div><div class="grow"></div>${g.target_time_s ? html`<div style="text-align:right"><div class="xs muted">Objetivo</div><b style="font:750 17px var(--num)">${dur(g.target_time_s)}</b></div>` : ''}</div>
     <p class="xs muted" style="margin:8px 0 6px">${ph ? ph.focus : 'Preparación pendiente'}</p>${bar(Math.max(0, done), total, hy ? 'linear-gradient(90deg,#6d28d9,#a78bfa)' : undefined)}</div>`;
 };

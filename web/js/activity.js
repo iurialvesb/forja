@@ -20,7 +20,7 @@ function routeSvg(route) {
   const W = 320, H = 200, pad = 10, sc = Math.min((W - 2 * pad) / Math.max(1e-9, x1 - x0), (H - 2 * pad) / Math.max(1e-9, y1 - y0));
   const pts = route.map(([a, b]) => `${(pad + (b * k - x0) * sc).toFixed(1)},${(H - pad - (a - y0) * sc).toFixed(1)}`);
   const [sx, sy] = pts[0].split(','), [ex, ey] = pts[pts.length - 1].split(',');
-  return html`<div class="card tight"><b>Recorrido</b>${raw(`<svg viewBox="0 0 ${W} ${H}" width="100%" style="margin-top:6px"><polyline fill="none" stroke="var(--accent)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" points="${pts.join(' ')}"/><circle cx="${sx}" cy="${sy}" r="5" fill="var(--green)"/><circle cx="${ex}" cy="${ey}" r="5" fill="var(--red)"/></svg>`)}</div>`;
+  return html`<div class="card tight"><b>Recorrido</b>${raw(`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Mapa del recorrido" style="margin-top:6px"><polyline fill="none" stroke="var(--accent)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" points="${pts.join(' ')}"/><circle cx="${sx}" cy="${sy}" r="5" fill="var(--green)"/><circle cx="${ex}" cy="${ey}" r="5" fill="var(--red)"/></svg>`)}</div>`;
 }
 
 export async function activityExtras(s) {

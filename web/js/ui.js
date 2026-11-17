@@ -157,7 +157,7 @@ export const levelColor = (l) => (l === 'verde' ? 'var(--green)' : l === 'ambar'
 let gid = 0;
 export function ring(value, color, label, size = 92, sub = '') {
   const r = 40, c = 2 * Math.PI * r, v = Math.max(0.02, Math.min(1, value || 0)), id = `rg${++gid}`;
-  return raw(`<svg class="ring" viewBox="0 0 100 100" style="width:${size}px;height:${size}px"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".55"/><stop offset="1" stop-color="${color}"/></linearGradient></defs>
+  return raw(`<svg class="ring" viewBox="0 0 100 100" role="img" aria-label="${esc(`${label} ${sub}`.trim())}" style="width:${size}px;height:${size}px"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".55"/><stop offset="1" stop-color="${color}"/></linearGradient></defs>
     <circle cx="50" cy="50" r="${r}" fill="none" stroke="rgba(140,170,255,.13)" stroke-width="9"/>
     <circle class="arc" cx="50" cy="50" r="${r}" fill="none" stroke="url(#${id})" stroke-width="9" stroke-linecap="round" stroke-dasharray="${c * v} ${c}" transform="rotate(-90 50 50)" style="filter:drop-shadow(0 0 6px ${color}55)"/>
     <text x="50" y="${sub ? 53 : 58}" text-anchor="middle" style="font:800 ${String(label).length > 3 ? 20 : 26}px var(--num);fill:#fff">${esc(label)}</text>${sub ? `<text x="50" y="69" text-anchor="middle" style="font-size:10px;font-weight:700;fill:rgba(205,218,245,.65)">${esc(sub)}</text>` : ''}</svg>`);
@@ -173,7 +173,8 @@ export function barChart(points, { color = 'var(--accent)', height = 140, label 
   const bars = points.map((p, i) => { const h = Math.max(0, (H - 16) - Y(p.value || 0)); const x = pad + i * bw + Math.max(1, bw * 0.16);
     return `<rect x="${x}" y="${H - 16 - h}" width="${Math.max(3, bw * 0.68)}" height="${h}" rx="${Math.min(6, bw * 0.3)}" fill="${p.color ?? `url(#${id})`}" opacity="${p.dim ? 0.45 : 1}"/>${i % Math.ceil(points.length / 7) === 0 ? `<text x="${pad + i * bw + bw / 2}" y="${H - 3}" text-anchor="middle">${esc(label(p))}</text>` : ''}`; }).join('');
   const g = goal ? `<line x1="${pad}" x2="${W}" y1="${Y(goal)}" y2="${Y(goal)}" stroke="rgba(205,218,245,.35)" stroke-dasharray="3 4"/><text x="${W}" y="${Y(goal) - 3}" text-anchor="end">${esc(fmt(goal))}</text>` : '';
-  return raw(`<svg viewBox="0 0 ${W} ${H}" width="100%"><defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}"/><stop offset="1" stop-color="${color}" stop-opacity=".35"/></linearGradient></defs>${goal ? "" : `<text x="0" y="10">${esc(fmt(max / 1.08))}</text>`}${g}${bars}</svg>`);
+  const desc = `Gráfico de barras: ${points.length} valores, último ${fmt(points[points.length - 1].value || 0)}, máximo ${fmt(Math.max(...points.map((p) => p.value || 0)))}`;
+  return raw(`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(desc)}"><defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}"/><stop offset="1" stop-color="${color}" stop-opacity=".35"/></linearGradient></defs>${goal ? "" : `<text x="0" y="10">${esc(fmt(max / 1.08))}</text>`}${g}${bars}</svg>`);
 }
 
 /** Línea con área degradada. series: [{color, points:[{x,y}], fmt?, fill?}]. */
@@ -199,7 +200,9 @@ export function lineChart(series, { height = 150, invert = false, band } = {}) {
   const f = series[0].fmt ?? ((v) => Math.round(v));
   const lab = series[0].points; const first = lab[0]?.x ?? '', last = lab[lab.length - 1]?.x ?? '';
   const top = invert ? min : max, bot = invert ? max : min;
-  return raw(`<svg viewBox="0 0 ${W} ${H}" width="100%"><defs>${defs.join('')}</defs>${bandEl}<text x="0" y="12">${esc(f(top))}</text><text x="0" y="${H - 20}">${esc(f(bot))}</text>${paths.join('')}<text x="${pad}" y="${H - 3}">${esc(first)}</text><text x="${W - 4}" y="${H - 3}" text-anchor="end">${esc(last)}</text></svg>`);
+  const s0 = series[0].points.filter((p) => p.y != null);
+  const desc = s0.length ? `Gráfico de evolución${first ? ` del ${first} al ${last}` : ''}: de ${f(s0[0].y)} a ${f(s0[s0.length - 1].y)}` : 'Gráfico de evolución';
+  return raw(`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(desc)}"><defs>${defs.join('')}</defs>${bandEl}<text x="0" y="12">${esc(f(top))}</text><text x="0" y="${H - 20}">${esc(f(bot))}</text>${paths.join('')}<text x="${pad}" y="${H - 3}">${esc(first)}</text><text x="${W - 4}" y="${H - 3}" text-anchor="end">${esc(last)}</text></svg>`);
 }
 
 /** Minigráfico para las tarjetas (sin ejes). kind: 'line' | 'bar'. */
@@ -207,10 +210,10 @@ export function spark(values, color = 'var(--accent)', kind = 'line', h = 36) {
   const v = values.map((x) => (x == null || Number.isNaN(+x) ? null : +x)); const ok = v.filter((x) => x != null);
   if (ok.length < 2) return raw('');
   const W = 120, min = kind === 'bar' ? 0 : Math.min(...ok), max = Math.max(...ok), sp = max - min || 1, id = `sp${++gid}`;
-  if (kind === 'bar') { const bw = W / v.length; return raw(`<svg class="spark" viewBox="0 0 ${W} ${h}" width="100%" height="${h}" preserveAspectRatio="none">${v.map((x, i) => (x == null ? '' : `<rect x="${i * bw + 1.5}" y="${h - (h * (x - min)) / sp}" width="${Math.max(2, bw - 3)}" height="${(h * (x - min)) / sp}" rx="2" fill="${color}" opacity="${i === v.length - 1 ? 1 : 0.5}"/>`)).join('')}</svg>`); }
+  if (kind === 'bar') { const bw = W / v.length; return raw(`<svg class="spark" aria-hidden="true" viewBox="0 0 ${W} ${h}" width="100%" height="${h}" preserveAspectRatio="none">${v.map((x, i) => (x == null ? '' : `<rect x="${i * bw + 1.5}" y="${h - (h * (x - min)) / sp}" width="${Math.max(2, bw - 3)}" height="${(h * (x - min)) / sp}" rx="2" fill="${color}" opacity="${i === v.length - 1 ? 1 : 0.5}"/>`)).join('')}</svg>`); }
   const pts = v.map((x, i) => (x == null ? null : [(W * i) / (v.length - 1), 3 + (h - 6) * (1 - (x - min) / sp)])).filter(Boolean);
   const d = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join('');
-  return raw(`<svg class="spark" viewBox="0 0 ${W} ${h}" width="100%" height="${h}" preserveAspectRatio="none"><defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".35"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs><path d="${d}L${W},${h}L0,${h}Z" fill="url(#${id})"/><path d="${d}" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linecap="round"/></svg>`);
+  return raw(`<svg class="spark" aria-hidden="true" viewBox="0 0 ${W} ${h}" width="100%" height="${h}" preserveAspectRatio="none"><defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".35"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs><path d="${d}L${W},${h}L0,${h}Z" fill="url(#${id})"/><path d="${d}" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linecap="round"/></svg>`);
 }
 
 /** Pasos de una sesión planificada (ritmos, series, pesos, descansos). */

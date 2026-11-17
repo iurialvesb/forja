@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-17 · Accesibilidad y uso con una mano (ui-ux-pro-max)
+- Nueva auditoría automática (`AUDIT=1 node web-test/run.mjs`): contraste AA, objetivos de toque, nombres accesibles, iconos decorativos y desbordes, en 390 px, 375 px, horizontal y texto grande. Resultado: 0 fallos (antes 246 de contraste y 261 de toque).
+- Contraste AA: azul de botones y pestañas activas más profundo (texto blanco ≥ 4,5:1), etiquetas de la barra inferior más claras y a 11,5 px, fechas y textos de los objetivos legibles.
+- Todo lo pulsable mide ≥ 40–44 px: botones pequeños, chips, segmentos, desplegables, filas de «Hoy», flechas de día, «Todo/Salud», pasos de la despensa.
+- Gráficos con descripción para VoiceOver (anillo, barras, evolución, recorrido); minigráficos ocultos al lector.
+- Horizontal y pantallas anchas: columna centrada de 600 px y barra inferior compacta con icono y texto en línea. Con texto grande el aviso del Watch pasa el botón abajo.
+
 ## 2026-11-17 · Pulido de interfaz (crítica impeccable 26/40)
 - Inicio más limpio: recuperación → aviso del Watch → Hoy → objetivos. «Tu semana» y el último ajuste en una línea plegable; sueño, pasos, actividad, peso y carga en una sola tarjeta «Esta semana» (antes 5); el sueño ya no sale repetido.
 - Lenguaje llano y formato español: coma decimal en km, kg y nivel; «1 sesión»; «CrossFit de tarde» en vez de «Afternoon Workout»; ACWR → «Carga esta semana frente a tu media» (en Progreso, con rango sano); VDOT → «Nivel»; UA fuera; «Marcar como leído».
