@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-11-17 · Pulido de interfaz (crítica impeccable 26/40)
+- Inicio más limpio: recuperación → aviso del Watch → Hoy → objetivos. «Tu semana» y el último ajuste en una línea plegable; sueño, pasos, actividad, peso y carga en una sola tarjeta «Esta semana» (antes 5); el sueño ya no sale repetido.
+- Lenguaje llano y formato español: coma decimal en km, kg y nivel; «1 sesión»; «CrossFit de tarde» en vez de «Afternoon Workout»; ACWR → «Carga esta semana frente a tu media» (en Progreso, con rango sano); VDOT → «Nivel»; UA fuera; «Marcar como leído».
+- Entrenos: un único «+» que abre las 4 formas de registrar, con qué hace cada una; el historial queda arriba. Estado vacío que invita a registrar.
+- Intensidad como etiqueta neutra con nivel en barras (el rojo queda para problemas). «Recomendada» solo donde aporta (CrossFit sin reservar).
+- Reajustes de comidas: lista «antes → después» plegable en lugar de un párrafo.
+- Cabecera opaca al hacer scroll; avisos de máximo dos líneas y 3 s.
+- Sin vicios genéricos: fuera los brillos de color en botones, el halo azul de fondo, la barra lateral de color y las etiquetas en mayúsculas sobre títulos. Solo el bloque de recuperación lleva color; el resto, superficies planas.
+- Flechas y «+» como iconos SVG.
+
 ## 2026-11-17 · Resumen de CrossFit con ejercicios
 - El PNG de compartir de CrossFit, fuerza o HYROX incluye un resumen de lo que hiciste: por bloque, formato y resultado (AMRAP 12' · 7+13 rondas) y hasta 4 ejercicios con series×reps y kilos (Back Squat 5×5 · 80 kg) o reps totales en el WOD (Thruster 63 reps · 43 kg). Sin calentamiento. Se puede quitar con «Ejercicios».
 

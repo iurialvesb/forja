@@ -108,6 +108,8 @@ export async function render(opts = {}) {
     view.innerHTML = html`<div class="card"><h3>No se pudo cargar</h3><p class="muted">${e.message}</p><button class="block" data-act="${act(() => { invalidate(); render(); })}">Reintentar</button></div>`.s;
   }
 }
+// Cabecera opaca en cuanto el contenido pasa por debajo.
+addEventListener('scroll', () => document.documentElement.classList.toggle('scrolled', scrollY > 8), { passive: true });
 window.addEventListener('hashchange', () => { if (sheetOpen()) closeSheet(); window.scrollTo(0, 0); render(); });
 
 // ---------- Acceso ----------

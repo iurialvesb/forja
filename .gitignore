@@ -4,3 +4,4 @@ ios/Forja.xcodeproj/
 node_modules/
 supabase/.temp/
 web-test/shots/
+.impeccable/

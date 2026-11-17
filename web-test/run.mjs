@@ -135,9 +135,9 @@ await shot('#/plan', '03-sesion', async () => { if (new Date(today + 'T12:00:00Z
 await shot('#/entrenos', '04-entrenos');
 const reopen = async () => { await page.goto('http://forja.test/index.html#/inicio'); await page.waitForTimeout(300); await page.goto('http://forja.test/index.html#/entrenos'); await page.waitForTimeout(700); };
 const WOD = `Afternoon Workout\n\nFERZA\nEMOM 10’\n- 6 FRONT SQUATS @ 50 kg\n- 15 HEELS ON PLATE 16KG GOBLET SQUATS\n\nWOD\nEMOM 24’ (4R)\n- 16 CAL ROW\n- 20 DEAD LIFT 50kg\n- 10 BURPEES OVER BAR\n- REST.\n- REST\n- REST.\n\nAMRAP 8\n- 10 wall balls 9kg\n- 10 box jumps`;
-await shot('#/entrenos', '05-pegar-wod', async () => { await page.getByText('Pegar entreno (Strava').click(); await page.waitForTimeout(300); await page.fill('#wtext', WOD); await page.waitForTimeout(400); });
+await shot('#/entrenos', '05-pegar-wod', async () => { await page.getByRole('button', { name: 'Registrar entreno' }).first().click(); await page.waitForTimeout(450); await page.getByRole('button', { name: /Pegar texto/ }).click(); await page.waitForTimeout(300); await page.fill('#wtext', WOD); await page.waitForTimeout(400); });
 await shot('#/entrenos', '05b-registro', async () => {
-  await page.getByText('Pegar entreno (Strava').click(); await page.waitForTimeout(300); await page.fill('#wtext', WOD);
+  await page.getByRole('button', { name: 'Registrar entreno' }).first().click(); await page.waitForTimeout(450); await page.getByRole('button', { name: /Pegar texto/ }).click(); await page.waitForTimeout(300); await page.fill('#wtext', WOD);
   const t0 = Date.now(); await page.getByRole('button', { name: 'Registrar', exact: true }).click(); await page.waitForSelector('#logger'); console.log(`Hoja de registro en ${Date.now() - t0} ms`);
   const cks = page.locator('#logger .ck:not(:has-text("·"))');
   for (let i = 0; i < 9; i++) await cks.nth(i).click();
@@ -190,7 +190,7 @@ await page.evaluate(() => { const p = document.querySelector('#sheet .panel'); i
   await page.screenshot({ path: `${OUT}/26c-compartir-crossfit.png` });
   await page.evaluate(() => document.querySelector('.share-prev[style]')?.remove());
 }
-await shot('#/entrenos', '05i-anadir-wod', async () => { await reopen(); await page.getByRole('button', { name: 'Historial', exact: true }).click(); await page.waitForTimeout(400); await page.locator('#view .card.row').filter({ hasText: 'Afternoon Workout' }).first().click(); await page.waitForTimeout(800); await page.evaluate(() => { const p = document.querySelector('#sheet .panel'); if (p) p.scrollTop = 9999; }); });
+await shot('#/entrenos', '05i-anadir-wod', async () => { await reopen(); await page.getByRole('button', { name: 'Historial', exact: true }).click(); await page.waitForTimeout(400); await page.locator('#view .card.row').filter({ hasText: 'CrossFit de tarde' }).first().click(); await page.waitForTimeout(800); await page.evaluate(() => { const p = document.querySelector('#sheet .panel'); if (p) p.scrollTop = 9999; }); });
 await (async () => {
   posted.length = 0;
   await page.getByRole('button', { name: /Añadir el WOD/ }).click(); await page.waitForTimeout(300);
@@ -244,7 +244,7 @@ await shot('#/nutricion', '10a-despensa-arrastrar', async () => {
   console.log(/340 g/.test(t5) ? 'Pasta −80 g → 340 g OK' : `✗ pasta: «${t5}»`);
   await page.screenshot({ path: `${OUT}/10d-despensa-tras.png` });
 }
-await shot('#/nutricion', '10b-despensa-anadir', async () => { await page.getByRole('button', { name: 'Despensa', exact: true }).click(); await page.waitForTimeout(400); await page.getByRole('button', { name: '＋ Añadir' }).click(); await page.fill('#ptext', 'dos sobres de puré Hacendado, seis latas de atún de 60 g, un kilo de arroz La Fallera'); await page.getByRole('button', { name: 'Organizar' }).click(); await page.waitForTimeout(900); });
+await shot('#/nutricion', '10b-despensa-anadir', async () => { await page.getByRole('button', { name: 'Despensa', exact: true }).click(); await page.waitForTimeout(400); await page.getByRole('button', { name: 'Añadir', exact: true }).click(); await page.fill('#ptext', 'dos sobres de puré Hacendado, seis latas de atún de 60 g, un kilo de arroz La Fallera'); await page.getByRole('button', { name: 'Organizar' }).click(); await page.waitForTimeout(900); });
 await shot('#/nutricion', '11-suplementos', () => page.getByRole('button', { name: 'Suplementos', exact: true }).click());
 await shot('#/coach', '12-coach', async () => { await page.getByText('¿Puedo hacer series mañana').click(); });
 await shot('#/perfil', '13-perfil');

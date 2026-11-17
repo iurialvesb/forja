@@ -14,7 +14,7 @@ const refresh = () => { invalidate('nutweek', 'shopping', 'pantry'); render(); }
 
 export async function NUTRITION(params = []) {
   if (params[0] && TABS.some(([k]) => k === params[0])) { tab = params[0]; history.replaceState(null, '', '#/nutricion'); }
-  const chips = html`<div class="chips">${TABS.map(([k, l]) => html`<button class="chip ${tab === k ? 'on' : ''}" data-act="${act(() => { tab = k; render(); })}">${l}</button>`)}</div>`;
+  const chips = html`<div class="chips subtabs">${TABS.map(([k, l]) => html`<button class="chip ${tab === k ? 'on' : ''}" data-act="${act(() => { tab = k; render(); })}">${l}</button>`)}</div>`;
   const body = await ({ hoy, menu, compra, batch, despensa, suplementos })[tab]();
   return { title: 'Nutrición', right: html`<button class="icon-btn" aria-label="Objetivos de nutrición" data-act="${act(settings)}">${raw(ic('target', 19))}</button>`, body: html`${chips}${body}` };
 }
@@ -44,19 +44,21 @@ async function hoy() {
     .sort((a, b) => (a === OTHER ? 99 : SLOTS.indexOf(a)) - (b === OTHER ? 99 : SLOTS.indexOf(b)));
   const isOpt = (x) => (w.settings.optionalSlots ?? []).includes(x) && !(w.settings.mealSlots ?? []).includes(x);
   const kc = S.kcal / Math.max(1, T.kcal);
-  const advice = d.adjustments?.length ? `He reajustado lo que te queda: ${d.adjustments.map((x) => x.text).join(' · ')}` : d.alerts?.[0]?.message;
+  const advice = d.alerts?.[0]?.message;
   return html`
-    <div class="row daynav"><button class="icon-btn" data-act="${act(() => { dDate = addDays(date, -1); render(); })}">‹</button>
+    <div class="row daynav"><button class="icon-btn" data-act="${act(() => { dDate = addDays(date, -1); render(); })}" aria-label="Anterior">${raw(ic('back', 20))}</button>
       <div class="grow center" style="padding:0" data-act="${act(() => { dDate = null; render(); })}"><b>${date === today() ? 'Hoy' : date === addDays(today(), -1) ? 'Ayer' : date === addDays(today(), 1) ? 'Mañana' : dayName(date)}</b><div class="xs muted">${shortDate(date)} · día de carga ${d.target.load}</div></div>
-      <button class="icon-btn" data-act="${act(() => { dDate = addDays(date, 1); render(); })}">›</button></div>
+      <button class="icon-btn" data-act="${act(() => { dDate = addDays(date, 1); render(); })}" aria-label="Siguiente">${raw(ic('chevron', 20))}</button></div>
     <div class="hero" style="padding:16px 18px">
       <div class="row" style="position:relative;z-index:1">${ring(Math.min(1, kc), kc > 1.06 ? '#fbbf24' : '#7fb0ff', n0(Math.abs(left)), 100, left >= 0 ? 'restantes' : 'de más')}
         <div class="grow eq"><div><span class="muted">Objetivo</span><b>${n0(T.kcal)}</b></div><div><span class="muted">− Comido</span><b>${n0(S.kcal)}</b></div><div class="tot"><span>= Restante</span><b style="color:${left < 0 ? 'var(--amber)' : '#fff'}">${n0(left)}</b></div></div></div>
       <div class="macros3">${mb('Proteína', S.protein, T.protein, '#7fb0ff')}${mb('Hidratos', S.carbs, T.carbs, '#fbbf24')}${mb('Grasa', S.fat, T.fat, '#f472b6')}</div>
     </div>
-    ${advice && date >= today() ? html`<div class="card tight small" style="border-color:rgba(127,176,255,.35)">${raw(ic('bulb', 17))} ${advice}</div>` : ''}
+    ${date >= today() && d.adjustments?.length ? html`<details class="card tight report"><summary><span class="grow small"><b>Cantidades reajustadas</b><span class="line">${d.adjustments.length === 1 ? `En ${slotName(d.adjustments[0].slot).toLowerCase()}` : `En ${d.adjustments.length} comidas`} para cuadrar el día</span></span>${raw(ic('chevron', 18))}</summary>
+      ${d.adjustments.map((x) => html`<div class="xs muted" style="margin-top:10px">${slotName(x.slot)}</div>${(x.changes ?? []).map((c) => html`<div class="row small"><span class="grow">${c.name}</span><span class="muted">${c.fromG} g</span><span style="margin:0 6px" class="muted">→</span><b>${c.toG} g</b></div>`)}`)}</details>`
+      : advice && date >= today() ? html`<div class="card tight small row" style="align-items:flex-start">${raw(ic('bulb', 17))}<span class="grow">${advice}</span></div>` : ''}
     ${slots.map((slot) => mealSection(slot, date, logs.filter((l) => (l.slot ?? OTHER) === slot), d.meals.find((m) => m.slot === slot), isOpt(slot)))}
-    <button class="block" data-act="${act(() => addFood(OTHER, date))}">＋ Algo más (picoteo, bebida…)</button>
+    <button class="block" data-act="${act(() => addFood(OTHER, date))}">${raw(ic('plus', 17))} Algo más (picoteo, bebida…)</button>
     <details><summary>Por qué estos objetivos</summary>${d.target.explanation.map((e) => html`<p class="small muted">${e}</p>`)}</details>`;
 }
 
@@ -67,11 +69,11 @@ function mealSection(slot, date, logs, planned, optional) {
   return html`<div class="card meal">
     <div class="row mhead"><b class="grow">${slot === OTHER ? 'Otros' : slotName(slot)}${optional ? html` <span class="xs muted">opcional</span>` : ''}</b><span class="mk">${kcal ? `${n0(kcal)} kcal` : ''}</span></div>
     ${entries.map(({ log, k, it }) => html`<div class="entry" data-act="${act(() => editEntry(log, k, date))}"><div class="grow"><div class="en">${it.name}</div><div class="xs muted">${fmtAmount(it)}${log.source === 'menu' ? ' · del menú' : ''}</div></div><div class="ek">${n0(it.macros?.kcal ?? 0)}</div></div>`)}
-    ${sugg ? html`<div class="sugg"><div class="row"><div class="grow"><div class="xs" style="color:var(--accent2);font-weight:750">SUGERIDO EN TU MENÚ${planned.fromBatch ? ' · BATCH' : ''}</div><div class="small" style="font-weight:650">${planned.title}</div>
+    ${sugg ? html`<div class="sugg"><div class="row"><div class="grow"><div class="small" style="font-weight:650">${planned.title}</div><div class="xs" style="color:var(--accent2)">Sugerido en tu menú${planned.fromBatch ? ' · del batch' : ''}</div>
           <div class="xs muted">${planned.ingredients.map((i) => `${i.name} ${Math.round(i.grams)} g`).join(' · ')}</div></div><div class="ek muted">${n0(planned.macros.kcal)}</div></div>
         <div class="row" style="gap:6px;margin-top:8px"><button class="sm primary" data-act="${act(mealAction(planned, 'eaten'))}">✓ Me lo he comido</button><button class="sm" data-act="${act(() => editMeal(planned))}">Cambiar</button><button class="sm ghost" data-act="${act(mealAction(planned, 'skip'))}">No</button></div></div>` : ''}
     ${planned?.status === 'skipped' && !entries.length ? html`<div class="xs muted" style="padding:6px 0">Menú descartado · <a data-act="${act(mealAction(planned, 'reset'))}">recuperar</a></div>` : ''}
-    <button class="addf" data-act="${act(() => addFood(slot, date))}">＋ Añadir alimento</button>
+    <button class="addf" data-act="${act(() => addFood(slot, date))}">${raw(ic('plus', 17))} Añadir alimento</button>
   </div>`;
 }
 
@@ -330,14 +332,14 @@ async function menu() {
   const mon = addDays(monday(), menuWeek);
   const w = await week(mon);
   return html`
-    <div class="row"><button class="sm" data-act="${act(() => { menuWeek -= 7; render(); })}">‹</button><b class="grow" style="text-align:center">Semana del ${shortDate(mon)}</b><button class="sm" data-act="${act(() => { menuWeek += 7; render(); })}">›</button></div>
+    <div class="row"><button class="sm" data-act="${act(() => { menuWeek -= 7; render(); })}" aria-label="Anterior">${raw(ic('back', 20))}</button><b class="grow" style="text-align:center">Semana del ${shortDate(mon)}</b><button class="sm" data-act="${act(() => { menuWeek += 7; render(); })}" aria-label="Siguiente">${raw(ic('chevron', 20))}</button></div>
     ${w.days.map((d) => html`<h2>${dayName(d.date)} <small>${n0(d.totals.kcal)}/${n0(d.target.macros.kcal)} kcal · P ${n0(d.totals.protein)}/${n0(d.target.macros.protein)}</small></h2>
       ${(() => {
         const fixed = w.settings.mealSlots ?? [], opt = w.settings.optionalSlots ?? [];
         const slots = [...new Set([...fixed, ...opt, ...d.meals.map((m) => m.slot)])].sort((a, b) => SLOTS.indexOf(a) - SLOTS.indexOf(b));
         return slots.map((sl) => { const m = d.meals.find((x) => x.slot === sl);
           if (m) return html`<div class="card tight row" data-act="${act(() => editMeal(m))}"><div class="grow"><div class="xs" style="color:var(--accent)">${slotName(m.slot)}</div><div class="small" style="font-weight:600">${m.title}</div></div><span class="xs muted">${n0(m.macros.kcal)} kcal</span>${m.status !== 'planned' ? ' ✎' : ''}</div>`;
-          return html`<div class="card tight row" style="border-style:dashed;opacity:.75"><div class="grow"><div class="xs" style="color:var(--accent)">${slotName(sl)}</div><div class="small muted">${fixed.includes(sl) ? 'Sin planificar' : 'Opcional'}</div></div><button class="sm ghost" data-act="${act(() => logFood(sl, { date: d.date }))}">＋</button></div>`; });
+          return html`<div class="card tight row" style="border-style:dashed;opacity:.75"><div class="grow"><div class="xs" style="color:var(--accent)">${slotName(sl)}</div><div class="small muted">${fixed.includes(sl) ? 'Sin planificar' : 'Opcional'}</div></div><button class="sm ghost" data-act="${act(() => logFood(sl, { date: d.date }))}">${raw(ic('plus', 20))}</button></div>`; });
       })()}
       ${d.alerts.map((a) => html`<div class="small alert">${raw(ic('alert', 17))} ${a.message}</div>`)}`)}`;
 }
@@ -440,7 +442,7 @@ async function despensa() {
     <div class="chips">${[['todo', 'Todo'], ...LOCS].map(([l, lb]) => html`<button class="chip ${ploc === l ? 'on' : ''}" data-act="${act(() => { ploc = l; render(); })}">${lb} <span class="muted">${l === 'todo' ? items.length : items.filter((i) => i.location === l).length}</span></button>`)}</div>
     ${soon.length ? html`<div class="card tight" style="border-color:rgba(251,191,36,.35)"><div class="small alert">${raw(ic('clock', 17))} Caduca pronto: ${soon.map((i) => `${i.name} (${i.expires_on <= today() ? 'hoy' : shortDate(i.expires_on)})`).join(', ')}</div>
       <button class="sm" style="margin-top:8px" data-act="${act((b) => recipeFor(b, soon.map((i) => i.id)))}">${raw(ic('pan', 17))} Proponme una receta con esto</button></div>` : ''}
-    <div class="grid2"><button class="primary" data-act="${act(addPantry)}">＋ Añadir</button><button data-act="${act(() => scanToPantry())}">${raw(ic('barcode', 17))} Escanear</button></div>
+    <div class="grid2"><button class="primary" data-act="${act(addPantry)}">${raw(ic('plus', 17))} Añadir</button><button data-act="${act(() => scanToPantry())}">${raw(ic('barcode', 17))} Escanear</button></div>
     ${locs.map(([loc, label]) => html`<div data-loc="${loc}" class="ploc"><h2>${label} <small>${items.filter((i) => i.location === loc).length}</small></h2>
       <div class="card tight list">${items.filter((i) => i.location === loc).map((i) => pantryRow(i))}
         ${!items.filter((i) => i.location === loc).length ? html`<div class="item muted small">Vacío${ploc === 'todo' ? ' · arrastra aquí con ⠿' : ''}</div>` : ''}</div></div>`)}
@@ -504,7 +506,7 @@ function useGrams(i) {
     <label>¿Cuánto has usado?</label>
     <div class="grid4">${usePresets(i.name).filter((g) => g <= left).map((g) => html`<button data-act="${act(() => go(g))}">${g} ${u}</button>`)}</div>
     <div class="row" style="gap:8px;margin-top:10px"><input id="ug" class="grow" type="number" inputmode="numeric" placeholder="Otra cantidad (${u})"><button class="primary" data-act="${act(() => { const g = +document.getElementById('ug').value; if (g > 0) go(g); })}">Restar</button></div>
-    ${i.package_g ? html`<button class="block" data-act="${act(() => { closeSheet(); savePantry(i, { quantity_g: left + +i.package_g }, `+ ${fmtQ(+i.package_g, liquid)}`); })}">＋ He comprado otro paquete (${fmtQ(+i.package_g, liquid)})</button>` : ''}
+    ${i.package_g ? html`<button class="block" data-act="${act(() => { closeSheet(); savePantry(i, { quantity_g: left + +i.package_g }, `+ ${fmtQ(+i.package_g, liquid)}`); })}">${raw(ic('plus', 17))} He comprado otro paquete (${fmtQ(+i.package_g, liquid)})</button>` : ''}
     <button class="block danger" data-act="${act(() => go(left))}">Se ha acabado</button>
     <p class="xs muted">Lo que cocinas desde el menú o el batch se descuenta solo; esto es para lo que gastes por tu cuenta.</p>`);
 }

@@ -66,7 +66,7 @@ function milestones(o) {
 }
 function nextKey(o) {
   if (!o.nextKey.length) return '';
-  return html`<h2>Próximas sesiones clave</h2>${o.nextKey.map((p) => html`<div class="card tight row" data-act="${act(() => go('plan'))}"><div class="grow"><b class="small">${p.title}</b><div class="xs muted">${dayName(p.date)}${p.plannedKm ? ` · ${(+p.plannedKm).toFixed(1)} km` : ''}</div></div>›</div>`)}`;
+  return html`<h2>Próximas sesiones clave</h2>${o.nextKey.map((p) => html`<div class="card tight row" data-act="${act(() => go('plan'))}"><div class="grow"><b class="small">${p.title}</b><div class="xs muted">${dayName(p.date)}${p.plannedKm ? ` · ${(+p.plannedKm).toLocaleString('es-ES', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} km` : ''}</div></div>›</div>`)}`;
 }
 
 function editTarget(g, o) {
@@ -91,8 +91,8 @@ export const goalCard = (g, phases, today) => {
   const done = first ? -daysUntil(first.start_date) : 0;
   const hy = g.type === 'hyrox';
   return html`<div class="card goalc ${hy ? 'hy' : ''}" data-act="${act(() => go(`objetivo/${g.id}`))}">
-    <div class="xs" style="font-weight:750;letter-spacing:.5px;text-transform:uppercase;color:${hy ? 'var(--purple)' : 'var(--blue)'}">${hy ? 'HYROX' : 'Carrera'} · ${shortDate(g.date)}</div>
-    <h3 style="margin:4px 0 10px">${g.name}</h3>
+    <h3 style="margin:0 0 2px">${g.name}</h3>
+    <div class="small" style="margin-bottom:10px;color:${hy ? 'var(--purple)' : 'var(--blue)'}">${shortDate(g.date)}${/hyrox|marat|carrera|10k|5k/i.test(g.name) ? '' : ` · ${hy ? 'HYROX' : 'Carrera'}`}</div>
     <div class="row" style="align-items:flex-end"><div class="kpi">${daysUntil(g.date)}<small> días</small></div><div class="grow"></div>${g.target_time_s ? html`<div style="text-align:right"><div class="xs muted">Objetivo</div><b style="font:750 17px var(--num)">${dur(g.target_time_s)}</b></div>` : ''}</div>
     <p class="xs muted" style="margin:8px 0 6px">${ph ? ph.focus : 'Preparación pendiente'}</p>${bar(Math.max(0, done), total, hy ? 'linear-gradient(90deg,#6d28d9,#a78bfa)' : undefined)}</div>`;
 };

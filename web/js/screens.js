@@ -3,7 +3,7 @@ import * as api from './api.js';
 import { get, invalidate, go, render } from './app.js';
 import {
   html, raw, act, toast, sheet, setSheet, closeSheet, busy, today, addDays, monday, dayName, shortDate, timeOf, daysUntil, pace, dur, n0,
-  icon, intensityTag, levelColor, ring, bar, barChart, lineChart, steps, resizeImage, phaseName, slotName, SLOTS, spark,
+  icon, intensityTag, levelColor, ring, bar, barChart, lineChart, steps, resizeImage, phaseName, slotName, SLOTS, spark, dec, plural, sessionName,
 } from './ui.js';
 import { ic } from './icons.js';
 import { goalCard } from './goals.js';
@@ -60,26 +60,22 @@ export async function HOME() {
           <div><div class="l">${raw(ic('heart', 13))} Reposo</div><div class="v">${H.rhr ? html`<span data-count="${H.rhr.v}">${H.rhr.v}</span>` : '–'}<small> ppm</small></div></div>
         </div>
       </div>
-      ${noWod.map((s) => html`<div class="card tight row" style="border-color:rgba(127,176,255,.45)"><span class="bub" style="width:40px;height:40px;background:var(--accentSoft);color:var(--accent2)">${raw(ic('watch', 22))}</span><div class="grow"><b class="small">${s.title ?? 'CrossFit'} · ${timeOf(s.started_at)}</b><div class="xs muted">Del Apple Watch, sin el WOD. Pega la pizarra y queda todo junto.</div></div><button class="sm primary" data-act="${act(() => addWodTo(s))}">Añadir WOD</button></div>`)}
-      ${rep ? html`<div class="card"><div class="row"><div class="small grow" style="color:var(--accent2);font-weight:750">${raw(ic('sparkle', 14))} Tu semana (${shortDate(rep.week_start)})</div><button class="sm ghost" data-act="${act(async () => { await api.fn('weekly', { action: 'seen', weekStart: rep.week_start }).catch(() => {}); invalidate('weekly'); render(); })}">Leído</button></div><p class="small" style="white-space:pre-line">${rep.text}</p></div>` : ''}
+      ${noWod.map((s) => html`<div class="card tight row notice"><span class="bub" style="width:40px;height:40px;background:var(--accentSoft);color:var(--accent2)">${raw(ic('watch', 22))}</span><div class="grow"><b class="small">${sessionName(s)} · ${timeOf(s.started_at)}</b><div class="xs muted">Llegó del Apple Watch sin el WOD.</div></div><button class="sm primary" data-act="${act(() => addWodTo(s))}">Añadir WOD</button></div>`)}
       ${todayCard(t, todays, nd, nut, supLogs)}
-      <div class="tiles">
-        ${tile('Sueño', 'moon', 'var(--purple)', H.sleep ? fmtSleep(H.sleep.h) : '–', H.sleep ? `media 7 días ${fmtSleep(H.sleep.avg7)}${H.sleep.score ? ` · nota ${H.sleep.score}` : ''}` : 'Sin datos del Watch', spark(H.sleepSeries, '#a78bfa', 'bar'), 'salud')}
-        ${tile('Pasos', 'steps', 'var(--green)', H.steps ? html`<span data-count="${Math.round(H.steps.v)}">${n0(H.steps.v)}</span>` : '–', H.steps ? `media ${n0(H.steps.avg7)}` : 'Sin datos', spark(H.stepsSeries, '#34d399', 'bar'), 'salud')}
-        ${tile('Actividad', 'flame', 'var(--pink)', html`${n0(minByDay.reduce((a, b) => a + b, 0))}<small> min</small>`, `${thisWeek.length} ${thisWeek.length === 1 ? 'entreno' : 'entrenos'} esta semana`, spark(minByDay, '#f472b6', 'bar'), 'entrenos')}
-        ${tile('Peso', 'scale', 'var(--amber)', w.length ? html`${(+w[w.length - 1].weight_kg).toLocaleString('es-ES', { maximumFractionDigits: 1 })}<small> kg</small>` : '–', w.length >= 2 ? `${(w[w.length - 1].weight_kg - w[Math.max(0, w.length - 8)].weight_kg) > 0 ? '+' : ''}${(w[w.length - 1].weight_kg - w[Math.max(0, w.length - 8)].weight_kg).toLocaleString('es-ES', { maximumFractionDigits: 1 })} kg últimas semanas` : 'Apunta tu peso', spark(w.slice(-20).map((x) => +x.weight_kg), '#fbbf24'), 'entrenos/progreso')}
+      ${goals.length ? html`<h2>Objetivos</h2><div class="hscroll">${goals.map((g) => goalCard(g, phases, t))}</div>` : html`<div class="card muted small">Añade tu próxima competición en Perfil → Objetivos.</div>`}
+      ${rep ? html`<details class="card report"><summary><span class="grow"><b>Tu semana</b> <span class="muted">· ${shortDate(rep.week_start)}</span><span class="line">${rep.text.split(/(?<=[.!?])\s/)[0]}</span></span>${raw(ic('chevron', 18))}</summary>
+        <p class="small" style="white-space:pre-line;margin:10px 0 12px">${rep.text}</p>
+        <button class="sm" data-act="${act(async () => { await api.fn('weekly', { action: 'seen', weekStart: rep.week_start }).catch(() => {}); invalidate('weekly'); render(); })}">Marcar como leído</button></details>` : ''}
+      ${last ? html`<div class="card tight"><div class="xs muted">Último ajuste del plan</div><div class="small">${last.reason}</div></div>` : ''}
+      <h2>Esta semana <a href="#/salud">Salud</a></h2>
+      <div class="card glance" data-act="${act(() => go('salud'))}">
+        <div><div class="l">Carrera</div><div class="v">${dec(km, 1)}<small> / ${Math.round(plannedKm)} km</small></div>${bar(km, Math.max(1, plannedKm))}</div>
+        <div><div class="l">Entrenos</div><div class="v">${thisWeek.length}<small> · ${n0(minByDay.reduce((a, b) => a + b, 0))} min</small></div>${bar(thisWeek.length, Math.max(thisWeek.length, week.filter((x) => x.date <= addDays(mon, 6) && x.status !== 'skipped').length, 1))}</div>
+        <div><div class="l">Pasos hoy</div><div class="v">${H.steps ? html`<span data-count="${Math.round(H.steps.v)}">${n0(H.steps.v)}</span>` : '–'}</div>${H.steps ? bar(H.steps.v, 8000, 'var(--green)') : ''}</div>
+        <div><div class="l">Peso</div><div class="v">${w.length ? html`${dec(w[w.length - 1].weight_kg, 1)}<small> kg</small>` : '–'}</div><div class="xs muted">${w.length >= 2 ? (() => { const dlt = w[w.length - 1].weight_kg - w[Math.max(0, w.length - 8)].weight_kg; return `${dlt > 0 ? '+' : ''}${dec(dlt, 1)} kg en semanas`; })() : 'Apunta tu peso'}</div></div>
       </div>
-      <div class="card">
-        <div class="row"><h3 class="grow">Carga semanal</h3>${readiness?.acwr != null ? html`<span class="tag ${+readiness.acwr > 1.5 ? 'red' : +readiness.acwr > 1.3 ? 'amber' : 'green'}">ACWR ${(+readiness.acwr).toFixed(2).replace('.', ',')}</span>` : ''}</div>
-        <div class="row" style="align-items:flex-end;margin:4px 0 8px"><div class="kpi">${km.toFixed(1).replace('.', ',')}<small> / ${Math.round(plannedKm)} km</small></div></div>
-        ${bar(km, Math.max(1, plannedKm))}
-        ${readiness?.leg_fatigue != null ? html`<div class="row xs muted" style="margin-top:12px"><span class="grow">Fatiga de piernas</span><span>${Math.round(+readiness.leg_fatigue)} / 350</span></div>${bar(+readiness.leg_fatigue, 350, +readiness.leg_fatigue >= 250 ? 'var(--red)' : +readiness.leg_fatigue >= 140 ? 'var(--amber)' : 'var(--green)')}` : ''}
-      </div>
-      <h2>Objetivos</h2>
-      ${goals.length ? html`<div class="hscroll">${goals.map((g) => goalCard(g, phases, t))}</div>` : html`<div class="card muted">Añade tu próxima competición en Perfil → Objetivos.</div>`}
-      ${last ? html`<div class="card"><div class="small" style="color:var(--accent2);font-weight:750">${raw(ic('sparkle', 14))} Tu entrenador</div><p style="margin:6px 0 0">${last.reason}</p></div>` : ''}
-      <h2>Última actividad <a href="#/salud">Ver todo</a></h2>
-      ${sessions.slice(0, 3).map(sessionRow)}
+      <h2>Última actividad <a href="#/entrenos">Todo</a></h2>
+      ${sessions.slice(0, 2).map(sessionRow)}
       ${!sessions.length ? html`<div class="card muted small">Conecta el Apple Watch (Perfil → Apple Watch) o registra un entreno en Entrenos.</div>` : ''}`,
   };
 }
@@ -191,7 +187,7 @@ function todayCard(t, todays, nd, nut, supLogs) {
     <div class="xs muted" style="margin-top:8px">Entreno</div>
     ${todays.length ? todays.map((s) => { const st = planState(s); const rec = !s.from_calendar && !s.reserved && s.discipline === 'crossfit' && s.status !== 'done';
       return html`<div class="lrow ${s.status === 'done' ? 'done' : ''}">${ck(s.status === 'done', () => (s.status === 'done' ? plannedDetail(s) : markDone(s)), 'Hecho')}
-        <div class="grow" data-act="${act(() => plannedDetail(s))}"><div class="small" style="font-weight:600">${cleanTitle(s.title)}</div><div class="xs muted">${[s.start_local ?? (s.slot === 'am' ? 'Mañana' : 'Tarde'), s.est_minutes ? `${s.est_minutes} min` : null, s.planned_km ? `${(+s.planned_km).toFixed(1)} km` : null].filter(Boolean).join(' · ')}</div></div>
+        <div class="grow" data-act="${act(() => plannedDetail(s))}"><div class="small" style="font-weight:600">${cleanTitle(s.title)}</div><div class="xs muted">${[s.start_local ?? (s.slot === 'am' ? 'Mañana' : 'Tarde'), s.est_minutes ? `${s.est_minutes} min` : null, s.planned_km ? `${dec(s.planned_km, 1)} km` : null].filter(Boolean).join(' · ')}</div></div>
         ${rec ? html`<button class="sm" title="Ya la he reservado en WodBuster" data-act="${act(() => toggleReserved(s))}">${raw(ic('ticket', 17))} Reservé</button>` : st.tag}</div>`; })
       : html`<div class="small muted">Descanso. Camina, duerme bien y come suficiente.</div>`}
     ${nd ? html`<div class="row xs muted" style="margin-top:10px"><span class="grow">Comidas</span><span>${n0(nd.totals.kcal)} / ${n0(nd.target.macros.kcal)} kcal · P ${n0(nd.totals.protein)}/${n0(nd.target.macros.protein)} g</span></div>
@@ -218,13 +214,14 @@ function planState(s) {
   if (s.status === 'skipped') return { tag: html`<span class="tag">No la hiciste</span>`, dim: true };
   if (past) return { tag: html`<span class="tag">No registrada</span>`, dim: true };
   if (s.from_calendar || s.reserved) return { tag: html`<span class="tag blue">Reservada</span>`, dim: false };
-  return { tag: html`<span class="tag accent">Recomendada</span>`, dim: false };
+  // Pendiente: en CrossFit importa si tienes plaza; en lo demás el estado por defecto no necesita etiqueta.
+  return { tag: s.discipline === 'crossfit' && !/recomendad/i.test(cleanTitle(s.title)) ? html`<span class="tag">Sin reservar</span>` : '', dim: false };
 }
 export const plannedCard = (s) => { const st = planState(s); return html`
   <div class="card row" data-act="${act(() => plannedDetail(s))}" style="${st.dim ? 'opacity:.55' : ''}">
     ${icon(s.discipline)}
     <div class="grow"><div style="font-weight:700">${cleanTitle(s.title)} ${s.status === 'modified' ? raw(ic('repeat', 17)) : ''}</div>
-      <div class="small muted">${[s.start_local ?? (s.slot === 'am' ? 'Mañana' : 'Tarde'), s.est_minutes ? `${s.est_minutes} min` : null, s.planned_km ? `${(+s.planned_km).toFixed(1)} km` : null].filter(Boolean).join(' · ')}</div>
+      <div class="small muted">${[s.start_local ?? (s.slot === 'am' ? 'Mañana' : 'Tarde'), s.est_minutes ? `${s.est_minutes} min` : null, s.planned_km ? `${dec(s.planned_km, 1)} km` : null].filter(Boolean).join(' · ')}</div>
       ${/pendiente de reserva|recomendado/i.test(s.title ?? '') && !s.from_calendar && !s.reserved && s.status !== 'done' ? html`<div class="xs muted">Aún no tienes clase reservada en WodBuster ese día: es la que te recomienda el plan.</div>` : s.objective ? html`<div class="small muted">${s.objective}</div>` : ''}
       <div class="row" style="gap:6px;margin-top:4px">${st.tag}${s.status !== 'done' ? intensityTag(s.intensity) : ''}</div></div>
   </div>`; };
@@ -233,7 +230,7 @@ async function markDone(s) {
   const day = s.date;
   const list = await api.db.select('sessions', { select: 'id,started_at,duration_s,title,discipline,distance_m', deleted_at: 'is.null', and: `(started_at.gte.${addDays(day, -1)}T22:00:00Z,started_at.lt.${day}T23:00:00Z)`, order: 'started_at' }).catch(() => []);
   const go2 = (sessionId) => busy(null, async () => { await api.fn('replan', { trigger: 'done', plannedId: s.id, sessionId }); closeSheet(); invalidate('planned', 'changes'); render(); toast('Marcada como hecha'); });
-  sheet('¿Con qué entreno la hiciste?', html`${list.map((x) => html`<button class="block" data-act="${act(() => go2(x.id))}">${timeOf(x.started_at)} · ${x.title ?? x.discipline} · ${dur(x.duration_s)}${x.distance_m > 0 ? ` · ${(x.distance_m / 1000).toFixed(1)} km` : ''}</button>`)}
+  sheet('¿Con qué entreno la hiciste?', html`${list.map((x) => html`<button class="block" data-act="${act(() => go2(x.id))}">${timeOf(x.started_at)} · ${sessionName(x)} · ${dur(x.duration_s)}${x.distance_m > 0 ? ` · ${dec(x.distance_m / 1000, 1)} km` : ''}</button>`)}
     <button class="block ${list.length ? 'ghost' : 'primary'}" data-act="${act(() => go2(null))}">La hice, pero no la tengo registrada</button>
     <p class="xs muted">Normalmente no hace falta: en cuanto llega un entreno de ese día y del mismo tipo (Apple Watch o registro), Forja la marca sola.</p>`);
 }
@@ -243,7 +240,7 @@ function plannedDetail(s) {
     <div class="row" style="gap:6px">${intensityTag(s.intensity)}${s.key ? html`<span class="tag accent">Sesión clave</span>` : ''}${s.from_calendar ? html`<span class="tag blue">Reservada</span>` : ''}</div>
     <p style="font-weight:600">${s.objective ?? ''}</p>
     <div class="stats"><div class="stat"><div class="l">Duración</div><div class="v">${s.est_minutes ?? '–'}<span class="u"> min</span></div></div>
-      ${s.planned_km ? html`<div class="stat"><div class="l">Distancia</div><div class="v">${(+s.planned_km).toFixed(1)}<span class="u"> km</span></div></div>` : ''}
+      ${s.planned_km ? html`<div class="stat"><div class="l">Distancia</div><div class="v">${dec(s.planned_km, 1)}<span class="u"> km</span></div></div>` : ''}
       <div class="stat"><div class="l">Piernas</div><div class="v">${s.leg_stress ?? 0}<span class="u">/3</span></div></div></div>
     <div class="card tight"><div class="small" style="color:var(--accent);font-weight:700">${raw(ic('bulb', 17))} Por qué esta sesión</div><div class="small">${s.rationale ?? ''}</div></div>
     <h3>Sesión</h3>${steps(s.steps)}
@@ -258,8 +255,8 @@ function plannedDetail(s) {
 export const sessionRow = (s) => html`
   <div class="card tight row" data-act="${act(() => sessionDetail(s.id))}">
     ${icon(s.discipline)}
-    <div class="grow"><div style="font-weight:600">${s.title ?? s.discipline}</div><div class="xs muted">${shortDate(s.started_at)} · ${timeOf(s.started_at)}</div></div>
-    <div style="text-align:right">${s.distance_m > 0 ? html`<div style="font-weight:600">${(s.distance_m / 1000).toFixed(2)} km</div>` : ''}<div class="xs muted">${dur(s.duration_s)}</div></div>
+    <div class="grow"><div style="font-weight:600">${sessionName(s)}</div><div class="xs muted">${shortDate(s.started_at)} · ${timeOf(s.started_at)}</div></div>
+    <div style="text-align:right">${s.distance_m > 0 ? html`<div style="font-weight:600">${dec(s.distance_m / 1000, 2)} km</div>` : ''}<div class="xs muted">${dur(s.duration_s)}</div></div>
   </div>`;
 
 async function sessionDetail(id) {
@@ -279,14 +276,14 @@ async function sessionDetail(id) {
     watchMate = near.find((w) => !(w.session_blocks || []).length && Math.abs(Date.parse(w.started_at) - Date.parse(s.started_at)) < 4 * 3.6e6) ?? null;
   }
   setSheet(html`
-    <h3>${s.title ?? s.discipline}</h3><p class="small muted">${dayName(s.started_at.slice(0, 10), true)} · ${timeOf(s.started_at)} · ${({ healthkit: 'Apple Salud', manual: 'Registro manual', photo: 'Foto' })[s.primary_source] ?? s.primary_source}</p>
+    <h3>${sessionName(s)}</h3><p class="small muted">${dayName(s.started_at.slice(0, 10), true)} · ${timeOf(s.started_at)} · ${({ healthkit: 'Apple Salud', manual: 'Registro manual', photo: 'Foto' })[s.primary_source] ?? s.primary_source}</p>
     <div class="stats"><div class="stat"><div class="l">Duración</div><div class="v">${dur(s.duration_s)}</div></div>
       ${s.distance_m > 0 ? html`<div class="stat"><div class="l">Distancia</div><div class="v">${(s.distance_m / 1000).toFixed(2).replace('.', ',')}<span class="u"> km</span></div></div>` : ''}
       ${s.avg_hr ? html`<div class="stat"><div class="l">FC media</div><div class="v" style="color:var(--red)">${s.avg_hr}</div></div>` : ''}
       ${s.rpe ? html`<div class="stat"><div class="l">RPE</div><div class="v">${s.rpe}</div></div>` : ''}</div>
     <button class="block share-btn" data-act="${act(async () => { const { openShare } = await import('./share.js'); openShare(s, blocks, name); })}">${raw(ic('image', 18))} Compartir resumen</button>
     ${s.discipline === 'running' && s.distance_m > 0 ? html`<p class="small">Ritmo medio: <b>${pace(s.duration_s / (s.distance_m / 1000))}</b></p>` : ''}
-    ${s.internal_load ? html`<p class="small muted">Carga ${n0(s.internal_load)} UA · fatiga de piernas ${n0(s.leg_index)}</p>` : ''}
+    ${s.internal_load ? html`<p class="small muted">Carga del entreno ${n0(s.internal_load)} · impacto en piernas ${n0(s.leg_index)}</p>` : ''}
     ${watch}
     ${blocks.map((b) => {
       const sets = (s.session_sets || []).filter((x) => x.block_id === b.id).sort((a, c) => a.position - c.position);
@@ -359,7 +356,7 @@ export async function PLAN() {
     title: 'Plan',
     body: html`
       <div class="chips">${phases.filter((p) => p.kind !== 'base').map((p) => html`<span class="chip ${p.start_date <= t && t <= p.end_date ? 'on' : ''}">${phaseName(p.kind)} · ${shortDate(p.start_date)}–${shortDate(p.end_date)}</span>`)}</div>
-      <div class="row"><button class="sm" data-act="${act(() => { planOffset--; render(); })}">‹</button><b class="grow" style="text-align:center">Semana del ${shortDate(mon)}</b><button class="sm" data-act="${act(() => { planOffset++; render(); })}">›</button></div>
+      <div class="row"><button class="sm" data-act="${act(() => { planOffset--; render(); })}" aria-label="Anterior">${raw(ic('back', 20))}</button><b class="grow" style="text-align:center">Semana del ${shortDate(mon)}</b><button class="sm" data-act="${act(() => { planOffset++; render(); })}" aria-label="Siguiente">${raw(ic('chevron', 20))}</button></div>
       <div class="days">${days.map((d) => html`<button class="day ${d === planDay ? 'on' : ''} ${d === t ? 'today' : ''}" data-act="${act(() => { planDay = d; render(); })}"><div class="w">${dayName(d).split(' ')[0]}</div><div class="d">${d.slice(8)}</div><div class="dots">${ses.filter((s) => s.date === d && s.status !== 'skipped').map((s) => raw(`<i style="background:${DC[s.discipline] ?? 'var(--muted)'}"></i>`))}</div></button>`)}</div>
       ${(() => {
         const dayDone = done.filter((x) => madridDay(x.started_at) === planDay);
@@ -377,7 +374,7 @@ export async function PLAN() {
 let wTab = 'historial';
 export async function WORKOUTS(params = []) {
   const openWod = params[0] === 'wod';
-  const right = html`<button class="icon-btn" data-act="${act(addWorkoutMenu)}">＋</button>`;
+  const right = html`<button class="icon-btn primary" aria-label="Registrar entreno" data-act="${act(addWorkoutMenu)}">${raw(ic('plus', 22))}</button>`;
   const seg = html`<div class="seg"><button class="${wTab === 'historial' ? 'on' : ''}" data-act="${act(() => { wTab = 'historial'; render(); })}">Historial</button><button class="${wTab === 'progreso' ? 'on' : ''}" data-act="${act(() => { wTab = 'progreso'; render(); })}">Progreso</button></div>`;
   if (wTab === 'progreso') return { title: 'Entrenos', right, body: html`${seg}${await progress()}` };
   const list = await get('sessions:365', () => api.db.select('sessions', { deleted_at: 'is.null', started_at: `gte.${addDays(today(), -365)}`, order: 'started_at.desc', limit: 300 }));
@@ -388,18 +385,17 @@ export async function WORKOUTS(params = []) {
     after: openWod ? () => { history.replaceState(null, '', '#/entrenos'); startFromText(); } : undefined,
     body: html`${seg}
       ${await draftBanner()}
-      <button class="primary block" data-act="${act(() => startFromText())}">${raw(ic('clipboard', 17))} Pegar entreno (Strava, notas, WhatsApp)</button>
-      <div class="grid2"><button data-act="${act(() => startFromPhoto())}">${raw(ic('camera', 17))} Foto de pizarra</button><button data-act="${act(manualMenu)}">${raw(ic('pen', 17))} Manual</button></div>
-      ${Object.keys(byWeek).sort().reverse().map((w) => html`<h2>Semana del ${shortDate(w)} <small>${byWeek[w].length} sesiones</small></h2>${byWeek[w].map(sessionRow)}`)}
-      ${!list.length ? html`<div class="card muted">Aún no hay entrenamientos.</div>` : ''}`,
+      ${Object.keys(byWeek).sort().reverse().map((w) => html`<h2>Semana del ${shortDate(w)} <small>${plural(byWeek[w].length, 'sesión', 'sesiones')}</small></h2>${byWeek[w].map(sessionRow)}`)}
+      ${!list.length ? html`<div class="card empty"><h3>Aún no hay entrenos</h3><p class="small muted">Llegan solos del Apple Watch. Para un WOD, pega la pizarra o hazle una foto.</p><button class="primary" data-act="${act(addWorkoutMenu)}">${raw(ic('plus', 17))} Registrar entreno</button></div>` : ''}`,
   };
 }
 
 function addWorkoutMenu() {
-  sheet('Registrar entreno', html`<button class="block primary" data-act="${act(() => startFromText())}">${raw(ic('clipboard', 17))} Pegar texto</button><button class="block" data-act="${act(() => startFromPhoto())}">${raw(ic('camera', 17))} Foto de pizarra o captura</button><button class="block" data-act="${act(() => startManual())}">${raw(ic('dumbbell', 17))} CrossFit por bloques (fuerza, WOD…)</button><button class="block" data-act="${act(manualWorkout)}">${raw(ic('pen', 17))} Otra actividad</button>`);
-}
-function manualMenu() {
-  sheet('Registro manual', html`<button class="block primary" data-act="${act(() => startManual())}">${raw(ic('dumbbell', 17))} CrossFit por bloques (fuerza, WOD, endurance)</button><button class="block" data-act="${act(manualWorkout)}">${raw(ic('pen', 17))} Otra actividad (carrera, pádel, natación…)</button>`);
+  const opt = (i, t, d, fn, primary) => html`<button class="block opt ${primary ? 'primary' : ''}" data-act="${act(fn)}">${raw(ic(i, 20))}<span class="grow"><b>${t}</b><small>${d}</small></span></button>`;
+  sheet('Registrar entreno', html`${opt('clipboard', 'Pegar texto', 'Strava, notas, WhatsApp o la pizarra copiada', () => startFromText(), true)}
+    ${opt('camera', 'Foto de la pizarra', 'O una captura de WodBuster', () => startFromPhoto())}
+    ${opt('dumbbell', 'CrossFit a mano', 'Por bloques: fuerza, WOD, endurance', () => startManual())}
+    ${opt('pen', 'Otra actividad', 'Carrera, pádel, natación…', manualWorkout)}`);
 }
 
 /** Compatibilidad: otras pantallas abren el pegado de texto. */
@@ -435,7 +431,7 @@ async function progress() {
   ]);
   return html`
     ${bodyCard(bm, ns)}
-    <div class="card"><div class="row"><h3 class="grow">Tus ritmos</h3>${r.vdot ? html`<span class="tag blue">VDOT ${r.vdot.toFixed(1)}</span>` : ''}</div>
+    <div class="card"><div class="row"><h3 class="grow">Tus ritmos</h3>${r.vdot ? html`<span class="tag blue" title="Tu nivel de forma en carrera (VDOT)">Nivel ${dec(r.vdot, 1)}</span>` : ''}</div>
       ${p ? html`<div class="small">${[['Suave', `${pace(p.easy[0])}–${pace(p.easy[1])}`], ['Maratón', pace(p.marathon)], ['Media', pace(p.halfMarathon)], ['Umbral', pace(p.threshold)], ['Series', pace(p.interval)], ['Repeticiones', pace(p.repetition)]].map(([a, b]) => html`<div class="row"><span class="grow muted">${a}</span><b>${b}</b></div>`)}</div><p class="xs muted">${r.vdotNote}</p>`
         : html`<p class="small muted">Registra una competición o un test (márcalo como test) para calcular tus ritmos reales.</p>`}</div>
     ${r.predictions.length ? html`<div class="card"><h3>Predicciones orientativas</h3><div class="stats">${r.predictions.map((x) => html`<div class="stat"><div class="l">${({ '5k': '5K', '10k': '10K', '15k': '15K', half: 'Media', marathon: 'Maratón' })[x.key]}</div><div class="v" style="font-size:15px">${dur(x.timeS)}</div></div>`)}</div></div>` : ''}
@@ -445,15 +441,28 @@ async function progress() {
     <button class="block" data-act="${act(() => exerciseHistory())}">${raw(ic('activity', 17))} Historial por ejercicio (pesos y repeticiones)</button>
     ${d.lifts.length ? d.lifts.map((l) => html`<div class="card"><h3>${l.name}</h3>
       <div class="stats"><div class="stat"><div class="l">1RM real</div><div class="v">${l.bestActual1RM ? l.bestActual1RM.kg : '–'}<span class="u"> kg</span></div></div>
-        <div class="stat"><div class="l">Estimado</div><div class="v" style="color:var(--amber)">${l.bestE1RM ? l.bestE1RM.kg.toFixed(1) : '–'}</div></div>
-        <div class="stat"><div class="l">De trabajo</div><div class="v" style="color:var(--accent)">${l.workingE1RM ? l.workingE1RM.kg.toFixed(1) : '–'}</div></div></div>
+        <div class="stat"><div class="l">Estimado</div><div class="v" style="color:var(--amber)">${l.bestE1RM ? dec(l.bestE1RM.kg, 1) : '–'}</div></div>
+        <div class="stat"><div class="l">De trabajo</div><div class="v" style="color:var(--accent)">${l.workingE1RM ? dec(l.workingE1RM.kg, 1) : '–'}</div></div></div>
       ${l.history.length >= 2 ? lineChart([{ color: 'var(--amber)', points: l.history.map((h) => ({ x: shortDate(h.date), y: h.e1rm })) }], { height: 110 }) : ''}
       <p class="xs muted">${l.suggestion.explanation}</p></div>`) : html`<div class="card muted small">Registra series con peso (o pega tus WODs) y verás aquí tu evolución y tu 1RM estimado.</div>`}
     <h2>Carga</h2>
+    ${await loadCard()}
     <div class="card"><h3>Forma (azul) y fatiga (rojo)</h3>${lineChart([{ color: 'var(--blue)', points: d.fitness.map((f) => ({ x: shortDate(f.date), y: f.ctl })) }, { color: 'var(--red)', points: d.fitness.map((f) => ({ x: shortDate(f.date), y: f.atl })) }])}
       <p class="xs muted">Carga crónica de 42 días (tu forma) y aguda de 7 días (tu fatiga).</p></div>
     <h2>Récords</h2>
     ${latest.length ? latest.map((x) => html`<div class="card tight row"><div class="grow"><b>${x.detail ?? x.metric}</b><div class="xs muted">${shortDate(x.achieved_on)}</div></div><span class="tag ${x.kind === 'actual' ? 'green' : 'amber'}">${x.kind === 'actual' ? 'Real' : 'Estimado'}</span></div>`) : html`<div class="card muted small">Se guardan solos al registrar entrenamientos.</div>`}`;
+}
+
+/** Carga de esta semana frente a tu media (ratio agudo:crónico) y fatiga de piernas, en palabras. */
+async function loadCard() {
+  const rd = await get('readiness', async () => (await api.db.select('readiness_daily', { date: `eq.${today()}` }))[0]);
+  if (!rd || (rd.acwr == null && rd.leg_fatigue == null)) return '';
+  const a = rd.acwr != null ? +rd.acwr : null, lf = rd.leg_fatigue != null ? +rd.leg_fatigue : null;
+  const aTxt = a == null ? '' : a > 1.5 ? 'Subida brusca: riesgo de lesión' : a > 1.3 ? 'Subiendo rápido' : a < 0.8 ? 'Por debajo de lo habitual' : 'Equilibrada';
+  return html`<div class="card">
+    ${a != null ? html`<div class="row"><div class="grow"><div class="small" style="font-weight:650">Carga esta semana frente a tu media</div><div class="xs muted">${aTxt}. Lo sano: entre 0,8 y 1,3.</div></div><div class="kpi">${dec(a, 2)}</div></div>` : ''}
+    ${lf != null ? html`<div class="row xs muted" style="margin-top:14px"><span class="grow">Fatiga de piernas · ${lf >= 250 ? 'alta' : lf >= 140 ? 'moderada' : 'baja'}</span><span>${Math.round(lf)} de 350</span></div>${bar(lf, 350, lf >= 250 ? 'var(--red)' : lf >= 140 ? 'var(--amber)' : 'var(--green)')}` : ''}
+  </div>`;
 }
 
 /** Peso y cintura frente a tu objetivo nutricional (tendencia de 4 semanas). */
@@ -471,7 +480,7 @@ function bodyCard(rows, ns) {
     : mode === 'definicion' ? (slope <= -0.15 ? `Bajando ${f(Math.abs(slope), 2)} kg/semana: vas bien${slope < -0.8 ? ', aunque algo rápido: cuidado con el rendimiento' : ''}.` : 'Peso estable: si la cintura tampoco baja, te ajusto las calorías.')
     : mode === 'volumen' ? (slope >= 0.1 ? `Subiendo ${f(slope, 2)} kg/semana: en rango.` : 'No estás subiendo: conviene comer algo más.')
     : `Tendencia ${slope >= 0 ? '+' : ''}${f(slope, 2)} kg/semana.`;
-  return html`<div class="card"><div class="row"><h3 class="grow">Cuerpo</h3><button class="sm" data-act="${act(addBody)}">＋ Peso / cintura</button></div>
+  return html`<div class="card"><div class="row"><h3 class="grow">Cuerpo</h3><button class="sm" data-act="${act(addBody)}">${raw(ic('plus', 17))} Peso / cintura</button></div>
     <div class="stats"><div class="stat"><div class="l">Peso</div><div class="v">${w.length ? f(w[w.length - 1].kg) : '–'}<span class="u"> kg</span></div></div>
       <div class="stat"><div class="l">Cintura</div><div class="v">${wa.length ? f(wa[wa.length - 1].waist) : '–'}<span class="u"> cm</span></div></div>
       <div class="stat"><div class="l">Tendencia</div><div class="v" style="font-size:16px">${slope == null ? '–' : `${slope >= 0 ? '+' : ''}${f(slope, 2)}`}<span class="u"> kg/sem</span></div><div class="xs muted">objetivo ${rate > 0 ? '+' : ''}${f(rate, 2)}</div></div></div>

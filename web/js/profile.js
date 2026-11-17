@@ -108,7 +108,7 @@ export async function goals() {
   const list = await api.db.select('goals', { status: 'eq.active', order: 'date' });
   sheet('Objetivos', html`
     ${list.map((g) => html`<div class="card tight row" data-act="${act(() => goalEditor(g))}"><div class="grow"><b>${g.name}</b><div class="xs muted">${g.date} · prioridad ${g.priority}</div></div><span class="muted">›</span></div>`)}
-    <button class="primary block" data-act="${act(() => goalEditor({ name: '', type: 'half_marathon', date: addDays(today(), 84), priority: 'A' }))}">＋ Añadir objetivo</button>`);
+    <button class="primary block" data-act="${act(() => goalEditor({ name: '', type: 'half_marathon', date: addDays(today(), 84), priority: 'A' }))}">${raw(ic('plus', 17))} Añadir objetivo</button>`);
 }
 function goalEditor(g) {
   sheet(g.id ? 'Editar objetivo' : 'Nuevo objetivo', html`<form data-submit="${act((v, f) => busy(f.querySelector('button'), async () => {

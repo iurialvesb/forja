@@ -30,7 +30,7 @@ export async function activityExtras(s) {
     api.db.select('session_laps', { session_id: `eq.${s.id}`, order: 'idx' }).catch(() => []),
   ]);
   const out = [];
-  const extra = [s.moving_s ? ['En movimiento', dur(s.moving_s)] : null, s.cadence_spm ? ['Cadencia', `${Math.round(s.cadence_spm)} ppm`] : null, s.avg_stride_m ? ['Zancada', `${(+s.avg_stride_m).toFixed(2)} m`] : null,
+  const extra = [s.moving_s ? ['En movimiento', dur(s.moving_s)] : null, s.cadence_spm ? ['Cadencia', `${Math.round(s.cadence_spm)} ppm`] : null, s.avg_stride_m ? ['Zancada', `${(+s.avg_stride_m).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m`] : null,
     s.elevation_gain_m ? ['Desnivel', `+${Math.round(s.elevation_gain_m)} / −${Math.round(s.elevation_loss_m ?? 0)} m`] : null, s.max_hr ? ['FC máx.', `${s.max_hr} ppm`] : null, s.avg_power ? ['Potencia', `${Math.round(s.avg_power)} W`] : null,
     s.active_kcal ? ['Calorías', `${Math.round(s.active_kcal)} kcal`] : null, s.max_speed_mps && s.discipline === 'running' ? ['Ritmo máx.', pace(1000 / s.max_speed_mps)] : null].filter(Boolean);
   if (extra.length) out.push(html`<div class="card tight">${extra.map(([a, b]) => html`<div class="row small"><span class="grow muted">${a}</span><b>${b}</b></div>`)}</div>`);
@@ -52,7 +52,7 @@ export async function activityExtras(s) {
   }
   if (laps.length > 1) {
     out.push(html`<div class="card tight"><b>Vueltas / intervalos</b>
-      ${laps.map((l) => html`<div class="row small"><span style="width:28px" class="muted">${l.idx + 1}</span><span class="grow">${dur(l.duration_s)}${l.distance_m ? ` · ${(l.distance_m / 1000).toFixed(2)} km` : ''}${l.avg_speed_mps && s.discipline === 'running' ? ` · ${pace(1000 / l.avg_speed_mps)}` : ''}</span><span class="muted">${l.avg_hr ? `${l.avg_hr} ppm` : ''}</span></div>`)}</div>`);
+      ${laps.map((l) => html`<div class="row small"><span style="width:28px" class="muted">${l.idx + 1}</span><span class="grow">${dur(l.duration_s)}${l.distance_m ? ` · ${(l.distance_m / 1000).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} km` : ''}${l.avg_speed_mps && s.discipline === 'running' ? ` · ${pace(1000 / l.avg_speed_mps)}` : ''}</span><span class="muted">${l.avg_hr ? `${l.avg_hr} ppm` : ''}</span></div>`)}</div>`);
   }
   if (streams?.route) out.push(routeSvg(streams.route));
   return out;

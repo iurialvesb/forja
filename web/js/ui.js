@@ -26,7 +26,7 @@ document.addEventListener('submit', (e) => {
 
 // Aviso (al estilo Sonner): sube desde abajo con una transición (interrumpible), se pausa si la app está en segundo
 // plano y se descarta deslizándolo hacia abajo, por donde entró.
-export function toast(msg, ms = 3500) {
+export function toast(msg, ms = 3200) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.style.transform = ''; t.hidden = false;
   requestAnimationFrame(() => t.setAttribute('data-on', ''));
@@ -138,7 +138,20 @@ export const DISC = {
   walking: ['walk', 'var(--green)'], hiking: ['mountain', 'var(--green)'], padel: ['zap', 'var(--green)'], tennis: ['zap', 'var(--green)'], skiing: ['mountain', 'var(--blue)'], dance: ['activity', 'var(--purple)'], other: ['activity', 'var(--muted)'],
 };
 export const icon = (d) => { const [i, c] = DISC[d] || DISC.other; return html`<div class="ico" style="background:color-mix(in srgb, ${c} 16%, transparent);color:${c}">${raw(ic(i, 21))}</div>`; };
-export const intensityTag = (i) => html`<span class="tag ${i === 'alta' ? 'red' : i === 'moderada' ? 'amber' : 'green'}">${i || ''}</span>`;
+// Intensidad: es información, no una alerta → etiqueta neutra con puntos de nivel (rojo se reserva para problemas).
+export const intensityTag = (i) => (i ? html`<span class="tag int"><span class="lvl" data-l="${i === 'alta' ? 3 : i === 'moderada' ? 2 : 1}" aria-hidden="true"><i></i><i></i><i></i></span>Intensidad ${i}</span>` : '');
+/** Número con coma decimal (es-ES). */
+export const dec = (x, d = 1) => (x == null || Number.isNaN(+x) ? '–' : (+x).toLocaleString('es-ES', { minimumFractionDigits: d, maximumFractionDigits: d }));
+export const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+const DISC_NAME = { running: 'Carrera', walking: 'Caminata', hiking: 'Senderismo', cycling: 'Bici', swimming: 'Natación', crossfit: 'CrossFit', hyrox: 'HYROX', hybrid: 'Híbrido', strength: 'Fuerza', weightlifting: 'Halterofilia', mobility: 'Movilidad', yoga: 'Yoga', padel: 'Pádel', tennis: 'Tenis', skiing: 'Esquí', dance: 'Baile', calisthenics: 'Calistenia', other: 'Entreno' };
+export const discName = (d) => DISC_NAME[d] ?? 'Entreno';
+/** Nombre legible de una sesión: los títulos genéricos en inglés del Watch («Afternoon Workout») pasan a «CrossFit de tarde». */
+export function sessionName(s) {
+  const t = String(s?.title ?? '').trim();
+  if (t && !/^(early\s+)?(morning|afternoon|evening|night|lunch|midday)\s+(workout|run|ride|walk|swim|hike|session|training|strength|crossfit)$/i.test(t) && !/^(workout|run|outdoor run|indoor run|functional strength training|traditional strength training|high intensity interval training|cross training)$/i.test(t)) return t;
+  const h = +new Intl.DateTimeFormat('es-ES', { hour: 'numeric', hour12: false, timeZone: 'Europe/Madrid' }).format(new Date(s.started_at));
+  return `${discName(s.discipline)} ${h < 12 ? 'de mañana' : h < 15 ? 'de mediodía' : h < 21 ? 'de tarde' : 'de noche'}`;
+}
 export const levelColor = (l) => (l === 'verde' ? 'var(--green)' : l === 'ambar' ? 'var(--amber)' : l === 'rojo' ? 'var(--red)' : 'var(--muted)');
 
 let gid = 0;
@@ -205,7 +218,7 @@ export function steps(list) {
   return (list || []).map((s) => {
     const m = [];
     if (s.repeat) m.push(`×${s.repeat}`);
-    if (s.distanceM) m.push(s.distanceM >= 1000 ? `${(s.distanceM / 1000).toFixed(1)} km` : `${Math.round(s.distanceM)} m`);
+    if (s.distanceM) m.push(s.distanceM >= 1000 ? `${(s.distanceM / 1000).toLocaleString('es-ES', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} km` : `${Math.round(s.distanceM)} m`);
     if (s.durationS) m.push(s.durationS >= 60 ? `${Math.round(s.durationS / 60)}′` : `${s.durationS}″`);
     if (s.paceRange?.length === 2) m.push(`${pace(s.paceRange[0])}–${pace(s.paceRange[1])}`); else if (s.pace) m.push(pace(s.pace.secPerKm));
     if (s.hrRange?.length === 2) m.push(`${s.hrRange[0]}–${s.hrRange[1]} ppm`);
