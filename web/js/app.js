@@ -140,7 +140,7 @@ function renderAuth(mode = 'login') {
     }
   }));
   document.getElementById('view').innerHTML = html`
-    <div style="padding-top:12vh;text-align:center"><div style="width:84px;height:84px;margin:0 auto;border-radius:26px;display:grid;place-items:center;background:linear-gradient(160deg,#5b97ff,#1d4ed8);box-shadow:0 18px 40px rgba(29,78,216,.5);color:#fff">${raw(ic('zap', 44))}</div><h1 style="margin:14px 0 6px;font-size:34px">Forja</h1>
+    <div style="padding-top:12vh"><div style="width:64px;height:64px;display:grid;place-items:center;border-radius:4px;background:var(--color-accent);color:var(--color-accent-ink)">${raw(ic('zap', 36))}</div><h1 style="margin:16px 0 8px;font-size:3.5rem;text-transform:uppercase;line-height:.9">Forja</h1>
       <p class="muted">Tu entrenador personal de running, CrossFit, HYROX y nutrición.</p></div>
     <form class="card" data-submit="${submit}">
       <label>Email</label><input name="email" type="email" autocomplete="email" required>

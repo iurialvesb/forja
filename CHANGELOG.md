@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-21 · Rediseño completo con Hallmark (tema Sport)
+- Nuevo sistema visual «hoja de resultados»: papel gris hormigón frío, tinta azul-negra, un único acento volt siempre como relleno (botón principal, pestaña actual, selección). Títulos en Saira Condensed en mayúsculas, texto en Albert Sans, tiempos y cifras de datos en JetBrains Mono. Fuentes propias (sin Barlow).
+- Todo color y tipo pasa por tokens (`web/css/tokens.css`, `base.css`); `app.css` reescrito desde cero (antes 114 fallos del mínimo de Hallmark, ahora 0).
+- Composición: la recuperación de Inicio y el resumen del Diario son una banda de tinta a todo el ancho (la firma de la app); el resto, secciones separadas por reglas finas y una regla gruesa por sección, sin tarjetas con sombra. Pestañas como tira con regla y bloque volt en la actual; hojas, avisos y temporizador en el mismo sistema.
+- Gráficos de un solo tono (tinta), sin degradados ni brillos; anillo plano. Zonas de pulso en escala de tinta con la Z5 en rojo.
+- Icono de la app nuevo: rayo volt sobre tinta. Meta descripción y colores de la PWA en claro.
+- El resumen PNG para compartir usa las fuentes nuevas, sin cursiva.
+
 ## 2026-11-17 · Nutrición instantánea
 - Diagnóstico con los registros reales: cada función del servidor arranca en frío (~2 s; nutrition-day 2,0–2,2 s) y cada acción del Diario esperaba a dos llamadas seguidas (guardar + recalcular la semana) con la pantalla bloqueada.
 - Acciones optimistas: «Me lo he comido», «No», «Deshacer», añadir, cambiar, mover, quitar y copiar de ayer se ven al instante (8–17 ms medidos con red simulada de 2 s); el servidor confirma por detrás y, si falla, se avisa y se vuelve a lo guardado. Lo pendiente se ve atenuado y no se puede editar hasta confirmarse.

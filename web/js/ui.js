@@ -81,7 +81,7 @@ function dragToClose(el) {
     dy = y - y0;
     panel.classList.add('dragging');
     panel.style.transform = `translateY(${dy > 0 ? dy : -Math.sqrt(-dy) * 2}px)`;           // hacia arriba, con resistencia
-    el.style.backgroundColor = `rgba(2,6,16,${0.62 * Math.max(0, 1 - dy / panel.offsetHeight)})`;
+    el.style.backgroundColor = `color-mix(in oklab, var(--color-ink) ${Math.round(55 * Math.max(0, 1 - dy / panel.offsetHeight))}%, transparent)`;
   };
   const end = () => {
     if (y0 == null) return;
@@ -156,25 +156,25 @@ export const levelColor = (l) => (l === 'verde' ? 'var(--green)' : l === 'ambar'
 
 let gid = 0;
 export function ring(value, color, label, size = 92, sub = '') {
-  const r = 40, c = 2 * Math.PI * r, v = Math.max(0.02, Math.min(1, value || 0)), id = `rg${++gid}`;
-  return raw(`<svg class="ring" viewBox="0 0 100 100" role="img" aria-label="${esc(`${label} ${sub}`.trim())}" style="width:${size}px;height:${size}px"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".55"/><stop offset="1" stop-color="${color}"/></linearGradient></defs>
-    <circle cx="50" cy="50" r="${r}" fill="none" stroke="rgba(140,170,255,.13)" stroke-width="9"/>
-    <circle class="arc" cx="50" cy="50" r="${r}" fill="none" stroke="url(#${id})" stroke-width="9" stroke-linecap="round" stroke-dasharray="${c * v} ${c}" transform="rotate(-90 50 50)" style="filter:drop-shadow(0 0 6px ${color}55)"/>
-    <text x="50" y="${sub ? 53 : 58}" text-anchor="middle" style="font:800 ${String(label).length > 3 ? 20 : 26}px var(--num);fill:#fff">${esc(label)}</text>${sub ? `<text x="50" y="69" text-anchor="middle" style="font-size:10px;font-weight:700;fill:rgba(205,218,245,.65)">${esc(sub)}</text>` : ''}</svg>`);
+  const r = 40, c = 2 * Math.PI * r, v = Math.max(0.02, Math.min(1, value || 0));
+  return raw(`<svg class="ring" viewBox="0 0 100 100" role="img" aria-label="${esc(`${label} ${sub}`.trim())}" style="width:${size}px;height:${size}px">
+    <circle class="trk" cx="50" cy="50" r="${r}" fill="none" stroke-width="8"/>
+    <circle class="arc" cx="50" cy="50" r="${r}" fill="none" stroke="${color}" stroke-width="8" stroke-linecap="butt" stroke-dasharray="${c * v} ${c}" transform="rotate(-90 50 50)"/>
+    <text class="lbl" x="50" y="${sub ? 55 : 60}" text-anchor="middle" style="font-size:${String(label).length > 3 ? 24 : 32}px">${esc(label)}</text>${sub ? `<text class="sub" x="50" y="70" text-anchor="middle">${esc(sub)}</text>` : ''}</svg>`);
 }
 export const bar = (value, max, color) => raw(`<div class="bar"><i style="width:${Math.max(0, Math.min(100, (value / Math.max(1, max)) * 100))}%${color ? `;background:${color}` : ''}"></i></div>`);
 
 /** Barras con degradado. points: [{label, value, color?}]. goal: línea de referencia. */
-export function barChart(points, { color = 'var(--accent)', height = 140, label = (p) => p.label, goal, fmt = (v) => Math.round(v) } = {}) {
+export function barChart(points, { color = 'var(--color-ink-2)', height = 140, label = (p) => p.label, goal, fmt = (v) => Math.round(v) } = {}) {
   if (!points.length) return raw('<p class="muted small">Sin datos todavía.</p>');
   const W = 320, H = height, pad = 22, max = Math.max(1, goal ?? 0, ...points.map((p) => p.value || 0)) * 1.08, id = `bg${++gid}`;
   const bw = (W - pad) / points.length;
   const Y = (v) => H - 16 - ((H - 28) * v) / max;
   const bars = points.map((p, i) => { const h = Math.max(0, (H - 16) - Y(p.value || 0)); const x = pad + i * bw + Math.max(1, bw * 0.16);
-    return `<rect x="${x}" y="${H - 16 - h}" width="${Math.max(3, bw * 0.68)}" height="${h}" rx="${Math.min(6, bw * 0.3)}" fill="${p.color ?? `url(#${id})`}" opacity="${p.dim ? 0.45 : 1}"/>${i % Math.ceil(points.length / 7) === 0 ? `<text x="${pad + i * bw + bw / 2}" y="${H - 3}" text-anchor="middle">${esc(label(p))}</text>` : ''}`; }).join('');
-  const g = goal ? `<line x1="${pad}" x2="${W}" y1="${Y(goal)}" y2="${Y(goal)}" stroke="rgba(205,218,245,.35)" stroke-dasharray="3 4"/><text x="${W}" y="${Y(goal) - 3}" text-anchor="end">${esc(fmt(goal))}</text>` : '';
+    return `<rect x="${x}" y="${H - 16 - h}" width="${Math.max(3, bw * 0.68)}" height="${h}" rx="1" fill="${p.color ?? color}" opacity="${p.dim ? 0.45 : 1}"/>${i % Math.ceil(points.length / 7) === 0 ? `<text x="${pad + i * bw + bw / 2}" y="${H - 3}" text-anchor="middle">${esc(label(p))}</text>` : ''}`; }).join('');
+  const g = goal ? `<line x1="${pad}" x2="${W}" y1="${Y(goal)}" y2="${Y(goal)}" stroke="var(--color-rule-2)" stroke-dasharray="3 4"/><text x="${W}" y="${Y(goal) - 3}" text-anchor="end">${esc(fmt(goal))}</text>` : '';
   const desc = `Gráfico de barras: ${points.length} valores, último ${fmt(points[points.length - 1].value || 0)}, máximo ${fmt(Math.max(...points.map((p) => p.value || 0)))}`;
-  return raw(`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(desc)}"><defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}"/><stop offset="1" stop-color="${color}" stop-opacity=".35"/></linearGradient></defs>${goal ? "" : `<text x="0" y="10">${esc(fmt(max / 1.08))}</text>`}${g}${bars}</svg>`);
+  return raw(`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(desc)}">${goal ? "" : `<text x="0" y="10">${esc(fmt(max / 1.08))}</text>`}${g}${bars}</svg>`);
 }
 
 /** Línea con área degradada. series: [{color, points:[{x,y}], fmt?, fill?}]. */
@@ -194,9 +194,9 @@ export function lineChart(series, { height = 150, invert = false, band } = {}) {
     if (s.fill !== false && k === 0) { const id = `lg${++gid}`; defs.push(`<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${s.color}" stop-opacity=".35"/><stop offset="1" stop-color="${s.color}" stop-opacity="0"/></linearGradient>`);
       paths.push(`<path d="${d}L${pts[pts.length - 1][0]},${H - 18}L${pts[0][0]},${H - 18}Z" fill="url(#${id})"/>`); }
     paths.push(`<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"${s.dash ? ' stroke-dasharray="4 4"' : ''}/>`);
-    const L = pts[pts.length - 1]; if (k === 0) paths.push(`<circle cx="${L[0]}" cy="${L[1]}" r="4" fill="${s.color}" stroke="#0e1830" stroke-width="2"/>`);
+    const L = pts[pts.length - 1]; if (k === 0) paths.push(`<circle cx="${L[0]}" cy="${L[1]}" r="4" fill="${s.color}" stroke="var(--color-paper)" stroke-width="2"/>`);
   });
-  const bandEl = band ? `<rect x="${pad}" width="${W - pad}" y="${Math.min(Y(band[0]), Y(band[1]))}" height="${Math.abs(Y(band[0]) - Y(band[1]))}" fill="rgba(52,211,153,.08)"/>` : '';
+  const bandEl = band ? `<rect x="${pad}" width="${W - pad}" y="${Math.min(Y(band[0]), Y(band[1]))}" height="${Math.abs(Y(band[0]) - Y(band[1]))}" fill="color-mix(in oklab, var(--color-success) 10%, transparent)"/>` : '';
   const f = series[0].fmt ?? ((v) => Math.round(v));
   const lab = series[0].points; const first = lab[0]?.x ?? '', last = lab[lab.length - 1]?.x ?? '';
   const top = invert ? min : max, bot = invert ? max : min;
@@ -206,7 +206,7 @@ export function lineChart(series, { height = 150, invert = false, band } = {}) {
 }
 
 /** Minigráfico para las tarjetas (sin ejes). kind: 'line' | 'bar'. */
-export function spark(values, color = 'var(--accent)', kind = 'line', h = 36) {
+export function spark(values, color = 'var(--color-ink-2)', kind = 'line', h = 36) {
   const v = values.map((x) => (x == null || Number.isNaN(+x) ? null : +x)); const ok = v.filter((x) => x != null);
   if (ok.length < 2) return raw('');
   const W = 120, min = kind === 'bar' ? 0 : Math.min(...ok), max = Math.max(...ok), sp = max - min || 1, id = `sp${++gid}`;

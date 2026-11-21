@@ -2,7 +2,8 @@
 import * as api from './api.js';
 import { html, raw, pace, dur, lineChart } from './ui.js';
 
-const ZC = ['#5c9eff', '#33d687', '#ffbd33', '#ff8a3d', '#ff545c'];
+// Zonas de pulso: de la tinta clara a la oscura, la 5 en error (lo único que de verdad pide atención).
+const ZC = ['var(--color-paper-3)', 'var(--color-rule)', 'var(--color-muted)', 'var(--color-ink-2)', 'var(--color-error)'];
 const mmss = (s) => { const t = Math.round(s); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
 
 function zonesBar(z) {
@@ -38,11 +39,11 @@ export async function activityExtras(s) {
   const se = streams?.series;
   if (se?.t?.length > 2) {
     const lbl = (i) => mmss(se.t[i]);
-    if (se.hr) out.push(html`<div class="card tight"><b>Frecuencia cardíaca</b>${lineChart([{ color: 'var(--red)', points: se.hr.map((y, i) => ({ x: lbl(i), y })) }], { height: 120 })}</div>`);
-    if (se.pace) { const cap = (y) => (y == null || y > 900 ? null : y); out.push(html`<div class="card tight"><b>Ritmo</b>${lineChart([{ color: 'var(--blue)', fmt: pace, points: se.pace.map((y, i) => ({ x: lbl(i), y: cap(y) })) }], { height: 120, invert: true })}</div>`); }
-    if (se.alt && se.alt.some((x) => x != null)) out.push(html`<div class="card tight"><b>Altitud</b>${lineChart([{ color: 'var(--green)', points: se.alt.map((y, i) => ({ x: lbl(i), y })) }], { height: 90 })}</div>`);
-    if (se.cad && s.discipline === 'running') out.push(html`<div class="card tight"><b>Cadencia</b>${lineChart([{ color: 'var(--purple)', points: se.cad.map((y, i) => ({ x: lbl(i), y })) }], { height: 90 })}</div>`);
-    if (se.w && se.w.some((x) => x)) out.push(html`<div class="card tight"><b>Potencia</b>${lineChart([{ color: 'var(--amber)', points: se.w.map((y, i) => ({ x: lbl(i), y })) }], { height: 90 })}</div>`);
+    if (se.hr) out.push(html`<div class="card tight"><b>Frecuencia cardíaca</b>${lineChart([{ color: 'var(--color-ink)', points: se.hr.map((y, i) => ({ x: lbl(i), y })) }], { height: 120 })}</div>`);
+    if (se.pace) { const cap = (y) => (y == null || y > 900 ? null : y); out.push(html`<div class="card tight"><b>Ritmo</b>${lineChart([{ color: 'var(--color-ink)', fmt: pace, points: se.pace.map((y, i) => ({ x: lbl(i), y: cap(y) })) }], { height: 120, invert: true })}</div>`); }
+    if (se.alt && se.alt.some((x) => x != null)) out.push(html`<div class="card tight"><b>Altitud</b>${lineChart([{ color: 'var(--color-ink)', points: se.alt.map((y, i) => ({ x: lbl(i), y })) }], { height: 90 })}</div>`);
+    if (se.cad && s.discipline === 'running') out.push(html`<div class="card tight"><b>Cadencia</b>${lineChart([{ color: 'var(--color-ink)', points: se.cad.map((y, i) => ({ x: lbl(i), y })) }], { height: 90 })}</div>`);
+    if (se.w && se.w.some((x) => x)) out.push(html`<div class="card tight"><b>Potencia</b>${lineChart([{ color: 'var(--color-ink)', points: se.w.map((y, i) => ({ x: lbl(i), y })) }], { height: 90 })}</div>`);
   }
   if (splits.length) {
     const best = Math.min(...splits.map((x) => +x.duration_s));

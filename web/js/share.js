@@ -5,8 +5,8 @@ import { html, raw, act, sheet, setSheet, toast, dur } from './ui.js';
 import { ic } from './icons.js';
 
 const W = 1080;
-const FONT = '"Barlow Condensed", "Arial Narrow", sans-serif';
-const BODY = '"Barlow", system-ui, sans-serif';
+const FONT = '"Saira Condensed", "Arial Narrow", sans-serif';
+const BODY = '"Albert Sans", system-ui, sans-serif';
 const OUTDOOR = ['running', 'walking', 'hiking', 'cycling', 'swimming', 'skiing'];
 const NAMES = { running: 'Carrera', walking: 'Caminata', hiking: 'Ruta', cycling: 'Bici', swimming: 'Natación', crossfit: 'CrossFit', hyrox: 'HYROX', hybrid: 'Híbrido', strength: 'Fuerza', weightlifting: 'Halterofilia', mobility: 'Movilidad', yoga: 'Yoga', padel: 'Pádel', tennis: 'Tenis', skiing: 'Esquí', dance: 'Baile' };
 
@@ -129,13 +129,13 @@ export function drawShare(canvas, s, stats, route, opts, work = []) {
   }
   const drawStat = (st, x, top, big, lbl) => {
     setFont(ctx, 600, lbl, BODY); ctx.fillStyle = soft; ctx.fillText(st.l, x, top + lbl); ctx.fillStyle = ink;
-    setFont(ctx, 800, big, FONT, true);
+    setFont(ctx, 800, big, FONT, false);
     const vW = ctx.measureText(st.v).width;
-    setFont(ctx, 600, big * 0.38, FONT, true); const uW = st.u ? ctx.measureText(' ' + st.u).width : 0;
+    setFont(ctx, 600, big * 0.38, FONT, false); const uW = st.u ? ctx.measureText(' ' + st.u).width : 0;
     const left = x - (vW + uW) / 2, base = top + lbl + big * 0.9;
     ctx.textAlign = 'left';
-    setFont(ctx, 800, big, FONT, true); ctx.fillText(st.v, left, base);
-    if (st.u) { setFont(ctx, 600, big * 0.38, FONT, true); ctx.fillText(' ' + st.u, left + vW, base); }
+    setFont(ctx, 800, big, FONT, false); ctx.fillText(st.v, left, base);
+    if (st.u) { setFont(ctx, 600, big * 0.38, FONT, false); ctx.fillText(' ' + st.u, left + vW, base); }
     ctx.textAlign = 'center';
   };
   if (stack) stats.forEach((st, i) => drawStat(st, cx, y + i * statH, 118, 38));
@@ -143,7 +143,7 @@ export function drawShare(canvas, s, stats, route, opts, work = []) {
     const colW = W / stats.length, big = stats.length >= 3 ? 104 : 128;
     stats.forEach((st, i) => {
       // Que la cifra quepa en su columna aunque sea larga (1:23:45).
-      let b = big; setFont(ctx, 800, b, FONT, true); while (ctx.measureText(st.v + (st.u ? ' ' + st.u : '')).width > colW - 30 && b > 56) { b -= 4; setFont(ctx, 800, b, FONT, true); }
+      let b = big; setFont(ctx, 800, b, FONT, false); while (ctx.measureText(st.v + (st.u ? ' ' + st.u : '')).width > colW - 30 && b > 56) { b -= 4; setFont(ctx, 800, b, FONT, false); }
       drawStat(st, colW * i + colW / 2, y, b, 34);
     });
   }
@@ -153,7 +153,7 @@ export function drawShare(canvas, s, stats, route, opts, work = []) {
     y += 30;
     ctx.fillStyle = soft; ctx.globalAlpha = 0.5; ctx.fillRect(cx - 60, y - 14, 120, 4); ctx.globalAlpha = 1; ctx.fillStyle = ink;
     for (const g of work) {
-      setFont(ctx, 700, 50, FONT, true); ctx.textAlign = 'center'; ctx.fillText(g.head.slice(0, 40), cx, y + 50); y += 64;
+      setFont(ctx, 700, 50, FONT, false); ctx.textAlign = 'center'; ctx.fillText(g.head.slice(0, 40), cx, y + 50); y += 64;
       for (const it of g.items) {
         setFont(ctx, 500, 38, BODY); const nW = ctx.measureText(it.n).width;
         setFont(ctx, 700, 38, BODY); const qW = it.q ? ctx.measureText('  ' + it.q).width : 0;
@@ -167,7 +167,7 @@ export function drawShare(canvas, s, stats, route, opts, work = []) {
     ctx.textAlign = 'center';
   }
   // Firma pequeña: el rayo de Forja + nombre.
-  ctx.fillStyle = soft; setFont(ctx, 800, 38, FONT, true);
+  ctx.fillStyle = soft; setFont(ctx, 800, 38, FONT, false);
   const word = 'FORJA', tw = ctx.measureText(word).width, bolt = 30, gx = cx - (tw + bolt + 10) / 2;
   ctx.beginPath(); const by = y + 40;
   ctx.moveTo(gx + 17, by - 4); ctx.lineTo(gx + 4, by + 20); ctx.lineTo(gx + 14, by + 20); ctx.lineTo(gx + 11, by + 36); ctx.lineTo(gx + 26, by + 12); ctx.lineTo(gx + 16, by + 12); ctx.lineTo(gx + 21, by - 4); ctx.closePath(); ctx.fill();
@@ -180,7 +180,7 @@ const toBlob = (canvas) => new Promise((ok) => canvas.toBlob(ok, 'image/png'));
 /** Hoja de compartir: vista previa sobre fondo de cuadros / oscuro / claro y botones de compartir, copiar y bajar. */
 export async function openShare(s, blocks = [], names = {}) {
   sheet('Compartir resumen', html`<div class="center"><span class="spinner"></span></div>`);
-  await Promise.allSettled([document.fonts?.load(`italic 800 100px ${FONT}`), document.fonts?.load(`600 40px ${BODY}`)]);
+  await Promise.allSettled([document.fonts?.load(`800 100px ${FONT}`), document.fonts?.load(`600 40px ${BODY}`)]);
   const streams = OUTDOOR.includes(s.discipline) ? await api.db.select('session_streams', { session_id: `eq.${s.id}`, select: 'route' }).then((r) => r[0]).catch(() => null) : null;
   const route = streams?.route ?? null;
   const work = workoutLines(blocks, s.session_sets || [], names);

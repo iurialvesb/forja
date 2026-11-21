@@ -41,7 +41,7 @@ export async function draftBanner() {
   if (!d) return '';
   const rows = d.blocks.flatMap((b) => b.groups.flatMap((g) => g.rows.filter((r) => !r.rest)));
   const done = rows.filter((r) => r.status !== 'pending').length;
-  return html`<div class="card tight row" style="border-color:var(--accent)"><div class="grow"><b>Entreno sin terminar</b><div class="xs muted">${d.title ?? d.blocks.map((b) => b.title).join(' + ')} · ${shortDate(d.date)} · ${done}/${rows.length} casillas</div></div>
+  return html`<div class="card tight row" style="border-top:2px solid var(--color-rule-2)"><div class="grow"><b>Entreno sin terminar</b><div class="xs muted">${d.title ?? d.blocks.map((b) => b.title).join(' + ')} · ${shortDate(d.date)} · ${done}/${rows.length} casillas</div></div>
     <button class="sm primary" data-act="${act(() => { D = d; openLogger(); })}">Seguir</button><button class="sm ghost" data-act="${act(() => { dropDraft(d); render(); })}">Descartar</button></div>`;
 }
 
@@ -204,7 +204,7 @@ function blockResult(bi, b) {
 
 function structureEditor(bi, b) {
   const dl = 'exlist';
-  return html`<div class="card tight" style="background:rgba(255,255,255,.03)">
+  return html`<div class="card tight well">
     <div class="grid2"><div><label>Apartado</label><select data-sf="part" data-b="${bi}">${PARTS.map(([k, l]) => html`<option value="${k}" ${b.part === k ? 'selected' : ''}>${l}</option>`)}</select></div>
       <div><label>Formato</label><select data-sf="format" data-b="${bi}">${FORMATS.map(([k, l]) => html`<option value="${k}" ${b.format === k ? 'selected' : ''}>${l}</option>`)}</select></div></div>
     <div class="grid2"><div><label>${b.format === 'emom' ? 'Rondas (salen de los minutos)' : 'Rondas / series'}</label><input class="num" data-sf="rounds" data-b="${bi}" value="${b.rounds ?? ''}" ${b.format === 'emom' && b.durationMin ? 'disabled' : ''}></div>
@@ -416,7 +416,7 @@ export async function exerciseHistory(exerciseId) {
     const top = days.map((d) => ({ d, kg: Math.max(0, ...byDay[d].map((s) => +s.load_kg || 0)) })).filter((x) => x.kg > 0).reverse();
     const qty = (s) => (s.reps != null ? `${s.reps}` : s.calories != null ? `${+s.calories} cal` : s.distance_m != null ? `${+s.distance_m} m` : s.duration_s != null ? `${s.duration_s} s` : '');
     setSheet(html`<select data-change="${act((el) => { cur = el.value; show(); })}">${ids.map((id) => html`<option value="${id}" ${id === cur ? 'selected' : ''}>${name[id] ?? id} (${count[id]})</option>`)}</select>
-      ${top.length >= 2 ? html`<div class="card"><h3>Peso máximo por día</h3>${lineChart([{ color: 'var(--amber)', points: top.slice(-30).map((x) => ({ x: shortDate(x.d), y: x.kg })) }], { height: 120 })}</div>` : ''}
+      ${top.length >= 2 ? html`<div class="card"><h3>Peso máximo por día</h3>${lineChart([{ color: 'var(--color-ink)', points: top.slice(-30).map((x) => ({ x: shortDate(x.d), y: x.kg })) }], { height: 120 })}</div>` : ''}
       ${days.map((d) => { const ss = byDay[d]; const vol = ss.reduce((a, s) => a + (s.reps ?? 0) * (+s.load_kg || 0), 0); const best = Math.max(0, ...ss.map((s) => +s.load_kg || 0));
         return html`<div class="card tight"><div class="row"><b class="grow">${dayName(d)}</b>${best ? html`<span class="tag amber">máx ${best} kg</span>` : ''}</div>
           <div class="small">${ss.map((s) => html`<span class="chip ${s.status === 'partial' ? 'warn' : ''}" title="${s.set_label ?? ''}">${qty(s)}${s.load_kg ? html` × ${+s.load_kg} kg` : ''}${s.status === 'partial' && s.target_reps ? html` <span class="xs">(de ${+s.target_reps})</span>` : ''}</span>`)}</div>

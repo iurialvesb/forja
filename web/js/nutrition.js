@@ -57,7 +57,7 @@ async function hoy() {
   const d = w.days.find((x) => x.date === date);
   if (!d) return html`<div class="card muted">Sin datos para ese día.</div>`;
   const T = d.target.macros, S = sumLogs(logs), left = T.kcal - S.kcal;
-  const mb = (n, v, t, c) => html`<div class="mm"><div class="xs" style="color:${c};font-weight:750">${n}</div><div style="font:750 15px var(--num)">${n0(v)}<span class="muted xs"> / ${n0(t)} g</span></div>${bar(v, t, c)}</div>`;
+  const mb = (n, v, t, c) => html`<div class="mm"><div class="xs muted">${n}</div><div style="font:500 var(--text-md) var(--font-outlier)">${n0(v)}<span class="muted xs" style="font-family:var(--font-body)"> / ${n0(t)} g</span></div>${bar(v, t, v > t * 1.1 ? 'var(--color-warn)' : c)}</div>`;
   const slots = [...new Set([...(w.settings.mealSlots ?? []), ...(w.settings.optionalSlots ?? []), ...d.meals.map((m) => m.slot), ...logs.map((l) => l.slot ?? OTHER)])]
     .sort((a, b) => (a === OTHER ? 99 : SLOTS.indexOf(a)) - (b === OTHER ? 99 : SLOTS.indexOf(b)));
   const isOpt = (x) => (w.settings.optionalSlots ?? []).includes(x) && !(w.settings.mealSlots ?? []).includes(x);
@@ -68,9 +68,9 @@ async function hoy() {
       <div class="grow center" style="padding:0" data-act="${act(() => { dDate = null; render(); })}"><b>${date === today() ? 'Hoy' : date === addDays(today(), -1) ? 'Ayer' : date === addDays(today(), 1) ? 'Mañana' : dayName(date)}</b><div class="xs muted">${shortDate(date)} · día de carga ${d.target.load}</div></div>
       <button class="icon-btn" data-act="${act(() => { dDate = addDays(date, 1); render(); })}" aria-label="Siguiente">${raw(ic('chevron', 20))}</button></div>
     <div class="hero" style="padding:16px 18px">
-      <div class="row" style="position:relative;z-index:1">${ring(Math.min(1, kc), kc > 1.06 ? '#fbbf24' : '#7fb0ff', n0(Math.abs(left)), 100, left >= 0 ? 'restantes' : 'de más')}
+      <div class="row" style="position:relative;z-index:1">${ring(Math.min(1, kc), kc > 1.06 ? 'var(--color-warn)' : 'var(--color-accent)', n0(Math.abs(left)), 100, left >= 0 ? 'restantes' : 'de más')}
         <div class="grow eq"><div><span class="muted">Objetivo</span><b>${n0(T.kcal)}</b></div><div><span class="muted">− Comido</span><b>${n0(S.kcal)}</b></div><div class="tot"><span>= Restante</span><b style="color:${left < 0 ? 'var(--amber)' : '#fff'}">${n0(left)}</b></div></div></div>
-      <div class="macros3">${mb('Proteína', S.protein, T.protein, '#7fb0ff')}${mb('Hidratos', S.carbs, T.carbs, '#fbbf24')}${mb('Grasa', S.fat, T.fat, '#f472b6')}</div>
+      <div class="macros3">${mb('Proteína', S.protein, T.protein, 'var(--color-accent)')}${mb('Hidratos', S.carbs, T.carbs, 'var(--color-accent)')}${mb('Grasa', S.fat, T.fat, 'var(--color-accent)')}</div>
     </div>
     ${date >= today() && d.adjustments?.length ? html`<details class="card tight report"><summary><span class="grow small"><b>Cantidades reajustadas</b><span class="line">${d.adjustments.length === 1 ? `En ${slotName(d.adjustments[0].slot).toLowerCase()}` : `En ${d.adjustments.length} comidas`} para cuadrar el día</span></span>${raw(ic('chevron', 18))}</summary>
       ${d.adjustments.map((x) => html`<div class="xs muted" style="margin-top:10px">${slotName(x.slot)}</div>${(x.changes ?? []).map((c) => html`<div class="row small"><span class="grow">${c.name}</span><span class="muted">${c.fromG} g</span><span style="margin:0 6px" class="muted">→</span><b>${c.toG} g</b></div>`)}`)}</details>`
@@ -245,15 +245,15 @@ const mealAction = (m, action, extra = {}) => async (b) => {
 function mealCard(m) {
   const st = m.status;
   return html`<div class="card tight">
-    <div class="row"><b style="color:var(--accent)" class="small grow">${slotName(m.slot)} ${m.locked ? raw(ic('lock', 17)) : ''}</b><span class="xs muted">${n0(m.macros.kcal)} kcal · P${n0(m.macros.protein)} C${n0(m.macros.carbs)} G${n0(m.macros.fat)}</span></div>
+    <div class="row"><b style="color:var(--color-ink-2)" class="small grow">${slotName(m.slot)} ${m.locked ? raw(ic('lock', 17)) : ''}</b><span class="xs muted">${n0(m.macros.kcal)} kcal · P${n0(m.macros.protein)} C${n0(m.macros.carbs)} G${n0(m.macros.fat)}</span></div>
     <div style="font-weight:600;${st === 'skipped' ? 'text-decoration:line-through;opacity:.6' : ''}">${m.title}</div>
     <div class="small muted">${m.ingredients.map((i) => `${i.name} ${Math.round(i.grams)} g`).join(' · ')}</div>
     <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap">
       ${st === 'eaten' ? html`<span class="ok small">${raw(ic('check', 17))} Cumplido</span><button class="sm ghost" data-act="${act(mealAction(m, 'reset'))}">Deshacer</button>`
         : st === 'skipped' ? html`<span class="bad small">✕ No comido</span><button class="sm ghost" data-act="${act(mealAction(m, 'reset'))}">Deshacer</button>`
-        : html`<button class="sm" style="color:var(--green)" data-act="${act(mealAction(m, 'eaten'))}">✓ Cumplido</button>
+        : html`<button class="sm primary" data-act="${act(mealAction(m, 'eaten'))}">✓ Cumplido</button>
           <button class="sm" data-act="${act(() => partial(m))}">◐ A medias</button>
-          <button class="sm" style="color:var(--red)" data-act="${act(mealAction(m, 'skip'))}">✕ No</button>`}
+          <button class="sm" data-act="${act(mealAction(m, 'skip'))}">✕ No</button>`}
       <button class="sm" data-act="${act(() => editMeal(m))}">✎ Cambiar</button>
       ${m.fromBatch ? html`<span class="tag purple">batch</span>` : ''}
     </div></div>`;
@@ -391,8 +391,8 @@ async function menu() {
         const fixed = w.settings.mealSlots ?? [], opt = w.settings.optionalSlots ?? [];
         const slots = [...new Set([...fixed, ...opt, ...d.meals.map((m) => m.slot)])].sort((a, b) => SLOTS.indexOf(a) - SLOTS.indexOf(b));
         return slots.map((sl) => { const m = d.meals.find((x) => x.slot === sl);
-          if (m) return html`<div class="card tight row" data-act="${act(() => editMeal(m))}"><div class="grow"><div class="xs" style="color:var(--accent)">${slotName(m.slot)}</div><div class="small" style="font-weight:600">${m.title}</div></div><span class="xs muted">${n0(m.macros.kcal)} kcal</span>${m.status !== 'planned' ? ' ✎' : ''}</div>`;
-          return html`<div class="card tight row" style="border-style:dashed;opacity:.75"><div class="grow"><div class="xs" style="color:var(--accent)">${slotName(sl)}</div><div class="small muted">${fixed.includes(sl) ? 'Sin planificar' : 'Opcional'}</div></div><button class="sm ghost" data-act="${act(() => logFood(sl, { date: d.date }))}">${raw(ic('plus', 20))}</button></div>`; });
+          if (m) return html`<div class="card tight row" data-act="${act(() => editMeal(m))}"><div class="grow"><div class="xs" style="color:var(--color-ink-2)">${slotName(m.slot)}</div><div class="small" style="font-weight:600">${m.title}</div></div><span class="xs muted">${n0(m.macros.kcal)} kcal</span>${m.status !== 'planned' ? ' ✎' : ''}</div>`;
+          return html`<div class="card tight row" style="border-style:dashed;opacity:.75"><div class="grow"><div class="xs" style="color:var(--color-ink-2)">${slotName(sl)}</div><div class="small muted">${fixed.includes(sl) ? 'Sin planificar' : 'Opcional'}</div></div><button class="sm ghost" data-act="${act(() => logFood(sl, { date: d.date }))}">${raw(ic('plus', 20))}</button></div>`; });
       })()}
       ${d.alerts.map((a) => html`<div class="small alert">${raw(ic('alert', 17))} ${a.message}</div>`)}`)}`;
 }
@@ -452,7 +452,7 @@ async function batch() {
           toast([`Descontado de tu despensa: ${r.used?.length ?? 0} productos`, ...(r.missing?.length ? [`No tenías: ${r.missing.map((x) => x.name).join(', ')}`] : [])].join(' · '), 8000);
         }))}">${raw(ic('check', 17))} He hecho el batch</button>`}</div>
       <h2>Plan de cocina <small>≈ ${Math.round(p.totalMinutes)} min · ${dayName(p.cookDate, true)}</small></h2>
-      <div class="card tight">${p.tasks.map((t) => html`<div class="row top" style="padding:6px 0"><b style="width:38px;color:var(--accent)" class="small">${Math.round(t.start)}′</b><div class="grow"><div class="small">${t.text}</div><div class="xs muted">${t.recipe}${t.equipment ? ` · ${t.equipment}` : ''} · ${t.hands === 'pasiva' ? 'puedes hacer otra cosa' : 'manos ocupadas'}</div></div></div>`)}</div>
+      <div class="card tight">${p.tasks.map((t) => html`<div class="row top" style="padding:6px 0"><b style="width:38px;color:var(--color-ink-2)" class="small">${Math.round(t.start)}′</b><div class="grow"><div class="small">${t.text}</div><div class="xs muted">${t.recipe}${t.equipment ? ` · ${t.equipment}` : ''} · ${t.hands === 'pasiva' ? 'puedes hacer otra cosa' : 'manos ocupadas'}</div></div></div>`)}</div>
       ${p.warnings.map((x) => html`<p class="alert small">${raw(ic('alert', 17))} ${x}</p>`)}
       <h2>Cantidades totales</h2>${p.totals.map((t) => html`<div class="card tight"><b class="small">${t.recipe}</b><div class="xs muted">${t.ingredients.map((i) => `${i.name} ${i.grams} g`).join(' · ')}</div></div>`)}
       <h2>Táperes <small>${p.containers.length}</small></h2>${p.containers.map((c) => html`<div class="card tight"><div class="row"><b class="small grow">${dayName(c.date)} · ${slotName(c.slot)}</b><span class="tag ${c.storage === 'congelador' ? 'blue' : 'green'}">${c.storage}</span></div><div class="small">${c.recipe}</div><div class="xs muted">${c.contents.map((i) => `${i.name} ${i.grams} g`).join(' · ')}</div>${c.note ? html`<div class="xs alert">${c.note}</div>` : ''}</div>`)}`
@@ -493,7 +493,7 @@ async function despensa() {
   return html`
     <div class="psearch"><input id="pq" type="search" placeholder="Buscar en casa…" autocomplete="off" oninput="for (const r of document.querySelectorAll('.pitem')) r.style.display = r.dataset.name.includes(this.value.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')) ? '' : 'none'"></div>
     <div class="chips">${[['todo', 'Todo'], ...LOCS].map(([l, lb]) => html`<button class="chip ${ploc === l ? 'on' : ''}" data-act="${act(() => { ploc = l; render(); })}">${lb} <span class="muted">${l === 'todo' ? items.length : items.filter((i) => i.location === l).length}</span></button>`)}</div>
-    ${soon.length ? html`<div class="card tight" style="border-color:rgba(251,191,36,.35)"><div class="small alert">${raw(ic('clock', 17))} Caduca pronto: ${soon.map((i) => `${i.name} (${i.expires_on <= today() ? 'hoy' : shortDate(i.expires_on)})`).join(', ')}</div>
+    ${soon.length ? html`<div class="card notice"><div class="small alert">${raw(ic('clock', 17))} Caduca pronto: ${soon.map((i) => `${i.name} (${i.expires_on <= today() ? 'hoy' : shortDate(i.expires_on)})`).join(', ')}</div>
       <button class="sm" style="margin-top:8px" data-act="${act((b) => recipeFor(b, soon.map((i) => i.id)))}">${raw(ic('pan', 17))} Proponme una receta con esto</button></div>` : ''}
     <div class="grid2"><button class="primary" data-act="${act(addPantry)}">${raw(ic('plus', 17))} Añadir</button><button data-act="${act(() => scanToPantry())}">${raw(ic('barcode', 17))} Escanear</button></div>
     ${locs.map(([loc, label]) => html`<div data-loc="${loc}" class="ploc"><h2>${label} <small>${items.filter((i) => i.location === loc).length}</small></h2>
@@ -510,7 +510,7 @@ async function recipeFor(btn, ids) {
     sheet(x.title, html`<p class="small muted">${x.servings ?? 1} ración(es)${x.minutes ? ` · ${x.minutes} min` : ''} · gasta: ${r.uses.join(', ')}</p>
       <h3>Ingredientes</h3>${x.ingredients.map((i) => html`<div class="row small"><span class="grow">${i.fromPantry ? html`${raw(ic('home', 17))} ` : ''}${i.name}</span><b>${Math.round(i.grams)} g</b></div>`)}
       <h3>Pasos</h3><ol class="small">${x.steps.map((st) => html`<li>${st}</li>`)}</ol>
-      ${x.tip ? html`<p class="small" style="color:var(--accent)">${x.tip}</p>` : ''}
+      ${x.tip ? html`<p class="small" style="color:var(--color-ink-2)">${x.tip}</p>` : ''}
       <button class="block primary" data-act="${act(() => { closeSheet(); logFood(undefined, { prefill: `${x.title}: ${x.ingredients.map((i) => `${i.name} ${Math.round(i.grams / (x.servings || 1))} g`).join(', ')}` }); })}">Lo he comido: apuntarlo</button>
       <p class="xs muted">${raw(ic('home', 17))} = lo tienes en casa.</p>`);
   });
@@ -524,7 +524,7 @@ function pantryRow(i) {
   let qty, ctl;
   if (i.mode === 'weight') {
     const q = +i.quantity_g || 0, pk = +i.package_g || 0, cap = Math.max(q, pk);
-    qty = html`<div class="pq"><b>${fmtQ(q, liquid)}</b>${pk && pk !== q ? html`<span class="muted"> de ${fmtQ(pk * Math.max(1, Math.ceil(q / pk)), liquid)}</span>` : ''}</div>${cap ? bar(q, pk ? pk * Math.max(1, Math.ceil(q / pk)) : cap, q / Math.max(1, pk || cap) < 0.2 ? 'var(--amber)' : 'linear-gradient(90deg,#1d4ed8,#7fb0ff)') : ''}`;
+    qty = html`<div class="pq"><b>${fmtQ(q, liquid)}</b>${pk && pk !== q ? html`<span class="muted"> de ${fmtQ(pk * Math.max(1, Math.ceil(q / pk)), liquid)}</span>` : ''}</div>${cap ? bar(q, pk ? pk * Math.max(1, Math.ceil(q / pk)) : cap, q / Math.max(1, pk || cap) < 0.2 ? 'var(--color-warn)' : 'var(--color-ink-2)') : ''}`;
     ctl = html`<button class="sm" data-act="${act(() => useGrams(i))}">Usar</button>`;
   } else {
     const u = Math.round((+i.units || 0) * 10) / 10, pack = +i.pack_units || 0;
@@ -692,7 +692,7 @@ function addPantry() {
 function editPantry(i) {
   const it = { name: i.name, location: i.location, mode: i.mode ?? 'units', units: i.units != null ? +i.units : undefined, packUnits: i.pack_units ?? undefined, unitGrams: i.unit_grams != null ? +i.unit_grams : undefined, unitLabel: i.unit_label ?? undefined,
     quantityG: i.quantity_g != null ? +i.quantity_g : undefined, packageG: i.package_g != null ? +i.package_g : undefined, expiresOn: i.expires_on ?? undefined };
-  const draw = () => setSheet(html`${i.image_url ? html`<div class="center" style="padding:4px 0"><img src="${i.image_url}" style="max-height:120px;border-radius:14px;background:#fff"></div>` : ''}
+  const draw = () => setSheet(html`${i.image_url ? html`<div class="center" style="padding:4px 0"><img src="${i.image_url}" style="max-height:120px;border-radius:4px;background:var(--color-paper)"></div>` : ''}
     <label>Nombre</label><input value="${it.name}" data-change="${act((el) => { it.name = el.value; })}">
     ${pantryForm(it, draw)}
     <button class="primary block" data-act="${act((b) => busy(b, async () => {
@@ -717,7 +717,7 @@ async function suplementos() {
           const s = mine.find((x) => x.id === r.supplementId); if (s?.stock > 0) await api.db.update('supplements', { stock: s.stock - 1 }, { id: `eq.${s.id}` });
           invalidate('supps'); render();
         }))}">Marcar tomado</button>`) : ''}</div>
-      ${r.take && r.when ? html`<div class="small" style="color:var(--accent)">${r.when}</div>` : ''}<div class="small muted">${r.reason}</div></div>`)}
+      ${r.take && r.when ? html`<div class="small" style="color:var(--color-ink-2)">${r.when}</div>` : ''}<div class="small muted">${r.reason}</div></div>`)}
     ${w.supplements.notes.map((n) => html`<p class="xs muted">${n}</p>`)}
     ${w.supplements.week?.length && mine.length ? html`<h2>Esta semana</h2><div class="card tight">${w.supplements.week.map((d) => html`<div class="row top" style="padding:5px 0;border-bottom:1px solid var(--line)"><b class="small" style="width:70px">${dayName(d.date).split(' ')[0]} ${d.date.slice(8)}</b><div class="grow small">${d.take.length ? d.take.map((t) => html`<span class="chip" title="${t.when ?? ''}">${t.name}</span>`) : html`<span class="muted">Nada</span>`}</div></div>`)}
       <p class="xs muted">Según los entrenos que tienes ese día: colágeno + vitamina C en días de saltos, series o fuerza; electrolitos en sesiones largas; creatina todos los días.</p></div>` : ''}

@@ -17,7 +17,7 @@ export async function GOAL(params = []) {
   const head = html`<div class="card center"><div class="small muted">${dayName(g.date, true)}</div>
     <div style="font-size:52px;font-weight:800;line-height:1.1">${o.daysLeft}</div><div class="muted">días · ${o.weeksLeft} semanas</div>
     <button class="sm ghost" data-act="${act(() => editTarget(g, o))}">${raw(ic('target', 17))} ${g.target_time_s ? `Objetivo ${clockH(g.target_time_s)}` : 'Poner tiempo objetivo'}</button></div>
-    <div class="card tight"><div class="small" style="color:var(--accent);font-weight:700">Cómo vas</div><div>${o.verdict}</div></div>`;
+    <div class="card tight"><div class="small" style="color:var(--color-ink-2);font-weight:700">Cómo vas</div><div>${o.verdict}</div></div>`;
   const body = o.kind === 'race' ? race(g, o) : hyrox(g, o, r.splits);
   return { title: g.name, right: html`<button class="icon-btn" data-act="${act(() => go('inicio'))}">✕</button>`, body: html`${tabs}${head}${body}${milestones(o)}${nextKey(o)}` };
 }
@@ -26,11 +26,11 @@ function race(g, o) {
   return html`
     <div class="stats card">
       <div class="stat"><div class="l">Predicción hoy</div><div class="v">${clockH(o.predictedS)}</div><div class="xs muted">${o.predictedPace ? pace(o.predictedPace) : 'sin datos'}</div></div>
-      <div class="stat"><div class="l">Objetivo</div><div class="v" style="color:var(--accent)">${clockH(o.targetS)}</div><div class="xs muted">${o.targetPace ? pace(o.targetPace) : '—'}</div></div>
+      <div class="stat"><div class="l">Objetivo</div><div class="v" style="color:var(--color-ink-2)">${clockH(o.targetS)}</div><div class="xs muted">${o.targetPace ? pace(o.targetPace) : '—'}</div></div>
       <div class="stat"><div class="l">Tirada larga (28 d)</div><div class="v">${o.longestRun28dKm}<span class="u"> km</span></div></div>
     </div>
-    <div class="card"><h3>Kilómetros por semana</h3>${barChart(o.weeks.map((w) => ({ label: shortDate(w.week), value: w.km })), { color: 'var(--blue)', height: 120 })}</div>
-    ${o.longRunPlan.length ? html`<div class="card"><h3>Progresión de la tirada larga</h3>${barChart(o.longRunPlan.map((w) => ({ label: shortDate(w.week), value: w.km })), { color: 'var(--accent)', height: 110 })}
+    <div class="card"><h3>Kilómetros por semana</h3>${barChart(o.weeks.map((w) => ({ label: shortDate(w.week), value: w.km })), { color: 'var(--color-ink)', height: 120 })}</div>
+    ${o.longRunPlan.length ? html`<div class="card"><h3>Progresión de la tirada larga</h3>${barChart(o.longRunPlan.map((w) => ({ label: shortDate(w.week), value: w.km })), { color: 'var(--color-ink)', height: 110 })}
       <p class="xs muted">Sube ~1,5 km por semana hasta el pico 3 semanas antes; después baja para llegar fresco.</p></div>` : ''}
     ${o.racePaceRuns.length ? html`<div class="card tight"><h3>Rodajes a ritmo de carrera</h3>${o.racePaceRuns.map((x) => html`<div class="row small"><span class="grow">${dayName(x.date)}</span><span>${x.km} km</span><b style="margin-left:10px">${pace(x.pace)}</b></div>`)}</div>` : ''}`;
 }
@@ -47,7 +47,7 @@ function hyrox(g, o, splits) {
   const sims = o.simulations;
   return html`
     <div class="stats card">
-      <div class="stat"><div class="l">Ritmo km objetivo</div><div class="v" style="color:var(--accent)">${o.runPaceTarget ? pace(o.runPaceTarget) : '–'}</div></div>
+      <div class="stat"><div class="l">Ritmo km objetivo</div><div class="v" style="color:var(--color-ink-2)">${o.runPaceTarget ? pace(o.runPaceTarget) : '–'}</div></div>
       <div class="stat"><div class="l">Tu ritmo comprometido</div><div class="v">${o.runPaceNow ? pace(o.runPaceNow) : '–'}</div></div>
       <div class="stat"><div class="l">Sesiones HYROX 28 d</div><div class="v">${o.hyroxSessions28d}</div></div>
     </div>
@@ -55,7 +55,7 @@ function hyrox(g, o, splits) {
       <div class="xs muted">Mejor parcial frente al reparto de tu objetivo.</div>${rows}
       <div class="grid2" style="margin-top:8px"><button class="sm primary" data-act="${act(() => startHyrox(8))}">Simulación completa</button><button class="sm" data-act="${act(() => startHyrox(4))}">Media (4 estaciones)</button></div>
       <p class="xs muted">Apunta el tiempo de cada tramo (m:ss); con ${raw(ic('clock', 17))} cronometras la simulación entera.</p></div>
-    ${sims.length >= 2 ? html`<div class="card"><h3>Simulaciones</h3>${lineChart([{ color: 'var(--accent)', points: sims.map((s) => ({ x: shortDate(s.date), y: Math.round(s.totalS / 60) })) }], { height: 120, invert: true })}<p class="xs muted">Minutos totales: más arriba = más rápido.</p></div>` : ''}
+    ${sims.length >= 2 ? html`<div class="card"><h3>Simulaciones</h3>${lineChart([{ color: 'var(--color-ink)', points: sims.map((s) => ({ x: shortDate(s.date), y: Math.round(s.totalS / 60) })) }], { height: 120, invert: true })}<p class="xs muted">Minutos totales: más arriba = más rápido.</p></div>` : ''}
     ${splits?.length ? html`<details class="card tight"><summary class="small">Reparto completo del objetivo (${clockH(g.target_time_s)})</summary>${splits.map((s) => html`<div class="row small"><span class="grow">${s.name}</span><b>${dur(s.seconds)}</b></div>`)}</details>` : ''}`;
 }
 
@@ -92,7 +92,7 @@ export const goalCard = (g, phases, today) => {
   const hy = g.type === 'hyrox';
   return html`<div class="card goalc ${hy ? 'hy' : ''}" data-act="${act(() => go(`objetivo/${g.id}`))}">
     <h3 style="margin:0 0 2px">${g.name}</h3>
-    <div class="small" style="margin-bottom:10px;font-weight:600;color:${hy ? '#c4b5fd' : '#7dd3fc'}">${shortDate(g.date)}${/hyrox|marat|carrera|10k|5k/i.test(g.name) ? '' : ` · ${hy ? 'HYROX' : 'Carrera'}`}</div>
+    <div class="small" style="margin-bottom:10px;font-weight:600;color:var(--color-ink-2)">${shortDate(g.date)}${/hyrox|marat|carrera|10k|5k/i.test(g.name) ? '' : ` · ${hy ? 'HYROX' : 'Carrera'}`}</div>
     <div class="row" style="align-items:flex-end"><div class="kpi">${daysUntil(g.date)}<small> días</small></div><div class="grow"></div>${g.target_time_s ? html`<div style="text-align:right"><div class="xs muted">Objetivo</div><b style="font:750 17px var(--num)">${dur(g.target_time_s)}</b></div>` : ''}</div>
-    <p class="xs muted" style="margin:8px 0 6px">${ph ? ph.focus : 'Preparación pendiente'}</p>${bar(Math.max(0, done), total, hy ? 'linear-gradient(90deg,#6d28d9,#a78bfa)' : undefined)}</div>`;
+    <p class="xs muted" style="margin:8px 0 6px">${ph ? ph.focus : 'Preparación pendiente'}</p>${bar(Math.max(0, done), total)}</div>`;
 };
