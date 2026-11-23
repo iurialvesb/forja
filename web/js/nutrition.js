@@ -86,11 +86,11 @@ function mealSection(slot, date, logs, planned, optional) {
   const sugg = planned && planned.status !== 'eaten' && planned.status !== 'skipped' && !logs.some((l) => l.planned_meal_id === planned.id);
   return html`<div class="card meal">
     <div class="row mhead"><b class="grow">${slot === OTHER ? 'Otros' : slotName(slot)}${optional ? html` <span class="xs muted">opcional</span>` : ''}</b><span class="mk">${kcal ? `${n0(kcal)} kcal` : ''}</span></div>
-    ${entries.map(({ log, k, it }) => html`<div class="entry ${log.pending ? 'pending' : ''}" data-act="${act(() => editEntry(log, k, date))}"><div class="grow"><div class="en">${it.name}</div><div class="xs muted">${fmtAmount(it)}${log.source === 'menu' ? ' · del menú' : ''}</div></div><div class="ek">${n0(it.macros?.kcal ?? 0)}</div></div>`)}
+    ${entries.map(({ log, k, it }) => html`<div class="entry ${log.pending ? 'pending' : ''}" data-act="${act(() => editEntry(log, k, date))}"><div class="grow"><div class="en">${dName(it)}</div><div class="xs muted">${fmtAmount(it)}${log.source === 'menu' ? ' · del menú' : ''}</div></div><div class="ek">${n0(it.macros?.kcal ?? 0)}</div></div>`)}
     ${sugg ? html`<div class="sugg">
         <div class="grow" data-act="${act(() => suggOptions(planned))}"><div class="st">${planned.title}</div>
           <div class="xs"><span style="color:var(--accent2)">Sugerido${planned.fromBatch ? ' · del batch' : ''}</span><span class="muted"> · ${n0(planned.macros.kcal)} kcal</span></div>
-          <div class="xs muted ing">${planned.ingredients.map((i) => `${i.name} ${qy(i.name, i.grams)}`).join(' · ')}</div></div>
+          <div class="xs muted ing">${planned.ingredients.map((i) => ing(i)).join(' · ')}</div></div>
         <button class="eat" aria-label="Me lo he comido: ${planned.title}" data-act="${act(mealAction(planned, 'eaten'))}">${raw(ic('check', 22))}</button></div>` : ''}
     ${planned?.status === 'skipped' && !entries.length ? html`<div class="xs muted" style="padding:6px 0">Menú descartado · <a data-act="${act(mealAction(planned, 'reset'))}">recuperar</a></div>` : ''}
     <button class="addf" data-act="${act(() => addFood(slot, date))}">${raw(ic('plus', 17))} Añadir alimento</button>
@@ -100,7 +100,13 @@ function mealSection(slot, date, logs, planned, optional) {
 // Lo que se compra por volumen (leche, bebidas, aceite, caldo…) se ve en ml/l; el resto en g/kg. Internamente siempre «gramos» (≈ ml).
 const U = (name) => (isLiquid(name ?? '') ? 'ml' : 'g');
 const qy = (name, g) => `${Math.round(+g || 0).toLocaleString('es-ES')} ${U(name)}`;
-const fmtAmount = (it) => { const u = it.unitGrams ?? catalogUnit(it.foodId); return u && Math.abs(it.grams / u - Math.round(it.grams / u)) < 0.05 && it.grams / u <= 12 ? `${Math.round(it.grams / u)} ud · ${qy(it.name, it.grams)}` : qy(it.name, it.grams); };
+// Pesado en crudo/seco pero comido cocinado (arroz, pasta, legumbre): el nombre es el alimento y la cantidad dice «en crudo».
+const RAW = /\s*\(?\b(en crudo|crudo|cruda|en seco|seco)\b\)?/i;
+const isRawIt = (it) => !!it.raw || RAW.test(it.name ?? '');
+const dName = (it) => { const n = String(it.name ?? '').replace(RAW, '').trim(); return n ? n[0].toUpperCase() + n.slice(1) : it.name; };
+const qi = (it, g = it.grams) => `${qy(it.name, g)}${isRawIt(it) ? ' en crudo' : ''}`;
+const ing = (it, g) => `${dName(it)} ${qi(it, g)}`;
+const fmtAmount = (it) => { const u = it.unitGrams ?? catalogUnit(it.foodId); return u && Math.abs(it.grams / u - Math.round(it.grams / u)) < 0.05 && it.grams / u <= 12 ? `${Math.round(it.grams / u)} ud · ${qi(it)}` : qi(it); };
 let catalogCache = null;
 const catalogUnit = (id) => catalogCache?.find((f) => f.id === id)?.unitGrams;
 
@@ -250,7 +256,7 @@ function mealCard(m) {
   return html`<div class="card tight">
     <div class="row"><b style="color:var(--color-ink-2)" class="small grow">${slotName(m.slot)} ${m.locked ? raw(ic('lock', 17)) : ''}</b><span class="xs muted">${n0(m.macros.kcal)} kcal · P${n0(m.macros.protein)} C${n0(m.macros.carbs)} G${n0(m.macros.fat)}</span></div>
     <div style="font-weight:600;${st === 'skipped' ? 'text-decoration:line-through;opacity:.6' : ''}">${m.title}</div>
-    <div class="small muted">${m.ingredients.map((i) => `${i.name} ${qy(i.name, i.grams)}`).join(' · ')}</div>
+    <div class="small muted">${m.ingredients.map((i) => ing(i)).join(' · ')}</div>
     <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap">
       ${st === 'eaten' ? html`<span class="ok small">${raw(ic('check', 17))} Cumplido</span><button class="sm ghost" data-act="${act(mealAction(m, 'reset'))}">Deshacer</button>`
         : st === 'skipped' ? html`<span class="bad small">✕ No comido</span><button class="sm ghost" data-act="${act(mealAction(m, 'reset'))}">Deshacer</button>`
@@ -264,7 +270,7 @@ function mealCard(m) {
 
 /** Al tocar la sugerencia: todas las opciones en una hoja (la tarjeta queda limpia: solo el ✓). */
 function suggOptions(m) {
-  sheet(m.title, html`<p class="small muted" style="margin-top:0">${m.ingredients.map((i) => `${i.name} ${qy(i.name, i.grams)}`).join(' · ')} · ${n0(m.macros.kcal)} kcal</p>
+  sheet(m.title, html`<p class="small muted" style="margin-top:0">${m.ingredients.map((i) => ing(i)).join(' · ')} · ${n0(m.macros.kcal)} kcal</p>
     <button class="block primary" data-act="${act((b) => { closeSheet(); mealAction(m, 'eaten')(b); })}">${raw(ic('check', 18))} Me lo he comido</button>
     <button class="block" data-act="${act(() => partial(m))}">Comí una parte o más</button>
     <button class="block" data-act="${act(() => editMeal(m))}">Cambiar cantidades o plato</button>
@@ -457,8 +463,8 @@ async function batch() {
       <h2>Plan de cocina <small>≈ ${Math.round(p.totalMinutes)} min · ${dayName(p.cookDate, true)}</small></h2>
       <div class="card tight">${p.tasks.map((t) => html`<div class="row top" style="padding:6px 0"><b style="width:38px;color:var(--color-ink-2)" class="small">${Math.round(t.start)}′</b><div class="grow"><div class="small">${t.text}</div><div class="xs muted">${t.recipe}${t.equipment ? ` · ${t.equipment}` : ''} · ${t.hands === 'pasiva' ? 'puedes hacer otra cosa' : 'manos ocupadas'}</div></div></div>`)}</div>
       ${p.warnings.map((x) => html`<p class="alert small">${raw(ic('alert', 17))} ${x}</p>`)}
-      <h2>Cantidades totales</h2>${p.totals.map((t) => html`<div class="card tight"><b class="small">${t.recipe}</b><div class="xs muted">${t.ingredients.map((i) => `${i.name} ${qy(i.name, i.grams)}`).join(' · ')}</div></div>`)}
-      <h2>Táperes <small>${p.containers.length}</small></h2>${p.containers.map((c) => html`<div class="card tight"><div class="row"><b class="small grow">${dayName(c.date)} · ${slotName(c.slot)}</b><span class="tag ${c.storage === 'congelador' ? 'blue' : 'green'}">${c.storage}</span></div><div class="small">${c.recipe}</div><div class="xs muted">${c.contents.map((i) => `${i.name} ${qy(i.name, i.grams)}`).join(' · ')}</div>${c.note ? html`<div class="xs alert">${c.note}</div>` : ''}</div>`)}`
+      <h2>Cantidades totales</h2>${p.totals.map((t) => html`<div class="card tight"><b class="small">${t.recipe}</b><div class="xs muted">${t.ingredients.map((i) => ing(i)).join(' · ')}</div></div>`)}
+      <h2>Táperes <small>${p.containers.length}</small></h2>${p.containers.map((c) => html`<div class="card tight"><div class="row"><b class="small grow">${dayName(c.date)} · ${slotName(c.slot)}</b><span class="tag ${c.storage === 'congelador' ? 'blue' : 'green'}">${c.storage}</span></div><div class="small">${c.recipe}</div><div class="xs muted">${c.contents.map((i) => ing(i)).join(' · ')}</div>${c.note ? html`<div class="xs alert">${c.note}</div>` : ''}</div>`)}`
       : html`<div class="card muted small">Aún no hay plan de batch para esta semana.</div>`}`;
 }
 
@@ -485,7 +491,7 @@ function cookedResult(r) {
   const byDate = {}; for (const m of r.meals) (byDate[m.date] ??= []).push(m);
   const body = html`
     ${r.notes?.length ? html`<div class="well small" style="margin-bottom:12px">${r.notes.map((n) => html`<div style="margin:4px 0">${n}</div>`)}</div>` : ''}
-    ${Object.keys(byDate).sort().map((d) => html`<div class="sect">${dayName(d)}</div>${byDate[d].map((m) => html`<div class="entry" style="cursor:default"><div class="grow"><div class="en">${slotName(m.slot)} · ${m.title}</div><div class="xs muted">${(m.ingredients ?? []).map((i) => `${i.name} ${qy(i.name, i.grams)}`).join(' · ')}</div></div></div>`)}`)}
+    ${Object.keys(byDate).sort().map((d) => html`<div class="sect">${dayName(d)}</div>${byDate[d].map((m) => html`<div class="entry" style="cursor:default"><div class="grow"><div class="en">${slotName(m.slot)} · ${m.title}</div><div class="xs muted">${(m.ingredients ?? []).map((i) => ing(i)).join(' · ')}</div></div></div>`)}`)}
     ${r.questions?.length ? html`<div class="card notice" style="display:block">${r.questions.map((q) => html`<div class="small" style="margin:4px 0">${q}</div>`)}<button class="sm" style="margin-top:8px" data-act="${act(describeCooking)}">Aclararlo</button></div>` : ''}
     ${r.unresolved?.length ? html`<p class="xs muted">Sin datos nutricionales (no cuentan en los macros): ${r.unresolved.join(', ')}</p>` : ''}
     ${r.pantryUsed?.length ? html`<p class="xs muted">Descontado de casa: ${[...new Set(r.pantryUsed.map((u) => u.from))].join(', ')}</p>` : ''}
@@ -526,10 +532,10 @@ async function recipeFor(btn, ids) {
     if (!r.recipe) return toast(r.note ?? 'No se me ocurre nada con eso');
     const x = r.recipe;
     sheet(x.title, html`<p class="small muted">${x.servings ?? 1} ración(es)${x.minutes ? ` · ${x.minutes} min` : ''} · gasta: ${r.uses.join(', ')}</p>
-      <h3>Ingredientes</h3>${x.ingredients.map((i) => html`<div class="row small"><span class="grow">${i.fromPantry ? html`${raw(ic('home', 17))} ` : ''}${i.name}</span><b>${qy(i.name, i.grams)}</b></div>`)}
+      <h3>Ingredientes</h3>${x.ingredients.map((i) => html`<div class="row small"><span class="grow">${i.fromPantry ? html`${raw(ic('home', 17))} ` : ''}${i.name}</span><b>${qi(i)}</b></div>`)}
       <h3>Pasos</h3><ol class="small">${x.steps.map((st) => html`<li>${st}</li>`)}</ol>
       ${x.tip ? html`<p class="small" style="color:var(--color-ink-2)">${x.tip}</p>` : ''}
-      <button class="block primary" data-act="${act(() => { closeSheet(); logFood(undefined, { prefill: `${x.title}: ${x.ingredients.map((i) => `${i.name} ${qy(i.name, i.grams / (x.servings || 1))}`).join(', ')}` }); })}">Lo he comido: apuntarlo</button>
+      <button class="block primary" data-act="${act(() => { closeSheet(); logFood(undefined, { prefill: `${x.title}: ${x.ingredients.map((i) => ing(i, i.grams / (x.servings || 1))).join(', ')}` }); })}">Lo he comido: apuntarlo</button>
       <p class="xs muted">${raw(ic('home', 17))} = lo tienes en casa.</p>`);
   });
 }

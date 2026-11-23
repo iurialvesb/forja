@@ -44,7 +44,8 @@ Reglas:
 - Respeta SIEMPRE sus preferencias escritas.`;
 
 const ING = { type: 'object', required: ['nameEs', 'queryEn', 'grams', 'role'], properties: {
-  nameEs: { type: 'string' }, queryEn: { type: 'string', description: 'USDA en inglés con estado ("lentils cooked", "rice white cooked")' },
+  nameEs: { type: 'string', description: 'Nombre del alimento, sin el estado («Arroz blanco», no «arroz en crudo»)' },
+  raw: { type: 'boolean', description: 'true si los gramos son en crudo/seco aunque se coma cocinado (arroz, pasta, legumbre pesados antes de cocer)' }, queryEn: { type: 'string', description: 'USDA en inglés con estado ("lentils cooked", "rice white cooked")' },
   grams: { type: 'number', description: 'Gramos por ración' }, role: { type: 'string', enum: ['protein', 'carb', 'fat', 'veg', 'fruit', 'dairy', 'other'] } } };
 // Compacto para que la IA responda rápido: cada plato una vez y luego qué día/franja lo comes.
 const describeSchema = { type: 'object', required: ['dishes', 'meals'], properties: {
@@ -83,7 +84,7 @@ Preferencias: ${st?.preferences ?? 'sin indicar'}`,
   const unresolved: string[] = [];
   const rows = r.meals.map((m) => ({
     user_id: userId, date: m.date, slot: m.slot, title: m.title, status: 'planned', locked: true, from_batch: true, updated_at: new Date().toISOString(),
-    ingredients: m.ingredients.flatMap((i: any) => { const f = cache.get(i.nameEs.toLowerCase()); if (!f) { unresolved.push(i.nameEs); return []; } return [{ foodId: f.id, name: i.nameEs, grams: Math.round(i.grams), role: i.role }]; }),
+    ingredients: m.ingredients.flatMap((i: any) => { const f = cache.get(i.nameEs.toLowerCase()); if (!f) { unresolved.push(i.nameEs); return []; } return [{ foodId: f.id, name: i.nameEs, grams: Math.round(i.grams), role: i.role, ...(i.raw ? { raw: true } : {}) }]; }),
   }));
   if (rows.length) { const { error } = await sb.from('planned_meals').upsert(rows, { onConflict: 'user_id,date,slot' }); if (error) throw error; }
   // Lo cocinado sale de la despensa ya (las comidas del batch no se vuelven a descontar al comerlas).
@@ -92,7 +93,7 @@ Preferencias: ${st?.preferences ?? 'sin indicar'}`,
   const d = await deductPantry(sb, used);
   const weeks = [...new Set(rows.map((x) => mondayOf(x.date)))];
   for (const w of weeks.length ? weeks : [weekStart]) await computeWeek(sb, ctx, w, true);
-  return { meals: rows.map((x) => ({ date: x.date, slot: x.slot, title: x.title, ingredients: x.ingredients.map((i: any) => ({ name: i.name, grams: i.grams })) })), notes: r0.notes ?? [], questions: r.questions ?? [], unresolved: [...new Set(unresolved)], pantryUsed: d.used, pantryMissing: d.missing };
+  return { meals: rows.map((x) => ({ date: x.date, slot: x.slot, title: x.title, ingredients: x.ingredients.map((i: any) => ({ name: i.name, grams: i.grams, raw: i.raw })) })), notes: r0.notes ?? [], questions: r.questions ?? [], unresolved: [...new Set(unresolved)], pantryUsed: d.used, pantryMissing: d.missing };
 }
 
 Deno.serve(handler(async (req) => {

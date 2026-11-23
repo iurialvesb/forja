@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-11-23 · Pesado en crudo
+- Arroz, pasta o legumbre pesados en crudo: el nombre es el alimento («Arroz») y la cantidad dice «80 g en crudo» (Diario, menú, batch, recetas). Las calorías ya eran las del crudo (80 g ≈ 287 kcal). El batch guarda la marca «en crudo» en vez de meterla en el nombre.
+
 ## 2026-11-23 · Líquidos en ml
 - Leche, bebidas vegetales, zumos, aceite, vinagre, caldo, nata, kéfir…: en toda Nutrición se ven en ml/l en vez de g (Diario, añadir y editar alimento con atajos de 100–500 ml, texto libre, menú, sugerencias, reajustes, compra, lista para compartir, batch, recetas y despensa). Internamente se guardan igual (1 ml ≈ 1 g), así que los macros no cambian.
 
