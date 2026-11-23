@@ -50,7 +50,7 @@ export async function HOME() {
     body: html`
       <div class="hero" data-act="${act(checkIn)}">
         <div class="row" style="position:relative;z-index:1">
-          ${ring((readiness?.score ?? 0) / 100, { verde: 'var(--color-accent)', ambar: 'var(--color-warn)', rojo: 'var(--color-error)' }[lvl] ?? 'var(--color-paper)', readiness ? readiness.score : '–', 104, 'de 100')}
+          ${ring((readiness?.score ?? 0) / 100, { verde: 'var(--color-brass)', ambar: 'var(--color-warn)', rojo: 'var(--color-error)' }[lvl] ?? 'var(--color-paper)', readiness ? readiness.score : '–', 104, 'de 100')}
           <div class="grow"><div class="status">${{ verde: 'Listo para entrenar', ambar: 'Con precaución', rojo: 'Prioriza recuperar' }[lvl] ?? 'Haz el check-in'}</div>
             <div class="small muted">${readiness?.reasons?.[0] ?? 'Toca para contarme cómo estás hoy.'}</div></div>
         </div>

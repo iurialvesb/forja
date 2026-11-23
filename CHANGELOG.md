@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-23 · «Fragua tranquila» (frontend-design)
+- Fuera el verde lima: la paleta sale del logo. Papel salvia, tinta pizarra, botones y selección en pizarra con texto claro; latón suave solo sobre la banda oscura (anillos, barras, temporizador). Hecho, en verde musgo; avisos en ocre; errores en ladrillo.
+- Títulos en minúscula (sin mayúsculas gritonas) y esquinas más suaves (10 px; hojas de 20 px).
+- Pestaña actual con fondo salvia en lugar de bloque de color.
+
 ## 2026-11-23 · Logo nuevo
 - Icono más tranquilo: rayo azul pizarra sobre gris verdoso claro (opción B), también en la pantalla de entrada.
 

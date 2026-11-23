@@ -65,16 +65,16 @@ function phase() {
   if (mode === 'emom') {
     const iv = opts.intervalS ?? 60, k = Math.floor(t / iv), left = iv - (t % iv);
     const slots = opts.slots?.length ? opts.slots : null;
-    return { big: clock(left), label: `Minuto ${k + 1} de ${Math.round(plan.total / iv)}`, sub: slots ? slots[k % slots.length] : '', color: left <= 3 ? 'var(--color-warn)' : 'var(--color-accent)', cue: left <= 3 ? `iv${k}-${Math.ceil(left)}` : null, newIv: `start${k}` };
+    return { big: clock(left), label: `Minuto ${k + 1} de ${Math.round(plan.total / iv)}`, sub: slots ? slots[k % slots.length] : '', color: left <= 3 ? 'var(--color-warn)' : 'var(--color-brass)', cue: left <= 3 ? `iv${k}-${Math.ceil(left)}` : null, newIv: `start${k}` };
   }
   if (mode === 'tabata') {
     const w = opts.work ?? 20, r = opts.rest ?? 10, cyc = w + r, k = Math.floor(t / cyc), inCyc = t % cyc, work = inCyc < w;
     const left = work ? w - inCyc : cyc - inCyc;
-    return { big: clock(left), label: work ? `Trabajo · ${k + 1}/${opts.rounds ?? 8}` : 'Descanso', sub: '', color: work ? 'var(--color-accent)' : 'var(--color-paper)', cue: left <= 3 ? `tb${k}-${work}-${Math.ceil(left)}` : null, newIv: `tb${k}-${work}` };
+    return { big: clock(left), label: work ? `Trabajo · ${k + 1}/${opts.rounds ?? 8}` : 'Descanso', sub: '', color: work ? 'var(--color-brass)' : 'var(--color-paper)', cue: left <= 3 ? `tb${k}-${work}-${Math.ceil(left)}` : null, newIv: `tb${k}-${work}` };
   }
-  if (mode === 'amrap') return { big: clock(plan.total - t), label: `AMRAP ${Math.round(plan.total / 60)}'`, sub: `Rondas: ${state.rounds}`, color: plan.total - t <= 10 ? 'var(--color-warn)' : 'var(--color-accent)', cue: plan.total - t <= 3 ? `am${Math.ceil(plan.total - t)}` : null };
-  if (opts.laps) { const k = state.laps.length; return { big: clock(t), label: opts.laps[k] ?? 'Final', sub: `Tramo ${clock(t - state.lapAt)}${k ? ` · anterior ${clock(state.laps[k - 1])}` : ''}`, color: 'var(--color-accent)' }; }
-  return { big: clock(t), label: plan.total ? `For Time · cap ${Math.round(plan.total / 60)}'` : 'For Time', sub: state.rounds ? `Rondas: ${state.rounds}` : '', color: 'var(--color-accent)' };
+  if (mode === 'amrap') return { big: clock(plan.total - t), label: `AMRAP ${Math.round(plan.total / 60)}'`, sub: `Rondas: ${state.rounds}`, color: plan.total - t <= 10 ? 'var(--color-warn)' : 'var(--color-brass)', cue: plan.total - t <= 3 ? `am${Math.ceil(plan.total - t)}` : null };
+  if (opts.laps) { const k = state.laps.length; return { big: clock(t), label: opts.laps[k] ?? 'Final', sub: `Tramo ${clock(t - state.lapAt)}${k ? ` · anterior ${clock(state.laps[k - 1])}` : ''}`, color: 'var(--color-brass)' }; }
+  return { big: clock(t), label: plan.total ? `For Time · cap ${Math.round(plan.total / 60)}'` : 'For Time', sub: state.rounds ? `Rondas: ${state.rounds}` : '', color: 'var(--color-brass)' };
 }
 
 function draw() {
