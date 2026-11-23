@@ -5,6 +5,7 @@
 - «RONDA 1:», «RONDA 2:»… se entienden: si son iguales se registra una ronda tipo × N con el peso de cada ronda (40-40-40-44 kg); si son distintas, cada ronda va en su grupo.
 - Intervalos «4 INTERVALOS (12 MIN)» y «2 minutos ON / 1 minuto OFF»; las listas numeradas («1. 200 m Run») ya no se leen como repeticiones y las frases explicativas pasan a notas.
 - «Peso corporal» se anota, no se confunde con el nombre del ejercicio.
+- Arreglo: los ejercicios nuevos se dan de alta en la base de datos (migración 0020); antes guardar fallaba con «session_sets_exercise_id_fkey». Un test impide que vuelva a pasar.
 
 ## Gráficos legibles (skill dataviz)
 - Paleta de gráficos propia y validada para daltonismo y contraste: azul, naranja y verde en orden fijo; rampa de un solo azul para magnitudes.

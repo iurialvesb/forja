@@ -113,3 +113,12 @@ test('catálogo de CrossFit: variantes que antes se confundían', () => {
     ['mountain climbers', 'mountain_climber'], ['bar facing burpees', 'bar_facing_burpee'], ['zancadas con salto', 'jumping_lunge'], ['dominadas', 'pull_up']];
   for (const [txt, id] of cases) assert.equal(resolveExercise(txt)?.id, id, txt);
 });
+
+test('todo ejercicio del catálogo existe en la base de datos (alguna migración lo inserta)', async () => {
+  const { readdirSync, readFileSync } = await import('node:fs');
+  const dir = new URL('../../supabase/migrations/', import.meta.url);
+  const sql = readdirSync(dir).filter((f) => f.endsWith('.sql')).map((f) => readFileSync(new URL(f, dir), 'utf8')).join('\n');
+  const { EXERCISES } = await import('../src/exercises.ts');
+  const missing = EXERCISES.filter((e) => !sql.includes(`('${e.id}',`)).map((e) => e.id);
+  assert.deepEqual(missing, [], 'Falta una migración con estos ejercicios (node scripts/gen-seed.ts y copia a una migración nueva)');
+});
