@@ -1,9 +1,9 @@
-/* Forja · «Fragua tranquila» (frontend-design, 23 nov): salvia + pizarra del logo, latón solo sobre la banda de tinta; títulos en minúscula.
- * Hallmark · shape: app screen · genre: editorial · theme: Sport (deal 1/3, seed personal-training-nutrition-tracker-8785·6f8fb4d0·2026-11-21·r0) · redesign: full
+/* Hallmark · shape: app screen · genre: editorial · theme: Sport (deal 1/3, seed personal-training-nutrition-tracker-8785·6f8fb4d0·2026-11-21·r0) · redesign: full
  * nav: kept (bottom tab bar, five destinations, now a ruled strip with a volt block on the current tab) · signature: the day sheet, readiness on the ink band over a results-sheet of today's sessions and meals · states: loading (skeleton), empty, error (toast), full, offline
  * axes: light/display-condensed/chromatic-volt · posture: restrained · contrast: pass · v2.0.0 */
 /* Hallmark · pre-emit critique: P4 H4 E4 S4 R3 V4 · weakest: R (range), the app is lists and forms; answered with the ink band, ruled sheets and one volt fill per screen */
 /* Hallmark · waive 24b · literal paddings in calc() with env() safe areas · the safe-area insets are device values, not scale steps */
+/* Forja · «Fragua tranquila» (frontend-design, 23 nov): salvia + pizarra del logo, latón solo sobre la banda de tinta; títulos en minúscula. */
 @import url("./tokens.css");
 @import url("./base.css");
 
