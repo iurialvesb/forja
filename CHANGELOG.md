@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-11-23 · Líquidos en ml
+- Leche, bebidas vegetales, zumos, aceite, vinagre, caldo, nata, kéfir…: en toda Nutrición se ven en ml/l en vez de g (Diario, añadir y editar alimento con atajos de 100–500 ml, texto libre, menú, sugerencias, reajustes, compra, lista para compartir, batch, recetas y despensa). Internamente se guardan igual (1 ml ≈ 1 g), así que los macros no cambian.
+
 ## 2026-11-23 · «Ya he cocinado» entiende batch reales
 - La IA usa el modelo que razona (antes el rápido sin razonamiento) y sabe de rendimientos: pesos en crudo o con hueso → carne cocinada (cuarto trasero ≈ 42 %), piezas ya comidas, caldo triturado con sus verduras repartido en raciones, arroz/pasta en crudo por ración, pescado del día, «al menos N días», verduras al horno repartidas entre cenas.
 - El resultado se enseña en una hoja: los cálculos que ha hecho, las comidas por día con sus gramos, lo que necesita aclarar (con botón para responder) y lo que no tiene datos nutricionales. Antes era un aviso que se cortaba a dos líneas y no se veían las preguntas.

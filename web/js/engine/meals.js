@@ -2,6 +2,7 @@
 // Comidas: ajuste de raciones a un objetivo de macros, menú semanal editable y reequilibrio
 // automático del resto del día/semana cuando cambias o registras algo.
 
+import { isLiquid } from './pantry.js';
 import { addMacros, macrosOf, roundMacros, subMacros, ZERO, distribute, slotOrder,                                                       } from './nutrition.js';
 
                              
@@ -114,7 +115,7 @@ export function rebalanceDay(args                                               
     const changes = m.ingredients.map((i, k) => ({ name: i.name, fromG: Math.round(orig.ingredients[k]?.grams ?? 0), toG: Math.round(i.grams) }))
       .filter((c) => Math.abs(c.toG - c.fromG) >= Math.max(10, c.fromG * 0.15));
     if (changes.length) adjustments.push({ mealId: m.id, slot: m.slot, title: m.title, changes,
-      text: `${m.slot.replace('_', ' ')}: ` + changes.map((c) => `${c.toG > c.fromG ? 'sube' : 'baja'} ${c.name.toLowerCase()} de ${c.fromG} a ${c.toG} g`).join(', ') });
+      text: `${m.slot.replace('_', ' ')}: ` + changes.map((c) => `${c.toG > c.fromG ? 'sube' : 'baja'} ${c.name.toLowerCase()} de ${c.fromG} a ${c.toG} ${isLiquid(c.name) ? 'ml' : 'g'}`).join(', ') });
   }
   const totals = roundMacros(meals.filter((m) => m.status !== 'skipped').reduce((a, m) => addMacros(a, mealMacros(m, foods)), args.extraEaten ? { ...args.extraEaten } : { ...ZERO }));
   const t = args.target.macros;
