@@ -165,55 +165,113 @@ export function ring(value, color, label, size = 92, sub = '') {
 export const bar = (value, max, color) => raw(`<div class="bar"><i style="width:${Math.max(0, Math.min(100, (value / Math.max(1, max)) * 100))}%${color ? `;background:${color}` : ''}"></i></div>`);
 
 /** Barras con degradado. points: [{label, value, color?}]. goal: línea de referencia. */
-export function barChart(points, { color = 'var(--color-ink-2)', height = 140, label = (p) => p.label, goal, fmt = (v) => Math.round(v) } = {}) {
-  if (!points.length) return raw('<p class="muted small">Sin datos todavía.</p>');
-  const W = 320, H = height, pad = 22, max = Math.max(1, goal ?? 0, ...points.map((p) => p.value || 0)) * 1.08, id = `bg${++gid}`;
-  const bw = (W - pad) / points.length;
-  const Y = (v) => H - 16 - ((H - 28) * v) / max;
-  const bars = points.map((p, i) => { const h = Math.max(0, (H - 16) - Y(p.value || 0)); const x = pad + i * bw + Math.max(1, bw * 0.16);
-    return `<rect x="${x}" y="${H - 16 - h}" width="${Math.max(3, bw * 0.68)}" height="${h}" rx="1" fill="${p.color ?? color}" opacity="${p.dim ? 0.45 : 1}"/>${i % Math.ceil(points.length / 7) === 0 ? `<text x="${pad + i * bw + bw / 2}" y="${H - 3}" text-anchor="middle">${esc(label(p))}</text>` : ''}`; }).join('');
-  const g = goal ? `<line x1="${pad}" x2="${W}" y1="${Y(goal)}" y2="${Y(goal)}" stroke="var(--color-rule-2)" stroke-dasharray="3 4"/><text x="${W}" y="${Y(goal) - 3}" text-anchor="end">${esc(fmt(goal))}</text>` : '';
-  const desc = `Gráfico de barras: ${points.length} valores, último ${fmt(points[points.length - 1].value || 0)}, máximo ${fmt(Math.max(...points.map((p) => p.value || 0)))}`;
-  return raw(`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(desc)}">${goal ? "" : `<text x="0" y="10">${esc(fmt(max / 1.08))}</text>`}${g}${bars}</svg>`);
-}
+// ---------- Gráficos (skill dataviz): marcas finas, un eje, leyenda si hay ≥ 2 series, capa de hover y tabla de datos ----------
+// Paleta categórica validada (validate_palette.js, superficie #f4f7f4: CVD ΔE ≥ 9,5, normal ≥ 22, contraste ≥ 3:1): --series-1..3.
+const nice = (v) => { if (v <= 0) return 1; const e = 10 ** Math.floor(Math.log10(v)); const m = v / e; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * e; };
+const tbl = (head, rows) => `<details class="dtable"><summary>Ver datos</summary><table><thead><tr>${head.map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></details>`;
+const tipData = (o) => esc(JSON.stringify(o));
 
-/** Línea con área degradada. series: [{color, points:[{x,y}], fmt?, fill?}]. */
+export function barChart(points, { color = 'var(--series-1)', height = 140, label = (p) => p.label, goal, fmt = (v) => Math.round(v), name = 'Valor' } = {}) {
+  if (!points.length) return raw('<p class="muted small">Sin datos todavía.</p>');
+  const W = 320, H = height, L = 30, R = 4, T = 14, B = 18;
+  const top = nice(Math.max(1, goal ?? 0, ...points.map((p) => p.value || 0)) * 1.05);
+  const slot = (W - L - R) / points.length, bw = Math.min(22, Math.max(3, slot - 2));
+  const Y = (v) => H - B - ((H - B - T) * v) / top;
+  const r4 = (x, y, w, h) => { const r = Math.min(4, w / 2, h); return h <= 0 ? '' : `M${x},${H - B}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${H - B}Z`; };
+  const every = Math.ceil(points.length / 7), last = points.length - 1;
+  const bars = points.map((p, i) => { const v = p.value || 0, x = L + i * slot + (slot - bw) / 2, y = Y(v);
+    return `<path d="${r4(x, y, bw, H - B - y)}" fill="${p.color ?? color}" opacity="${p.dim ? 0.45 : 1}"/>${i % every === 0 || i === last ? `<text x="${L + i * slot + slot / 2}" y="${H - 4}" text-anchor="middle">${esc(label(p))}</text>` : ''}`; }).join('');
+  const lastV = points[last].value || 0, lx = L + last * slot + slot / 2;
+  const grid = `<line class="grid" x1="${L}" x2="${W - R}" y1="${H - B}" y2="${H - B}"/><line class="grid" x1="${L}" x2="${W - R}" y1="${Y(top)}" y2="${Y(top)}"/><text x="${L - 4}" y="${Y(top) + 3}" text-anchor="end">${esc(fmt(top))}</text><text x="${L - 4}" y="${H - B + 3}" text-anchor="end">0</text>`;
+  const g = goal ? `<line class="ref" x1="${L}" x2="${W - R}" y1="${Y(goal)}" y2="${Y(goal)}"/><text x="${L - 4}" y="${Y(goal) + 3}" text-anchor="end">${esc(fmt(goal))}</text>` : '';
+  const vy = goal && Math.abs(Y(lastV) - 4 - Y(goal)) < 12 ? Math.min(Y(lastV), Y(goal)) - 6 : Y(lastV) - 4;
+  const val = lastV ? `<text class="val" x="${lx}" y="${vy}" text-anchor="middle">${esc(fmt(lastV))}</text>` : '';
+  const desc = `Gráfico de barras: ${points.length} valores, último ${fmt(lastV)}, máximo ${fmt(Math.max(...points.map((p) => p.value || 0)))}`;
+  const tips = points.map((p) => [label(p), p.value == null ? '–' : fmt(p.value)]);
+  return raw(`<figure class="viz" data-kind="bar" data-tip="${tipData({ L, R, W, n: points.length, rows: tips, name })}">
+    <svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(desc)}" tabindex="0">${grid}${g}${bars}${val}<rect class="hl" x="0" y="${T - 4}" width="0" height="${H - B - T + 4}"/></svg>
+    <div class="vtip" hidden></div>${tbl(['Periodo', name], tips)}</figure>`);
+}
 export function lineChart(series, { height = 150, invert = false, band } = {}) {
   const all = series.flatMap((s) => s.points.map((p) => p.y)).filter((y) => y != null && !Number.isNaN(y));
   if (all.length < 2) return raw('<p class="muted small">Sin datos suficientes.</p>');
-  const W = 320, H = height, pad = 26; let min = Math.min(...all), max = Math.max(...all); if (band) { min = Math.min(min, band[0]); max = Math.max(max, band[1]); } if (min === max) { min -= 1; max += 1; }
+  const multi = series.length > 1, W = 320, H = height, L = 30, R = multi ? 40 : 34, T = 10, B = 18;
+  let min = Math.min(...all), max = Math.max(...all); if (band) { min = Math.min(min, band[0]); max = Math.max(max, band[1]); } if (min === max) { min -= 1; max += 1; }
   const span = max - min; min -= span * 0.08; max += span * 0.08;
   const n = Math.max(...series.map((s) => s.points.length));
-  const X = (i) => pad + ((W - pad - 4) * i) / Math.max(1, n - 1);
-  const Y = (y) => { const t = (y - min) / (max - min); return 8 + (H - 26) * (invert ? t : 1 - t); };
-  const defs = [], paths = [];
+  const X = (i) => L + ((W - L - R) * i) / Math.max(1, n - 1);
+  const Y = (y) => { const t = (y - min) / (max - min); return T + (H - B - T) * (invert ? t : 1 - t); };
+  const col = (s, k) => s.color ?? `var(--series-${k + 1})`;
+  const f0 = series[0].fmt ?? ((v) => Math.round(v));
+  const paths = [], ends = [];
   series.forEach((s, k) => {
-    const pts = s.points.map((p, i) => (p.y == null ? null : [X(i), Y(p.y)])).filter(Boolean);
+    const pts = s.points.map((p, i) => (p.y == null ? null : [X(i), Y(p.y), p.y])).filter(Boolean);
     if (!pts.length) return;
     const d = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join('');
-    if (s.fill !== false && k === 0) { const id = `lg${++gid}`; defs.push(`<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${s.color}" stop-opacity=".35"/><stop offset="1" stop-color="${s.color}" stop-opacity="0"/></linearGradient>`);
-      paths.push(`<path d="${d}L${pts[pts.length - 1][0]},${H - 18}L${pts[0][0]},${H - 18}Z" fill="url(#${id})"/>`); }
-    paths.push(`<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"${s.dash ? ' stroke-dasharray="4 4"' : ''}/>`);
-    const L = pts[pts.length - 1]; if (k === 0) paths.push(`<circle cx="${L[0]}" cy="${L[1]}" r="4" fill="${s.color}" stroke="var(--color-paper)" stroke-width="2"/>`);
+    if (!multi && !band) paths.push(`<path d="${d}L${pts[pts.length - 1][0]},${H - B}L${pts[0][0]},${H - B}Z" fill="${col(s, k)}" opacity="0.1"/>`);
+    paths.push(`<path d="${d}" fill="none" stroke="${col(s, k)}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`);
+    const e = pts[pts.length - 1]; ends.push({ x: e[0], y: e[1], v: (s.fmt ?? f0)(e[2]), c: col(s, k) });
   });
-  const bandEl = band ? `<rect x="${pad}" width="${W - pad}" y="${Math.min(Y(band[0]), Y(band[1]))}" height="${Math.abs(Y(band[0]) - Y(band[1]))}" fill="color-mix(in oklab, var(--color-success) 10%, transparent)"/>` : '';
-  const f = series[0].fmt ?? ((v) => Math.round(v));
-  const lab = series[0].points; const first = lab[0]?.x ?? '', last = lab[lab.length - 1]?.x ?? '';
-  const top = invert ? min : max, bot = invert ? max : min;
+  // Etiquetas al final de cada línea; si chocan, se apartan lo justo (sin despegarse de su punto).
+  const lab = [...ends].sort((a, b) => a.y - b.y); for (let i = 1; i < lab.length; i++) if (lab[i].y - lab[i - 1].y < 12) lab[i].ly = (lab[i - 1].ly ?? lab[i - 1].y) + 12;
+  const dots = ends.map((e) => `<circle cx="${e.x}" cy="${e.y}" r="4" fill="${e.c}" stroke="var(--color-paper)" stroke-width="2"/><text class="val" x="${e.x + 7}" y="${(e.ly ?? e.y) + 3}">${esc(e.v)}</text>`).join('');
+  const bandEl = band ? `<rect x="${L}" width="${W - L - R}" y="${Math.min(Y(band[0]), Y(band[1]))}" height="${Math.abs(Y(band[0]) - Y(band[1]))}" fill="var(--color-success)" opacity="0.1"/>` : '';
+  const xs = series[0].points.map((p) => p.x ?? ''); const first = xs[0], last = xs[xs.length - 1];
+  const topV = invert ? min : max, botV = invert ? max : min;
+  const grid = `<line class="grid" x1="${L}" x2="${W - R}" y1="${T}" y2="${T}"/><line class="grid" x1="${L}" x2="${W - R}" y1="${H - B}" y2="${H - B}"/><text x="${L - 4}" y="${T + 3}" text-anchor="end">${esc(f0(topV))}</text><text x="${L - 4}" y="${H - B + 3}" text-anchor="end">${esc(f0(botV))}</text>`;
   const s0 = series[0].points.filter((p) => p.y != null);
-  const desc = s0.length ? `Gráfico de evolución${first ? ` del ${first} al ${last}` : ''}: de ${f(s0[0].y)} a ${f(s0[s0.length - 1].y)}` : 'Gráfico de evolución';
-  return raw(`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(desc)}"><defs>${defs.join('')}</defs>${bandEl}<text x="0" y="12">${esc(f(top))}</text><text x="0" y="${H - 20}">${esc(f(bot))}</text>${paths.join('')}<text x="${pad}" y="${H - 3}">${esc(first)}</text><text x="${W - 4}" y="${H - 3}" text-anchor="end">${esc(last)}</text></svg>`);
+  const desc = `Gráfico de evolución${first ? ` del ${first} al ${last}` : ''}: ${series.map((s, k) => { const q = s.points.filter((p) => p.y != null); return `${s.name ?? (multi ? `serie ${k + 1}` : '')} de ${(s.fmt ?? f0)(q[0]?.y)} a ${(s.fmt ?? f0)(q[q.length - 1]?.y)}`; }).join('; ')}`;
+  const rows = xs.map((x, i) => [x, ...series.map((s) => (s.points[i]?.y == null ? '–' : (s.fmt ?? f0)(s.points[i].y)))]);
+  const names = series.map((s, k) => s.name ?? (multi ? `Serie ${k + 1}` : 'Valor'));
+  const legend = multi ? `<div class="vlegend">${series.map((s, k) => `<span><i style="background:${col(s, k)}"></i>${esc(names[k])}</span>`).join('')}</div>` : '';
+  const ys = series.map((s) => s.points.map((p) => (p.y == null ? null : +Y(p.y).toFixed(1))));
+  return raw(`<figure class="viz" data-kind="line" data-tip="${tipData({ L, R, W, n, rows, names, cols: series.map(col), ys })}">${legend}
+    <svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(desc)}" tabindex="0">${bandEl}${grid}${paths.join('')}<line class="xh" x1="0" x2="0" y1="${T}" y2="${H - B}" visibility="hidden"/>${series.map((s, k) => `<circle class="xp" r="4" fill="${col(s, k)}" stroke="var(--color-paper)" stroke-width="2" visibility="hidden"/>`).join('')}${dots}<text x="${L}" y="${H - 4}">${esc(first)}</text><text x="${W - R}" y="${H - 4}" text-anchor="end">${esc(last)}</text></svg>
+    <div class="vtip" hidden></div>${tbl(['Fecha', ...names], rows)}</figure>`);
 }
 
-/** Minigráfico para las tarjetas (sin ejes). kind: 'line' | 'bar'. */
-export function spark(values, color = 'var(--color-ink-2)', kind = 'line', h = 36) {
+/** Capa de hover/foco para todos los gráficos: cruz que busca la X en líneas, la barra entera en barras; flechas con el teclado. */
+function vizAt(fig, i) {
+  const d = JSON.parse(fig.dataset.tip); i = Math.max(0, Math.min(d.n - 1, i)); fig._i = i;
+  const svg = fig.querySelector('svg'), tip = fig.querySelector('.vtip'), r = d.rows[i];
+  const slot = (d.W - d.L - d.R) / d.n, x = d.kind === 'bar' || fig.dataset.kind === 'bar' ? d.L + i * slot : d.L + ((d.W - d.L - d.R) * i) / Math.max(1, d.n - 1);
+  if (fig.dataset.kind === 'bar') { const hl = svg.querySelector('.hl'); hl.setAttribute('x', x); hl.setAttribute('width', slot); }
+  else {
+    const xh = svg.querySelector('.xh'); xh.setAttribute('x1', x); xh.setAttribute('x2', x); xh.setAttribute('visibility', 'visible');
+    svg.querySelectorAll('.xp').forEach((c, k) => { const y = d.ys[k][i]; if (y == null) return c.setAttribute('visibility', 'hidden'); c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('visibility', 'visible'); });
+  }
+  tip.replaceChildren();
+  const head = document.createElement('div'); head.className = 'vt-h'; head.textContent = r[0]; tip.append(head);
+  r.slice(1).forEach((v, k) => { const row = document.createElement('div'); row.className = 'vt-r';
+    if (d.cols) { const key = document.createElement('i'); key.style.background = d.cols[k]; row.append(key); }
+    const b = document.createElement('b'); b.textContent = v; row.append(b);
+    if (d.names && d.names.length > 1) { const s = document.createElement('span'); s.textContent = d.names[k]; row.append(s); }
+    tip.append(row); });
+  tip.hidden = false;
+  const px = (x / d.W) * svg.getBoundingClientRect().width, tw = tip.offsetWidth, fw = fig.clientWidth;
+  tip.style.left = `${Math.max(0, Math.min(fw - tw, px - tw / 2))}px`;
+}
+function vizOff(fig) { const tip = fig.querySelector('.vtip'); if (tip) tip.hidden = true; fig.querySelectorAll('.xh, .xp').forEach((e) => e.setAttribute('visibility', 'hidden')); const hl = fig.querySelector('.hl'); if (hl) hl.setAttribute('width', 0); }
+function vizIndex(fig, clientX) {
+  const d = JSON.parse(fig.dataset.tip), box = fig.querySelector('svg').getBoundingClientRect(), x = ((clientX - box.left) / box.width) * d.W;
+  return fig.dataset.kind === 'bar' ? Math.floor((x - d.L) / ((d.W - d.L - d.R) / d.n)) : Math.round(((x - d.L) / (d.W - d.L - d.R)) * (d.n - 1));
+}
+if (typeof document !== 'undefined' && !window.__viz) {
+  window.__viz = true;
+  document.addEventListener('pointermove', (e) => { const fig = e.target.closest?.('figure.viz'); document.querySelectorAll('figure.viz').forEach((f) => f !== fig && f._i != null && (vizOff(f), (f._i = null))); if (fig && e.target.closest('svg')) vizAt(fig, vizIndex(fig, e.clientX)); });
+  document.addEventListener('pointerdown', (e) => { const fig = e.target.closest?.('figure.viz'); if (fig && e.target.closest('svg')) vizAt(fig, vizIndex(fig, e.clientX)); });
+  document.addEventListener('focusin', (e) => { const fig = e.target.closest?.('figure.viz'); if (fig && e.target.tagName === 'svg') vizAt(fig, fig._i ?? JSON.parse(fig.dataset.tip).n - 1); });
+  document.addEventListener('focusout', (e) => { const fig = e.target.closest?.('figure.viz'); if (fig) vizOff(fig); });
+  document.addEventListener('keydown', (e) => { const fig = e.target.closest?.('figure.viz'); if (!fig || !['ArrowLeft', 'ArrowRight'].includes(e.key)) return; e.preventDefault(); vizAt(fig, (fig._i ?? 0) + (e.key === 'ArrowRight' ? 1 : -1)); });
+}
+export function spark(values, color = 'var(--series-1)', kind = 'line', h = 36) {
   const v = values.map((x) => (x == null || Number.isNaN(+x) ? null : +x)); const ok = v.filter((x) => x != null);
   if (ok.length < 2) return raw('');
   const W = 120, min = kind === 'bar' ? 0 : Math.min(...ok), max = Math.max(...ok), sp = max - min || 1, id = `sp${++gid}`;
   if (kind === 'bar') { const bw = W / v.length; return raw(`<svg class="spark" aria-hidden="true" viewBox="0 0 ${W} ${h}" width="100%" height="${h}" preserveAspectRatio="none">${v.map((x, i) => (x == null ? '' : `<rect x="${i * bw + 1.5}" y="${h - (h * (x - min)) / sp}" width="${Math.max(2, bw - 3)}" height="${(h * (x - min)) / sp}" rx="2" fill="${color}" opacity="${i === v.length - 1 ? 1 : 0.5}"/>`)).join('')}</svg>`); }
   const pts = v.map((x, i) => (x == null ? null : [(W * i) / (v.length - 1), 3 + (h - 6) * (1 - (x - min) / sp)])).filter(Boolean);
   const d = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join('');
-  return raw(`<svg class="spark" aria-hidden="true" viewBox="0 0 ${W} ${h}" width="100%" height="${h}" preserveAspectRatio="none"><defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".35"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs><path d="${d}L${W},${h}L0,${h}Z" fill="url(#${id})"/><path d="${d}" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linecap="round"/></svg>`);
+  return raw(`<svg class="spark" aria-hidden="true" viewBox="0 0 ${W} ${h}" width="100%" height="${h}" preserveAspectRatio="none"><path d="${d}L${W},${h}L0,${h}Z" fill="${color}" opacity="0.1"/><path d="${d}" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linecap="round"/></svg>`);
 }
 
 /** Pasos de una sesión planificada (ritmos, series, pesos, descansos). */

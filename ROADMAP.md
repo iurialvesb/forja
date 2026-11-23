@@ -18,6 +18,7 @@ Estado: ✅ hecho · 🔜 siguiente · 💡 idea
 | Modo sin conexión (lecturas en caché + cola de guardado) | ✅ |
 | Exportación JSON completa y CSV de entrenos | ✅ |
 | Coach con modelo Pro (Gemini de pago) y Flash de reserva | ✅ |
+- Gráficos con paleta validada, tooltip táctil/teclado, leyendas y tabla «Ver datos» (dataviz).
 
 ## Siguiente
 | Área | Por qué |

@@ -416,7 +416,7 @@ export async function exerciseHistory(exerciseId) {
     const top = days.map((d) => ({ d, kg: Math.max(0, ...byDay[d].map((s) => +s.load_kg || 0)) })).filter((x) => x.kg > 0).reverse();
     const qty = (s) => (s.reps != null ? `${s.reps}` : s.calories != null ? `${+s.calories} cal` : s.distance_m != null ? `${+s.distance_m} m` : s.duration_s != null ? `${s.duration_s} s` : '');
     setSheet(html`<select data-change="${act((el) => { cur = el.value; show(); })}">${ids.map((id) => html`<option value="${id}" ${id === cur ? 'selected' : ''}>${name[id] ?? id} (${count[id]})</option>`)}</select>
-      ${top.length >= 2 ? html`<div class="card"><h3>Peso máximo por día</h3>${lineChart([{ color: 'var(--color-ink)', points: top.slice(-30).map((x) => ({ x: shortDate(x.d), y: x.kg })) }], { height: 120 })}</div>` : ''}
+      ${top.length >= 2 ? html`<div class="card"><h3>Peso máximo por día</h3>${lineChart([{ points: top.slice(-30).map((x) => ({ x: shortDate(x.d), y: x.kg })) }], { height: 120 })}</div>` : ''}
       ${days.map((d) => { const ss = byDay[d]; const vol = ss.reduce((a, s) => a + (s.reps ?? 0) * (+s.load_kg || 0), 0); const best = Math.max(0, ...ss.map((s) => +s.load_kg || 0));
         return html`<div class="card tight"><div class="row"><b class="grow">${dayName(d)}</b>${best ? html`<span class="tag amber">máx ${best} kg</span>` : ''}</div>
           <div class="small">${ss.map((s) => html`<span class="chip ${s.status === 'partial' ? 'warn' : ''}" title="${s.set_label ?? ''}">${qty(s)}${s.load_kg ? html` × ${+s.load_kg} kg` : ''}${s.status === 'partial' && s.target_reps ? html` <span class="xs">(de ${+s.target_reps})</span>` : ''}</span>`)}</div>

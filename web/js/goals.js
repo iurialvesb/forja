@@ -29,8 +29,8 @@ function race(g, o) {
       <div class="stat"><div class="l">Objetivo</div><div class="v" style="color:var(--color-ink-2)">${clockH(o.targetS)}</div><div class="xs muted">${o.targetPace ? pace(o.targetPace) : '—'}</div></div>
       <div class="stat"><div class="l">Tirada larga (28 d)</div><div class="v">${o.longestRun28dKm}<span class="u"> km</span></div></div>
     </div>
-    <div class="card"><h3>Kilómetros por semana</h3>${barChart(o.weeks.map((w) => ({ label: shortDate(w.week), value: w.km })), { color: 'var(--color-ink)', height: 120 })}</div>
-    ${o.longRunPlan.length ? html`<div class="card"><h3>Progresión de la tirada larga</h3>${barChart(o.longRunPlan.map((w) => ({ label: shortDate(w.week), value: w.km })), { color: 'var(--color-ink)', height: 110 })}
+    <div class="card"><h3>Kilómetros por semana</h3>${barChart(o.weeks.map((w) => ({ label: shortDate(w.week), value: w.km })), { height: 120 })}</div>
+    ${o.longRunPlan.length ? html`<div class="card"><h3>Progresión de la tirada larga</h3>${barChart(o.longRunPlan.map((w) => ({ label: shortDate(w.week), value: w.km })), { height: 110 })}
       <p class="xs muted">Sube ~1,5 km por semana hasta el pico 3 semanas antes; después baja para llegar fresco.</p></div>` : ''}
     ${o.racePaceRuns.length ? html`<div class="card tight"><h3>Rodajes a ritmo de carrera</h3>${o.racePaceRuns.map((x) => html`<div class="row small"><span class="grow">${dayName(x.date)}</span><span>${x.km} km</span><b style="margin-left:10px">${pace(x.pace)}</b></div>`)}</div>` : ''}`;
 }
@@ -55,7 +55,7 @@ function hyrox(g, o, splits) {
       <div class="xs muted">Mejor parcial frente al reparto de tu objetivo.</div>${rows}
       <div class="grid2" style="margin-top:8px"><button class="sm primary" data-act="${act(() => startHyrox(8))}">Simulación completa</button><button class="sm" data-act="${act(() => startHyrox(4))}">Media (4 estaciones)</button></div>
       <p class="xs muted">Apunta el tiempo de cada tramo (m:ss); con ${raw(ic('clock', 17))} cronometras la simulación entera.</p></div>
-    ${sims.length >= 2 ? html`<div class="card"><h3>Simulaciones</h3>${lineChart([{ color: 'var(--color-ink)', points: sims.map((s) => ({ x: shortDate(s.date), y: Math.round(s.totalS / 60) })) }], { height: 120, invert: true })}<p class="xs muted">Minutos totales: más arriba = más rápido.</p></div>` : ''}
+    ${sims.length >= 2 ? html`<div class="card"><h3>Simulaciones</h3>${lineChart([{ points: sims.map((s) => ({ x: shortDate(s.date), y: Math.round(s.totalS / 60) })) }], { height: 120, invert: true })}<p class="xs muted">Minutos totales: más arriba = más rápido.</p></div>` : ''}
     ${splits?.length ? html`<details class="card tight"><summary class="small">Reparto completo del objetivo (${clockH(g.target_time_s)})</summary>${splits.map((s) => html`<div class="row small"><span class="grow">${s.name}</span><b>${dur(s.seconds)}</b></div>`)}</details>` : ''}`;
 }
 

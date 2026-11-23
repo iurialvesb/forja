@@ -1,5 +1,13 @@
 # Changelog
 
+## Gráficos legibles (skill dataviz)
+- Paleta de gráficos propia y validada para daltonismo y contraste: azul, naranja y verde en orden fijo; rampa de un solo azul para magnitudes.
+- Zonas de FC en rampa secuencial (Z1 claro → Z5 oscuro) con barra segmentada.
+- Toca o pasa el dedo por cualquier gráfico: línea guía y valor exacto; también con teclado (flechas).
+- «Ver datos» bajo cada gráfico abre la tabla con los valores.
+- Forma/Fatiga con leyenda; sueño con leyenda (noches cortas en azul claro, ya no en color de alerta) y etiqueta del último valor sin pisar el objetivo.
+- Barras finas con extremo redondeado, rejilla discreta, sin degradados; la VFC ya no mezcla área y franja.
+
 ## 2026-11-23 · «Fragua tranquila» (frontend-design)
 - Fuera el verde lima: la paleta sale del logo. Papel salvia, tinta pizarra, botones y selección en pizarra con texto claro; latón suave solo sobre la banda oscura (anillos, barras, temporizador). Hecho, en verde musgo; avisos en ocre; errores en ladrillo.
 - Títulos en minúscula (sin mayúsculas gritonas) y esquinas más suaves (10 px; hojas de 20 px).

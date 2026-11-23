@@ -2,14 +2,14 @@
 import * as api from './api.js';
 import { html, raw, pace, dur, lineChart } from './ui.js';
 
-// Zonas de pulso: de la tinta clara a la oscura, la 5 en error (lo único que de verdad pide atención).
-const ZC = ['var(--color-paper-3)', 'var(--color-rule)', 'var(--color-muted)', 'var(--color-ink-2)', 'var(--color-error)'];
+// Zonas de pulso: magnitud ordenada → un solo tono, de claro a oscuro (secuencial, sin arcoíris).
+const ZC = ['var(--seq-1)', 'var(--seq-2)', 'var(--seq-3)', 'var(--seq-4)', 'var(--seq-5)'];
 const mmss = (s) => { const t = Math.round(s); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
 
 function zonesBar(z) {
   const tot = z.seconds.reduce((a, b) => a + b, 0); if (!tot) return '';
   return html`<div class="card tight"><b>Zonas de FC</b>
-    <div style="display:flex;height:12px;border-radius:99px;overflow:hidden;margin:8px 0">${z.seconds.map((s, i) => raw(`<i style="width:${(s / tot) * 100}%;background:${ZC[i]}"></i>`))}</div>
+    <div class="segbar" role="img" aria-label="${z.seconds.map((s, i) => `Z${i + 1} ${Math.round((s / tot) * 100)} %`).join(', ')}">${z.seconds.map((s, i) => (s ? raw(`<i style="flex:${s} 0 0;background:${ZC[i]}"></i>`) : ''))}</div>
     ${z.seconds.map((s, i) => html`<div class="row small"><span style="width:12px;height:12px;border-radius:4px;background:${ZC[i]};display:inline-block"></span><span class="grow">Z${i + 1}${z.bounds?.[i] ? html` <span class="muted xs">${z.bounds[i][0]}–${z.bounds[i][1]} ppm</span>` : ''}</span><b>${dur(s)}</b><span class="muted" style="width:44px;text-align:right">${Math.round((s / tot) * 100)}%</span></div>`)}</div>`;
 }
 
@@ -39,11 +39,11 @@ export async function activityExtras(s) {
   const se = streams?.series;
   if (se?.t?.length > 2) {
     const lbl = (i) => mmss(se.t[i]);
-    if (se.hr) out.push(html`<div class="card tight"><b>Frecuencia cardíaca</b>${lineChart([{ color: 'var(--color-ink)', points: se.hr.map((y, i) => ({ x: lbl(i), y })) }], { height: 120 })}</div>`);
-    if (se.pace) { const cap = (y) => (y == null || y > 900 ? null : y); out.push(html`<div class="card tight"><b>Ritmo</b>${lineChart([{ color: 'var(--color-ink)', fmt: pace, points: se.pace.map((y, i) => ({ x: lbl(i), y: cap(y) })) }], { height: 120, invert: true })}</div>`); }
-    if (se.alt && se.alt.some((x) => x != null)) out.push(html`<div class="card tight"><b>Altitud</b>${lineChart([{ color: 'var(--color-ink)', points: se.alt.map((y, i) => ({ x: lbl(i), y })) }], { height: 90 })}</div>`);
-    if (se.cad && s.discipline === 'running') out.push(html`<div class="card tight"><b>Cadencia</b>${lineChart([{ color: 'var(--color-ink)', points: se.cad.map((y, i) => ({ x: lbl(i), y })) }], { height: 90 })}</div>`);
-    if (se.w && se.w.some((x) => x)) out.push(html`<div class="card tight"><b>Potencia</b>${lineChart([{ color: 'var(--color-ink)', points: se.w.map((y, i) => ({ x: lbl(i), y })) }], { height: 90 })}</div>`);
+    if (se.hr) out.push(html`<div class="card tight"><b>Frecuencia cardíaca</b>${lineChart([{ points: se.hr.map((y, i) => ({ x: lbl(i), y })) }], { height: 120 })}</div>`);
+    if (se.pace) { const cap = (y) => (y == null || y > 900 ? null : y); out.push(html`<div class="card tight"><b>Ritmo</b>${lineChart([{ fmt: pace, points: se.pace.map((y, i) => ({ x: lbl(i), y: cap(y) })) }], { height: 120, invert: true })}</div>`); }
+    if (se.alt && se.alt.some((x) => x != null)) out.push(html`<div class="card tight"><b>Altitud</b>${lineChart([{ points: se.alt.map((y, i) => ({ x: lbl(i), y })) }], { height: 90 })}</div>`);
+    if (se.cad && s.discipline === 'running') out.push(html`<div class="card tight"><b>Cadencia</b>${lineChart([{ points: se.cad.map((y, i) => ({ x: lbl(i), y })) }], { height: 90 })}</div>`);
+    if (se.w && se.w.some((x) => x)) out.push(html`<div class="card tight"><b>Potencia</b>${lineChart([{ points: se.w.map((y, i) => ({ x: lbl(i), y })) }], { height: 90 })}</div>`);
   }
   if (splits.length) {
     const best = Math.min(...splits.map((x) => +x.duration_s));

@@ -129,22 +129,23 @@ export async function HEALTH(params = []) {
         <div class="row"><span class="bub" style="width:34px;height:34px;background:var(--color-paper-2);color:var(--color-ink)">${raw(ic('moon', 18))}</span><h3 class="grow" style="margin:0">Sueño</h3>${lastNight?.sleep_score != null ? html`<span class="tag purple">Nota ${lastNight.sleep_score}</span>` : ''}</div>
         <div class="row" style="margin:10px 0 2px;align-items:flex-end"><div class="kpi">${lastNight ? fmtSleep(+lastNight.sleep_h) : '–'}</div><div class="small muted" style="margin-left:6px">${lastNight ? (lastNight.date === t ? 'anoche' : shortDate(lastNight.date)) : ''}</div></div>
         <div class="small muted">Media ${fmtSleep(avg(vals('sleep_h')))}${lastNight?.avg_sleeping_hr ? ` · pulso dormido ${lastNight.avg_sleeping_hr} ppm` : ''}${H.sleep && H.sleep.avg7 < 7 ? ' · intenta llegar a 7–8 h' : ''}</div>
-        ${barChart(ser('sleep_h').map((p) => ({ ...p, color: p.value && p.value < 6.5 ? 'var(--color-warn)' : undefined })), { color: 'var(--color-ink-2)', height: 130, goal: 8, fmt: (v) => `${Math.round(v)} h`, label: (p) => (span > 14 ? p.x : p.label) })}
+        <div class="vlegend"><span><i style="background:var(--series-1);height:8px"></i>6,5 h o más</span><span><i style="background:var(--seq-1);height:8px"></i>Menos de 6,5 h</span><span><i style="background:var(--color-muted)"></i>Objetivo 8 h</span></div>
+        ${barChart(ser('sleep_h').map((p) => ({ ...p, color: p.value && p.value < 6.5 ? 'var(--seq-1)' : undefined })), { name: 'Sueño', height: 130, goal: 8, fmt: (v) => (v % 1 ? fmtSleep(v) : `${v} h`), label: (p) => (span > 14 ? p.x : p.label) })}
       </div>
       <div class="card">
         <div class="row"><span class="bub" style="width:34px;height:34px;background:var(--accentSoft);color:var(--accent2)">${raw(ic('pulse', 18))}</span><h3 class="grow" style="margin:0">Variabilidad cardiaca (VFC)</h3>${H.hrv && hm ? html`<span class="tag ${H.hrv.v < hm - hs ? 'amber' : 'green'}">${H.hrv.v < hm - hs ? 'Por debajo' : 'En tu rango'}</span>` : ''}</div>
         <div class="row" style="margin:10px 0 2px;align-items:flex-end"><div class="kpi">${H.hrv ? Math.round(H.hrv.v) : '–'}<small> ms</small></div></div>
         <div class="small muted">Tu rango normal: ${hm ? `${Math.round(hm - hs)}–${Math.round(hm + hs)} ms` : '—'} (franja verde)</div>
-        ${lineChart([{ color: 'var(--color-ink)', points: ser('hrv_ms') }], { height: 130, band: hm ? [hm - hs, hm + hs] : undefined })}
+        ${lineChart([{ points: ser('hrv_ms') }], { height: 130, band: hm ? [hm - hs, hm + hs] : undefined })}
       </div>
       <div class="card">
         <div class="row"><span class="bub" style="width:34px;height:34px;background:var(--color-paper-2);color:var(--color-ink)">${raw(ic('heart', 18))}</span><h3 class="grow" style="margin:0">Pulso en reposo</h3></div>
         <div class="row" style="margin:10px 0 2px;align-items:flex-end"><div class="kpi">${H.rhr ? H.rhr.v : '–'}<small> ppm</small></div></div>
-        ${lineChart([{ color: 'var(--color-ink)', points: ser('rhr') }], { height: 110 })}
+        ${lineChart([{ points: ser('rhr') }], { height: 110 })}
       </div>
       <div class="card">
         <div class="row"><span class="bub" style="width:34px;height:34px;background:var(--color-paper-2);color:var(--color-ink)">${raw(ic('steps', 18))}</span><h3 class="grow" style="margin:0">Pasos</h3><span class="small muted">media ${n0(avg(vals('steps')))}</span></div>
-        ${barChart(ser('steps'), { color: 'var(--color-ink-2)', height: 120, goal: 8000, fmt: (v) => `${Math.round(v / 1000)}k`, label: (p) => (span > 14 ? p.x : p.label) })}
+        ${barChart(ser('steps'), { name: 'Pasos', height: 120, goal: 8000, fmt: (v) => `${Math.round(v / 1000)}k`, label: (p) => (span > 14 ? p.x : p.label) })}
       </div>
       ${extraTiles ? html`<div class="tiles">${raw(extraTiles)}</div>` : ''}
       <h2>Todas tus actividades</h2>
@@ -436,18 +437,18 @@ async function progress() {
         : html`<p class="small muted">Registra una competición o un test (márcalo como test) para calcular tus ritmos reales.</p>`}</div>
     ${r.predictions.length ? html`<div class="card"><h3>Predicciones orientativas</h3><div class="stats">${r.predictions.map((x) => html`<div class="stat"><div class="l">${({ '5k': '5K', '10k': '10K', '15k': '15K', half: 'Media', marathon: 'Maratón' })[x.key]}</div><div class="v" style="font-size:15px">${dur(x.timeS)}</div></div>`)}</div></div>` : ''}
     <div class="card"><h3>Km por semana</h3>${barChart(r.weeks.map((w) => ({ value: w.km, label: shortDate(w.week) })))}</div>
-    ${r.runs.length >= 3 ? html`<div class="card"><h3>Evolución del ritmo</h3>${lineChart([{ color: 'var(--color-ink)', fmt: pace, points: r.runs.slice(-30).map((x) => ({ x: shortDate(x.date), y: x.paceSecPerKm })) }], { invert: true })}</div>` : ''}
+    ${r.runs.length >= 3 ? html`<div class="card"><h3>Evolución del ritmo</h3>${lineChart([{ fmt: pace, points: r.runs.slice(-30).map((x) => ({ x: shortDate(x.date), y: x.paceSecPerKm })) }], { invert: true })}</div>` : ''}
     <h2>Fuerza</h2>
     <button class="block" data-act="${act(() => exerciseHistory())}">${raw(ic('activity', 17))} Historial por ejercicio (pesos y repeticiones)</button>
     ${d.lifts.length ? d.lifts.map((l) => html`<div class="card"><h3>${l.name}</h3>
       <div class="stats"><div class="stat"><div class="l">1RM real</div><div class="v">${l.bestActual1RM ? l.bestActual1RM.kg : '–'}<span class="u"> kg</span></div></div>
         <div class="stat"><div class="l">Estimado</div><div class="v">${l.bestE1RM ? dec(l.bestE1RM.kg, 1) : '–'}</div></div>
         <div class="stat"><div class="l">De trabajo</div><div class="v" style="color:var(--color-ink-2)">${l.workingE1RM ? dec(l.workingE1RM.kg, 1) : '–'}</div></div></div>
-      ${l.history.length >= 2 ? lineChart([{ color: 'var(--color-ink)', points: l.history.map((h) => ({ x: shortDate(h.date), y: h.e1rm })) }], { height: 110 }) : ''}
+      ${l.history.length >= 2 ? lineChart([{ points: l.history.map((h) => ({ x: shortDate(h.date), y: h.e1rm })) }], { height: 110 }) : ''}
       <p class="xs muted">${l.suggestion.explanation}</p></div>`) : html`<div class="card muted small">Registra series con peso (o pega tus WODs) y verás aquí tu evolución y tu 1RM estimado.</div>`}
     <h2>Carga</h2>
     ${await loadCard()}
-    <div class="card"><h3>Forma (línea oscura) y fatiga (roja)</h3>${lineChart([{ color: 'var(--color-ink)', points: d.fitness.map((f) => ({ x: shortDate(f.date), y: f.ctl })) }, { color: 'var(--color-error)', points: d.fitness.map((f) => ({ x: shortDate(f.date), y: f.atl })) }])}
+    <div class="card"><h3>Forma y fatiga</h3>${lineChart([{ name: 'Forma', points: d.fitness.map((f) => ({ x: shortDate(f.date), y: f.ctl })) }, { name: 'Fatiga', points: d.fitness.map((f) => ({ x: shortDate(f.date), y: f.atl })) }])}
       <p class="xs muted">Carga crónica de 42 días (tu forma) y aguda de 7 días (tu fatiga).</p></div>
     <h2>Récords</h2>
     ${latest.length ? latest.map((x) => html`<div class="card tight row"><div class="grow"><b>${x.detail ?? x.metric}</b><div class="xs muted">${shortDate(x.achieved_on)}</div></div><span class="tag ${x.kind === 'actual' ? 'green' : 'amber'}">${x.kind === 'actual' ? 'Real' : 'Estimado'}</span></div>`) : html`<div class="card muted small">Se guardan solos al registrar entrenamientos.</div>`}`;
@@ -484,8 +485,8 @@ function bodyCard(rows, ns) {
     <div class="stats"><div class="stat"><div class="l">Peso</div><div class="v">${w.length ? f(w[w.length - 1].kg) : '–'}<span class="u"> kg</span></div></div>
       <div class="stat"><div class="l">Cintura</div><div class="v">${wa.length ? f(wa[wa.length - 1].waist) : '–'}<span class="u"> cm</span></div></div>
       <div class="stat"><div class="l">Tendencia</div><div class="v" style="font-size:16px">${slope == null ? '–' : `${slope >= 0 ? '+' : ''}${f(slope, 2)}`}<span class="u"> kg/sem</span></div><div class="xs muted">objetivo ${rate > 0 ? '+' : ''}${f(rate, 2)}</div></div></div>
-    ${w.length >= 2 ? lineChart([{ color: 'var(--color-ink)', fmt: (v) => f(v), points: w.map((d) => ({ x: shortDate(d.date), y: d.kg })) }], { height: 110 }) : ''}
-    ${wa.length >= 2 ? html`<div class="xs muted">Cintura (cm)</div>${lineChart([{ color: 'var(--color-rule-2)', fmt: (v) => f(v), points: wa.map((d) => ({ x: shortDate(d.date), y: d.waist })) }], { height: 90 })}` : ''}
+    ${w.length >= 2 ? lineChart([{ fmt: (v) => f(v), points: w.map((d) => ({ x: shortDate(d.date), y: d.kg })) }], { height: 110 }) : ''}
+    ${wa.length >= 2 ? html`<div class="xs muted">Cintura (cm)</div>${lineChart([{ fmt: (v) => f(v), points: wa.map((d) => ({ x: shortDate(d.date), y: d.waist })) }], { height: 90 })}` : ''}
     <p class="small">${verdict}</p></div>`;
 }
 function addBody() {
