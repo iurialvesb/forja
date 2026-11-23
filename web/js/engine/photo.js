@@ -16,6 +16,8 @@ import { resolveExercise } from './exercises.js';
                     
                      
                  
+                                                                                                  
+                                                                                                       
  
 
                                 
@@ -79,6 +81,8 @@ export function toSession(p               , answers                        , bas
   const blocks                 = p.sections.map((sec, si) => {
     const sets             = [];
     let multiplier = sec.rounds;
+    // Si alguna fila cambia de peso por ronda, todas se desglosan ronda a ronda (una serie por ronda)
+    const expand = sec.items.some((i) => i.loadsByRound?.length) ? sec.rounds ?? Math.max(...sec.items.map((i) => i.loadsByRound?.length ?? 1)) : 0;
     sec.items.forEach((it, ii) => {
       const id = `s${si}i${ii}`;
       const exName = answers[`${id}:exercise`] ?? it.exercise;
@@ -95,8 +99,9 @@ export function toSession(p               , answers                        , bas
         reps = parts.reduce((a, b) => a + b, 0);
         multiplier = 1;
       }
-      const n = sec.kind === 'strength' && sec.rounds && reps ? sec.rounds : 1;
-      for (let k = 0; k < n; k++) sets.push({ exerciseId: ex?.id ?? `custom:${exName}`, reps, loadKg, distanceM: it.distanceM, calories: it.calories, durationS: it.durationS });
+      const perRound = !loadAns && it.loadsByRound?.length ? it.loadsByRound : null;   // mismo ejercicio, peso distinto en cada ronda
+      const n = expand || (sec.kind === 'strength' && sec.rounds && reps ? sec.rounds : 1);
+      for (let k = 0; k < n; k++) sets.push({ exerciseId: ex?.id ?? `custom:${exName}`, reps, loadKg: perRound?.[k] != null ? perRound[k] : loadKg, distanceM: it.distanceM, calories: it.calories, durationS: it.durationS });
       if (n > 1) multiplier = undefined;
     });
     if (sec.format === 'emom' && sec.durationMin && sec.emomIntervalS && !sec.rounds) {

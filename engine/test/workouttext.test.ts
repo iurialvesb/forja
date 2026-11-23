@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseWorkoutText, describeParsed, toSession, collectQuestions, regionalLoad, legIndex, volumeByExercise, liftsFromSessions } from '../src/index.ts';
+import { parseWorkoutText, describeParsed, toSession, collectQuestions, regionalLoad, legIndex, volumeByExercise, liftsFromSessions, resolveExercise, buildBlock } from '../src/index.ts';
 
 const EJEMPLO = `Afternoon Workout
 
@@ -39,7 +39,7 @@ test('tu ejemplo de Strava: fuerza EMOM 10 (5 rondas) + WOD EMOM 24 (4 rondas, 3
   assert.equal(fs.length, 5);                                           // 5 series registradas → progresión y e1RM
   assert.equal(s.blocks![1].rounds, 4);
   const vol = volumeByExercise(s);
-  assert.equal(vol.deadlift.reps, 80); assert.equal(vol.deadlift.tonnageKg, 4000); assert.equal(vol.burpee.reps, 40);
+  assert.equal(vol.deadlift.reps, 80); assert.equal(vol.deadlift.tonnageKg, 4000); assert.equal(vol.burpee_over_bar.reps, 40);
   assert.ok(legIndex(regionalLoad(s, 78)) > 150);
   assert.ok(liftsFromSessions([s]).some((l) => l.exerciseId === 'front_squat' && l.loadKg === 50 && l.reps === 6));
 });
@@ -76,4 +76,40 @@ test('E2MOM y líneas que no entiende → pregunta, nunca inventa', () => {
   const p = parseWorkoutText(`E2MOM 12'\n- 3 Snatch 60kg\n- quetzalcoatl flips`);
   assert.equal(p.sections[0].emomIntervalS, 120); assert.equal(p.sections[0].rounds, 3);
   assert.ok(p.uncertainties.some((u) => /quetzalcoatl/.test(u.question)));
+});
+
+test('rondas escritas una a una: push/split jerk, intervalos 2 ON / 1 OFF y peso distinto en la última ronda', () => {
+  const r = (n: number, kg: number) => `RONDA ${n}:\n- 4 Push Jerk – ${kg} kg\n- 20 Rodillas al pecho\n- 4 Split Jerk – ${kg} kg\n- Rest`;
+  const iv = (n: number, ex: string) => `RONDA ${n}:\n1. 200 m Run\n2. 7 Burpees Over Bar\n3. ${ex}${n < 4 ? '\n4. Rest – 1 min' : ''}`;
+  const p = parseWorkoutText(`FUERZA – EMOM 16 MIN (4 RONDAS)\n\n${r(1, 40)}\n\n${r(2, 40)}\n\n${r(3, 40)}\n\n${r(4, 44)}\n\nWOD – 4 INTERVALOS (12 MIN)\nFormato: 2 minutos ON / 1 minuto OFF.\nCada intervalo comienza con 200 m de carrera y 7 Burpees Over Bar. Después, realizar máximas repeticiones del ejercicio asignado durante el tiempo restante.\n\n${iv(1, '4 Thrusters – 40 kg')}\n\n${iv(2, '8 Pull-ups – Peso corporal')}\n\n${iv(3, '10 Clean – 40 kg')}\n\n${iv(4, '12 Pull-ups – Peso corporal')}`);
+  assert.equal(p.uncertainties.length, 0, JSON.stringify(p.uncertainties));
+  const [f, w] = p.sections;
+  assert.equal(f.format, 'emom'); assert.equal(f.rounds, 4); assert.equal(f.durationMin, 16);
+  assert.deepEqual(f.items.map((i) => resolveExercise(i.exercise)?.id), ['push_jerk', 'knees_to_chest', 'split_jerk']);
+  assert.deepEqual(f.items[0].loadsByRound, [40, 40, 40, 44]);
+  assert.equal(w.format, 'intervals'); assert.equal(w.durationMin, 12); assert.equal(w.restS, 60);
+  assert.equal(w.items.length, 12);
+  assert.deepEqual(w.items.filter((i) => i.round === 2).map((i) => resolveExercise(i.exercise)?.id), ['run', 'burpee_over_bar', 'pull_up']);
+  assert.match(w.notes ?? '', /máximas repeticiones/);
+  const s = toSession({ ...p, sourceKind: 'whiteboard' }, {}, { id: 'x', startedAt: '2026-11-23T18:00:00Z', durationS: 3600 });
+  const pj = s.blocks![0].sets.filter((x) => x.exerciseId === 'push_jerk');
+  assert.deepEqual(pj.map((x) => x.loadKg), [40, 40, 40, 44]);
+  assert.equal(s.blocks![0].sets.filter((x) => x.exerciseId === 'knees_to_chest').length, 4);
+  assert.equal(s.blocks![1].sets.filter((x) => x.exerciseId === 'pull_up').reduce((a, x) => a + (x.reps ?? 0), 0), 20);
+  const b = buildBlock(w);
+  assert.deepEqual(b.groups.map((g) => g.label), ['Intervalo 1', 'Intervalo 2', 'Intervalo 3', 'Intervalo 4']);
+  const e = buildBlock(f);
+  assert.equal(e.groups.length, 16);
+  assert.equal(e.groups[12].rows[0].targetKg, 44);
+});
+
+test('catálogo de CrossFit: variantes que antes se confundían', () => {
+  const cases: [string, string][] = [['push jerk', 'push_jerk'], ['split jerk', 'split_jerk'], ['jerk', 'jerk'], ['power jerk', 'power_jerk'], ['hang power clean', 'hang_power_clean'],
+    ['hang squat clean', 'hang_squat_clean'], ['S2OH', 'shoulder_to_overhead'], ['G2OH', 'ground_to_overhead'], ['clusters', 'cluster'], ['DB thrusters', 'db_thruster'],
+    ['DB hang clean and jerk', 'db_clean_and_jerk'], ['KB clean', 'kb_clean'], ['Box step overs', 'box_step_over'], ['K2E', 'knees_to_elbow'], ['rodillas al pecho', 'knees_to_chest'],
+    ['BBJO', 'burpee_box_jump_over'], ['burpee pull ups', 'burpee_pull_up'], ['strict HSPU', 'strict_hspu'], ['wall-facing HSPU', 'wall_facing_hspu'], ['sumo deadlift', 'sumo_deadlift'],
+    ['D-ball over shoulder', 'dball_over_shoulder'], ['sandbag cleans', 'sandbag_clean'], ['overhead lunges', 'overhead_lunge'], ['V-ups', 'v_up'], ['hip extensions', 'back_extension'],
+    ['ring rows', 'ring_row'], ['chin ups', 'chin_up'], ['snatch balance', 'snatch_balance'], ['pegboard', 'peg_board'], ['Turkish get up', 'turkish_get_up'], ['slam balls', 'slam_ball'],
+    ['mountain climbers', 'mountain_climber'], ['bar facing burpees', 'bar_facing_burpee'], ['zancadas con salto', 'jumping_lunge'], ['dominadas', 'pull_up']];
+  for (const [txt, id] of cases) assert.equal(resolveExercise(txt)?.id, id, txt);
 });

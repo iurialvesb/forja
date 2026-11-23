@@ -27,7 +27,10 @@ export interface LogRow {
   splitS?: number;               // tiempo parcial del tramo (HYROX)
 }
 export interface LogGroup { id: string; label: string; rows: LogRow[] }
-export interface LogTemplateRow { exercise: string; unit: LogUnit; target?: number; scheme?: number[]; targetKg?: number; targetPct?: number; targetText?: string; rest?: boolean; notes?: string }
+export interface LogTemplateRow { exercise: string; unit: LogUnit; target?: number; scheme?: number[]; targetKg?: number; targetPct?: number; targetText?: string; rest?: boolean; notes?: string;
+  round?: number;                // ronda/intervalo concreto cuando cada ronda es distinta
+  kgByRound?: number[];          // peso de cada ronda cuando la ronda tipo se repite con pesos distintos
+}
 export interface LogBlock {
   id: string;
   part: LogPart;
@@ -92,13 +95,15 @@ function rowFromItem(it: ParsedItem): LogTemplateRow {
     targetKg: it.loadKg, targetPct: pct ? Number(pct[1].replace(',', '.')) : undefined,
     targetText: it.loadText && !pct ? it.loadText : undefined, notes: it.notes,
     scheme: schemeOf(it.repScheme).length > 1 ? schemeOf(it.repScheme) : undefined,
+    round: it.round, kgByRound: it.loadsByRound,
   };
 }
 
-export function rowFromTemplate(t: LogTemplateRow, overrideTarget?: number): LogRow {
+export function rowFromTemplate(t: LogTemplateRow, overrideTarget?: number, round?: number): LogRow {
   const target = overrideTarget ?? t.target;
-  return { id: nid('r'), exercise: t.exercise, unit: t.unit, target, targetKg: t.targetKg, targetPct: t.targetPct, targetText: t.targetText, rest: t.rest, notes: t.notes,
-    done: t.rest ? undefined : target, doneKg: t.targetKg, status: t.rest ? 'done' : 'pending' };
+  const kg = round != null && t.kgByRound?.[round] != null ? t.kgByRound[round] : t.targetKg;
+  return { id: nid('r'), exercise: t.exercise, unit: t.unit, target, targetKg: kg, targetPct: t.targetPct, targetText: t.targetText, rest: t.rest, notes: t.notes,
+    done: t.rest ? undefined : target, doneKg: kg, status: t.rest ? 'done' : 'pending' };
 }
 
 /** Construye la hoja de registro de un bloque. */
@@ -114,7 +119,7 @@ export function buildBlock(sec: ParsedSection & { rests?: number }): LogBlock {
   const restN = Number(sec.notes?.match(/(\d+) minuto\(s\) de descanso/)?.[1] ?? 0);
   if (sec.format === 'emom') {
     for (let k = 0; k < restN; k++) b.template.push({ exercise: 'Descanso', unit: 's', target: sec.emomIntervalS ?? 60, rest: true });
-    b.notes = undefined;
+    b.notes = sec.notes?.replace(/\d+ minuto\(s\) de descanso por ronda\.?\s*/, '').trim() || undefined;
   }
   regroup(b);
   return b;
@@ -134,7 +139,7 @@ export function regroup(b: LogBlock) {
     let minute = 0;
     for (let r = 0; r < rounds; r++) for (const row of t) {
       const a = minute + 1, z = minute + iv / 60;
-      b.groups.push({ id: nid('g'), label: `${z > a ? `Min ${a}–${z}` : `Min ${a}`} · R${r + 1}`, rows: [rowFromTemplate(row)] });
+      b.groups.push({ id: nid('g'), label: `${z > a ? `Min ${a}–${z}` : `Min ${a}`} · R${row.round ?? r + 1}`, rows: [rowFromTemplate(row, undefined, r)] });
       minute += iv / 60;
     }
     return b;
@@ -170,8 +175,17 @@ export function regroup(b: LogBlock) {
     for (let r = 0; r < 8; r++) b.groups.push({ id: nid('g'), label: `Intervalo ${r + 1}`, rows: t.map((x) => ({ ...rowFromTemplate(x), done: undefined })) });
     return b;
   }
+  const word = b.format === 'intervals' ? 'Intervalo' : 'Ronda';
+  // Cada ronda distinta (RONDA 1: thrusters, RONDA 2: pull-ups…): un grupo por ronda con sus ejercicios
+  if (t.some((x) => x.round)) {
+    const common = t.filter((x) => !x.round);
+    const ns = [...new Set(t.map((x) => x.round).filter((n): n is number => !!n))].sort((x, y) => x - y);
+    if (common.length) b.groups.push({ id: nid('g'), label: 'Inicio', rows: common.map((x) => rowFromTemplate(x)) });
+    for (const n of ns) b.groups.push({ id: nid('g'), label: `${word} ${n}`, rows: t.filter((x) => x.round === n).map((x) => rowFromTemplate(x)) });
+    return b;
+  }
   const rounds = b.rounds && b.rounds > 1 ? b.rounds : 1;
-  for (let r = 0; r < rounds; r++) b.groups.push({ id: nid('g'), label: rounds > 1 ? `Ronda ${r + 1}` : 'Trabajo', rows: t.map((x) => rowFromTemplate(x)) });
+  for (let r = 0; r < rounds; r++) b.groups.push({ id: nid('g'), label: rounds > 1 ? `${word} ${r + 1}` : 'Trabajo', rows: t.map((x) => rowFromTemplate(x, undefined, r)) });
   return b;
 }
 

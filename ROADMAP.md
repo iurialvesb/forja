@@ -19,6 +19,7 @@ Estado: ✅ hecho · 🔜 siguiente · 💡 idea
 | Exportación JSON completa y CSV de entrenos | ✅ |
 | Coach con modelo Pro (Gemini de pago) y Flash de reserva | ✅ |
 | Gráficos con paleta validada, tooltip táctil/teclado, leyendas y tabla «Ver datos» | ✅ |
+| Catálogo CrossFit ampliado (159 ejercicios), rondas escritas una a una e intervalos ON/OFF | ✅ |
 
 ## Siguiente
 | Área | Por qué |

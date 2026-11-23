@@ -45,7 +45,10 @@ Reglas estrictas:
 - Esquemas de repeticiones descendentes o por series ("21-15-9", "5-5-3-3-1") van en repScheme, no en reps.
 - Si la pizarra da dos pesos (masculino/femenino, "43/29") o porcentajes, pon el texto en loadText y deja loadKg vacío.
 - Libras → kilos (×0,4536) solo si la unidad está escrita.
-- Abreviaturas habituales: T2B, C2B, HSPU, DU, KBS, WB, BJ, BMU, RMU, OHS, PC, PS, SC, C&J, DL, FS, BS, SP, PP.
+- Abreviaturas habituales: T2B, C2B, K2E, K2C, HSPU, DU, KBS, WB, BJ, BJO, BBJO, BOB, BFB, BMU, RMU, OHS, PC, PS, SC, HPC, HSC, C&J, S2OH, G2OH, DL, FS, BS, SP, PP, PJ, SJ, TGU.
+- Respeta la variante exacta del ejercicio con el nombre de la lista (Push Jerk ≠ Split Jerk ≠ Power Jerk; Hang Power Clean ≠ Hang Squat Clean; Burpees Over Bar ≠ Burpees).
+- Si las rondas se escriben una a una y son iguales, da una ronda tipo con "rounds" = N; si el peso cambia en alguna ronda, indícalo en notes. Si cada ronda es distinta, lista todas las filas.
+- Intervalos "2' ON / 1' OFF": format "intervals", durationMin total y restS del descanso. Las frases explicativas van en notes de la sección.
 - Para capturas de apps (Strava, Apple Fitness, apps de gimnasio) rellena "metrics" con los datos visibles.
 - El resultado del usuario (tiempo, rondas) normalmente no está en la pizarra: no lo supongas.
 Ejercicios conocidos por la app: ${EXERCISES.map((e) => e.name).join(', ')}.`;

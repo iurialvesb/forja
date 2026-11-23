@@ -282,6 +282,17 @@ await page.evaluate(() => { localStorage.removeItem('forja:draft'); });
 await shot('#/nutricion/despensa', '21-despensa-receta', async () => { await page.getByText('Proponme una receta').click(); await page.waitForTimeout(500); });
 await shot('#/coach', '22-coach-resumen');
 await shot('#/inicio', '23-inicio-abajo', async () => { await page.evaluate(() => window.scrollTo(0, 900)); });
+const JERK_IV = "FUERZA – EMOM 16 MIN (4 RONDAS)\n\nRONDA 1:\n- 4 Push Jerk – 40 kg\n- 20 Rodillas al pecho\n- 4 Split Jerk – 40 kg\n- Rest\n\nRONDA 2:\n- 4 Push Jerk – 40 kg\n- 20 Rodillas al pecho\n- 4 Split Jerk – 40 kg\n- Rest\n\nRONDA 3:\n- 4 Push Jerk – 40 kg\n- 20 Rodillas al pecho\n- 4 Split Jerk – 40 kg\n- Rest\n\nRONDA 4:\n- 4 Push Jerk – 44 kg\n- 20 Rodillas al pecho\n- 4 Split Jerk – 44 kg\n- Rest\n\n\nWOD – 4 INTERVALOS (12 MIN)\nFormato: 2 minutos ON / 1 minuto OFF.\nCada intervalo comienza con 200 m de carrera y 7 Burpees Over Bar. Después, realizar máximas repeticiones del ejercicio asignado durante el tiempo restante.\n\nRONDA 1:\n1. 200 m Run\n2. 7 Burpees Over Bar\n3. 4 Thrusters – 40 kg\n4. Rest – 1 min\n\nRONDA 2:\n1. 200 m Run\n2. 7 Burpees Over Bar\n3. 8 Pull-ups – Peso corporal\n4. Rest – 1 min\n\nRONDA 3:\n1. 200 m Run\n2. 7 Burpees Over Bar\n3. 10 Clean – 40 kg\n4. Rest – 1 min\n\nRONDA 4:\n1. 200 m Run\n2. 7 Burpees Over Bar\n3. 12 Pull-ups – Peso corporal\n";
+await shot('#/entrenos', '05k-jerk-intervalos', async () => {
+  await page.getByRole('button', { name: 'Registrar entreno' }).first().click(); await page.waitForTimeout(450); await page.getByRole('button', { name: /Pegar texto/ }).click(); await page.waitForTimeout(300);
+  await page.fill('#wtext', JERK_IV); await page.waitForTimeout(400);
+  const prev = await page.locator('#tprev').innerText({ timeout: 1500 });
+  if (/No entiendo/.test(prev) || !/Push Jerk/.test(prev) || !/Split Jerk/.test(prev)) errors.push(`jerk/intervalos: ${prev.slice(0, 300)}`); else console.log('Push/Split Jerk e intervalos OK');
+  await page.getByRole('button', { name: 'Registrar', exact: true }).click(); await page.waitForSelector('#logger'); await page.waitForTimeout(300);
+  await page.screenshot({ path: `${OUT}/05k-jerk-registro.png` });
+  await page.evaluate(() => document.querySelectorAll('*').forEach((n) => { if (n.scrollHeight > n.clientHeight + 50 && getComputedStyle(n).overflowY !== 'visible') n.scrollTop = n.scrollHeight * 0.62; }));
+  await page.waitForTimeout(200);
+});
 { // Registrar comida: interpretación instantánea en el móvil
   await page.goto('http://forja.test/index.html#/inicio'); await page.waitForTimeout(200); await page.goto('http://forja.test/index.html#/nutricion/hoy'); await page.waitForTimeout(700);
   await page.locator('.addf').first().click(); await page.waitForTimeout(300); await page.getByRole('button', { name: 'Escribir' }).click(); await page.waitForTimeout(400);

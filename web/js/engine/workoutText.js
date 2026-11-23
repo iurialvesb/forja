@@ -35,7 +35,7 @@ function headerKind(line        )                   {
   return null;
 }
 
-                                                                                                                                                                                 
+                                                                                                                                                                                                                 
 
 /** Detecta una línea de formato: "EMOM 24' (4R)", "E2MOM 12", "AMRAP 15 min", "5 RFT", "FOR TIME (TC 12')", "5x5", "TABATA". */
 export function parseFormat(line        )             {
@@ -55,6 +55,15 @@ export function parseFormat(line        )             {
   }
   if ((m = t.match(/(\d+)\s*'?\s*AMRAP\b/))) return { format: 'amrap', durationMin: Number(m[1]), timeCapMin: Number(m[1]) };
   if ((m = t.match(/\bAMRAP\s*(?:DE\s*)?(\d+)?/))) return { format: 'amrap', durationMin: m[1] ? Number(m[1]) : undefined, timeCapMin: m[1] ? Number(m[1]) : undefined };
+  // Intervalos: "4 INTERVALOS (12 MIN)", "2 MINUTOS ON / 1 MINUTO OFF", "40'' ON 20'' OFF", "2' TRABAJO / 1' DESCANSO"
+  const onOff = t.match(/(\d+(?:[.,]\d+)?)\s*('{1,2}|")?\s*(?:ON|TRABAJO|WORK)\b\s*[\/,x×-]?\s*(\d+(?:[.,]\d+)?)\s*('{1,2}|")?\s*(?:OFF|DESCANSO|REST)\b/);
+  const secs = (v        , u         ) => Math.round(Number(v.replace(',', '.')) * (u === "''" || u === '"' ? 1 : 60));
+  const ivN = t.match(/\b(\d+)\s*(?:INTERVALOS?|INTERVALS?|BLOQUES?\s+DE\s+TRABAJO)\b/);
+  if (ivN || onOff) {
+    const dur = t.match(/\(\s*(\d+)\s*'\s*\)/) ?? (ivN ? t.match(/(\d+)\s*'(?!')/) : null);
+    return { format: 'intervals', rounds: ivN ? Number(ivN[1]) : undefined, durationMin: dur ? Number(dur[1]) : undefined,
+      workS: onOff ? secs(onOff[1], onOff[2]) : undefined, restS: onOff ? secs(onOff[3], onOff[4]) : undefined };
+  }
   if (/\bTABATA\b/.test(t)) return { format: 'tabata', durationMin: 4, rounds: 8 };
   if ((m = t.match(/\b(\d+)\s*(?:RFT|RONDAS?\s+(?:POR|FOR)\s+TIEMPO|ROUNDS?\s+FOR\s+TIME)\b/))) return { format: 'for_time', rounds: Number(m[1]), timeCapMin: cap ? Number(cap[1]) : undefined };
   if ((m = t.match(/^(\d+(?:\s*-\s*\d+){1,})\s*(?:FOR TIME|POR TIEMPO|REPS)?/)) && /FOR TIME|POR TIEMPO/.test(t)) return { format: 'for_time', scheme: m[1].replace(/\s/g, ''), timeCapMin: cap ? Number(cap[1]) : undefined };
@@ -67,6 +76,12 @@ export function parseFormat(line        )             {
 }
 
 const REST_RE = /^(rest|descanso|descansa|recupera|recovery|off)\b/i;
+/** "RONDA 1:", "Round 2", "Intervalo 3 –", "Vuelta 4: 10 burpees" → número de ronda (y lo que venga detrás). */
+const ROUND_RE = /^(?:ronda|round|rd|vuelta|intervalo|interval|bloque|tanda)\s*#?\s*(\d{1,2})\s*(?:[:.)\-–]\s*(.*))?$/i;
+/** Frase explicativa ("Cada intervalo comienza con…", "Después, realizar máximas repeticiones…"): va a notas, no es un ejercicio. */
+const isProse = (l        ) => !/^[\-–•*·]?\s*\d/.test(l) && (l.split(/\s+/).length >= 9 || /^(nota|notas|note|objetivo|stimulus|estimulo|estímulo|idea|cada (ronda|intervalo|vuelta|minuto)|despues|después|realizar|realiza|el objetivo)\b/i.test(l));
+
+                                                                                                                       
 
 /** Extrae cargas de cualquier parte de la línea: "@ 50 kg", "50kg", "16KG", "43/29", "@75%", "2x22.5kg", "135 lb". */
 function extractLoad(s        )                                                       {
@@ -111,13 +126,14 @@ export function parseItem(raw        )                    {
   else if (!item.repScheme && (m = s.match(/\s(\d+)\s*[x×]\s*(\d+)\s*$/i))) { item.repScheme = Array(Number(m[1])).fill(m[2]).join('-'); item.reps = undefined; s = s.slice(0, m.index); }
   s = s.replace(/\(\s*\)/g, ' ').replace(/\s+/g, ' ').replace(/^[\s\-–:.)]+/, '').replace(/[\s\-–.:;,(]+$/, '').trim();
   const variants           = [];
+  if (/\b(peso corporal|bodyweight|body weight|bw|sin peso|sin carga)\b/i.test(s)) { variants.push('peso corporal'); s = s.replace(/\b(peso corporal|bodyweight|body weight|bw|sin peso|sin carga)\b/gi, ' ').replace(/\s+/g, ' ').replace(/[\s\-–.:;,(]+$/, '').trim(); }
   if (/heels? (on|elevated)|talones (en|elevados)/i.test(s)) variants.push('talones elevados');
   if (/\bstrict\b|\bestrict[oa]s?\b/i.test(s)) variants.push('estricto');
   if (/\bkipping\b/i.test(s)) variants.push('kipping');
   if (/\b(db|dumbbells?|mancuernas?)\b/i.test(s)) variants.push('mancuerna');
   if (/\b(kb|kettlebells?)\b/i.test(s)) variants.push('kettlebell');
   if (/\bpause|pausa\b/i.test(s)) variants.push('con pausa');
-  if (/over (the )?bar|sobre (la )?barra|facing/i.test(s)) variants.push('sobre la barra');
+  if (/over (the )?bar|sobre (la )?barra|facing/i.test(s) && !['burpee_over_bar', 'bar_facing_burpee'].includes(resolveExercise(s)?.id ?? '')) variants.push('sobre la barra');
   if (variants.length) item.notes = [item.notes, variants.join(', ')].filter(Boolean).join('; ');
   item.exercise = s;
   return item;
@@ -140,7 +156,7 @@ const isNoise = (l        ) => /^(afternoon|morning|evening|lunch|night)\s+(work
 export function parseWorkoutText(text        )                                         {
   const lines = deHomoglyph(text).replace(/\r/g, '').split('\n').map((l) => l.trim()).filter(Boolean);
   const out                                         = { sourceKind: 'whiteboard', sections: [], uncertainties: [], unparsed: [] };
-  let cur                                                        = null;
+  let cur             = null;
   let stationN = 0;
   const close = () => {
     stationN = 0;
@@ -150,8 +166,17 @@ export function parseWorkoutText(text        )                                  
     cur = null;
   };
   lines.forEach((line0, idx) => {
-    let line = line0;
+    let line = line0.replace(/^(formato|format|esquema)\s*:\s*/i, '');
     if (idx === 0 && (isNoise(line) || (!headerKind(line) && !parseFormat(line) && !/\d/.test(line) && !resolveExercise(line)))) { out.title = line; return; }
+    // Rondas escritas una a una: "RONDA 1:" abre un grupo dentro del bloque actual
+    const rm = line.replace(/^[\s\-–•*·>]+/, '').match(ROUND_RE);
+    if (rm) {
+      if (!cur) cur = { kind: 'wod', items: [], rests: 0 };
+      (cur.groups ??= []).push({ start: cur.items.length, rests: cur.rests });
+      stationN = 0;
+      if (!rm[2]?.trim()) return;
+      line = rm[2].trim();
+    }
     const hk = headerKind(line.split(/[:\-–]/)[0]);
     const fmtLine = parseFormat(line);
     if (hk) {
@@ -174,6 +199,11 @@ export function parseWorkoutText(text        )                                  
         return;
       }
     }
+    // "Formato: 2' ON / 1' OFF" completa los intervalos del bloque en curso
+    if (fmtLine?.format === 'intervals' && cur && !cur.items.length && (!cur.fmt || cur.fmt.format === 'intervals')) {
+      cur.fmt = { ...cur.fmt, ...Object.fromEntries(Object.entries(fmtLine).filter(([, v]) => v != null)) }       ;
+      return;
+    }
     if (fmtLine && !/^[\-–•*·]/.test(line) && !(fmtLine.format === 'sets' && cur?.fmt)) {
       if (!cur || cur.fmt || cur.items.length) { const kind            = cur?.kind ?? (fmtLine.format === 'sets' ? 'strength' : 'wod'); close(); cur = { kind, items: [], rests: 0 }; }
       cur .fmt = fmtLine; cur .title = cur .title ?? KIND_LABEL[cur .kind];
@@ -182,7 +212,12 @@ export function parseWorkoutText(text        )                                  
       if (fmtLine.format === 'sets' && sameLine && sameLine !== line.trim()) { const it = parseItem(sameLine); if (it?.exercise) cur .items.push(it); }
       return;
     }
-    const sp = stationPrefix(line);
+    if (isProse(line)) { if (cur) (cur.prose ??= []).push(line.replace(/\.$/, '')); else out.title ??= line; return; }
+    // Lista numerada "1. 200 m Run", "2) 7 burpees": el número es la posición, no las repeticiones
+    let ln = line.match(/^\s*(\d{1,2})[.)]\s+(?=\S)(.*)$/);
+    if (ln && !/^\d/.test(ln[2]) && Number(ln[1]) !== stationN + 1) ln = null;     // "10. burpees" sin lista previa = 10 burpees
+    if (ln) { stationN = Number(ln[1]); line = ln[2]; }
+    const sp = ln ? null : stationPrefix(line);
     if (sp && (sp.explicit || sp.n === stationN + 1)) { stationN = sp.n; line = sp.rest; }
     const setsLine = line.match(/^(\d+)\s*[x×]\s*(\d+)\s+(.+)$/i);
     if (setsLine && !/cal|m\b/i.test(setsLine[2])) {
@@ -211,11 +246,46 @@ export function parseWorkoutText(text        )                                  
   return out;
 }
 
-function finalize(sec                                              , out               ) {
+const sig = (it            ) => [resolveExercise(it.exercise)?.id ?? normalizeName(it.exercise), it.reps, it.repScheme, it.distanceM, it.calories, it.durationS].join('|');
+
+/** Rondas escritas una a una: si son iguales se colapsan en una ronda tipo × N (con el peso de cada ronda); si no, cada ejercicio queda marcado con su ronda. */
+function collapseRounds(sec     )                     {
+  const g = sec.groups;
+  if (!g || g.length < 2) return undefined;
+  const prefix = sec.items.slice(0, g[0].start);
+  const slices = g.map((x, i) => sec.items.slice(x.start, g[i + 1]?.start ?? sec.items.length));
+  const restsPer = g.map((x, i) => (g[i + 1]?.rests ?? sec.rests) - x.rests);
+  const same = slices.every((sl) => sl.length === slices[0].length && sl.every((it, k) => sig(it) === sig(slices[0][k]))) && restsPer.every((r) => r === restsPer[0]) && slices[0].length > 0;
+  if (same) {
+    sec.items = [...prefix, ...slices[0].map((it, k) => {
+      const loads = slices.map((sl) => sl[k].loadKg);
+      if (loads.some((l) => l != null) && new Set(loads).size > 1) it.loadsByRound = loads.map((l) => l ?? it.loadKg ?? 0);
+      return it;
+    })];
+    sec.rests = restsPer[0];
+    return slices.length;
+  }
+  slices.forEach((sl, i) => sl.forEach((it) => { it.round = i + 1; }));
+  return undefined;
+}
+
+function finalize(sec     , out               ) {
+  const nRounds = collapseRounds(sec);
+  const restsNote = (n        ) => `${n} minuto(s) de descanso por ronda`;
+  finalizeFmt(sec, out, nRounds, restsNote);
+  const extra = [...(sec.prose ?? [])];
+  const byRound = sec.items.filter((i) => i.loadsByRound);
+  for (const it of byRound) extra.push(`${displayEx(it.exercise)}: ${it.loadsByRound .map((l, r) => `R${r + 1} ${String(l).replace('.', ',')} kg`).join(', ')}`);
+  if (extra.length) sec.notes = [sec.notes, ...extra].filter(Boolean).join('. ');
+}
+const displayEx = (raw        ) => { const r = resolveExercise(raw); return r ? getExercise(r.id) .name : raw; };
+
+function finalizeFmt(sec     , out               , nRounds                    , restsNote                       ) {
   const f = sec.fmt;
+  if (!f && nRounds) { sec.rounds = nRounds; if (sec.kind === 'wod') sec.format = 'rounds'; }
   if (!f) {
     // "Deadlift 5-5-5-3-3-3" sin formato ni cabecera: son series de fuerza, no un WOD
-    if (sec.items.length && sec.items.length <= 3 && sec.items.every((i) => i.repScheme) && sec.kind === 'wod' && !sec.title) { sec.kind = 'strength'; sec.title = KIND_LABEL.strength; }
+    if (!nRounds && sec.items.length && sec.items.length <= 3 && sec.items.every((i) => i.repScheme) && sec.kind === 'wod' && !sec.title) { sec.kind = 'strength'; sec.title = KIND_LABEL.strength; }
     if (sec.kind === 'strength' && sec.items.some((i) => i.repScheme)) sec.format = 'sets';
     return;
   }
@@ -223,7 +293,8 @@ function finalize(sec                                              , out        
   if (f.timeCapMin) sec.timeCapMin = f.timeCapMin;
   if (f.format === 'emom') {
     sec.emomIntervalS = f.intervalS ?? 60;
-    const slots = sec.items.length + sec.rests;                       // cada línea (incluidos descansos) ocupa un intervalo
+    const slots = sec.items.filter((i) => !i.round || i.round === 1).length + (sec.groups && !nRounds && sec.groups.length > 1 ? Math.round(sec.rests / sec.groups.length) : sec.rests);
+    if (!f.rounds && nRounds) f.rounds = nRounds;                       // cada línea (incluidos descansos) ocupa un intervalo
     const totalIntervals = f.durationMin ? Math.round((f.durationMin * 60) / sec.emomIntervalS) : undefined;
     sec.durationMin = f.durationMin ?? (f.rounds && slots ? (f.rounds * slots * sec.emomIntervalS) / 60 : undefined);
     if (f.rounds) sec.rounds = f.rounds;
@@ -232,13 +303,22 @@ function finalize(sec                                              , out        
       out.uncertainties.push({ field: `emom:${sec.title}`, question: `${sec.title}: ${f.durationMin}' con ${slots} estaciones no da ${f.rounds} rondas exactas. ¿Cuántas rondas hiciste?` });
     }
     if (!sec.rounds) out.uncertainties.push({ field: `emom:${sec.title}`, question: `¿Cuánto duró el EMOM de ${sec.title ?? 'este bloque'} (minutos)?` });
-    if (sec.rests) sec.notes = `${sec.rests} minuto(s) de descanso por ronda`;
+    if (sec.rests) sec.notes = restsNote(sec.rests);
+  } else if (f.format === 'intervals') {
+    const n = nRounds ?? (sec.groups?.length && sec.groups.length > 1 ? sec.groups.length : f.rounds);
+    if (f.workS && f.restS) {
+      sec.restS = f.restS;
+      sec.durationMin = f.durationMin ?? (n ? (n * (f.workS + f.restS)) / 60 : undefined);
+      sec.notes = `${n ? `${n} intervalos de ` : 'Intervalos de '}${f.workS % 60 ? `${f.workS}"` : `${f.workS / 60}'`} de trabajo y ${f.restS % 60 ? `${f.restS}"` : `${f.restS / 60}'`} de descanso`;
+    } else sec.durationMin = f.durationMin;
+    if (nRounds) sec.rounds = nRounds;                                     // rondas iguales: ronda tipo × N
+    else if (!sec.items.some((i) => i.round)) sec.rounds = f.rounds;        // ronda tipo sin desglosar
   } else if (f.format === 'amrap') {
     sec.durationMin = f.durationMin;
   } else if (f.format === 'tabata') {
     sec.rounds = 8; sec.durationMin = 4 * Math.max(1, sec.items.length);
   } else if (f.format === 'for_time' || f.format === 'rounds' || f.format === 'chipper') {
-    if (f.rounds) sec.rounds = f.rounds;
+    if (f.rounds) sec.rounds = f.rounds; else if (nRounds) sec.rounds = nRounds;
     if (f.scheme) for (const it of sec.items) if (!it.repScheme && it.reps == null && it.calories == null && it.distanceM == null) it.repScheme = f.scheme;
   } else if (f.format === 'sets' && f.setsReps) {
     for (const it of sec.items) if (!it.repScheme) { it.repScheme = Array(f.setsReps.sets).fill(String(f.setsReps.reps)).join('-'); it.reps = undefined; }
@@ -246,9 +326,9 @@ function finalize(sec                                              , out        
   if (sec.kind === 'wod' && !sec.format) sec.format = 'for_time';
 }
 
-function stripInternal(s                                              )                {
-  const { rests: _r, fmt: _f, ...rest } = s;
-  void _r; void _f;
+function stripInternal(s     )                {
+  const { rests: _r, fmt: _f, groups: _g, prose: _p, ...rest } = s;
+  void _r; void _f; void _g; void _p;
   return rest;
 }
 
@@ -256,12 +336,12 @@ function stripInternal(s                                              )         
 export function describeParsed(p               )           {
   return p.sections.map((s) => {
     const mult = s.rounds ?? 1;
-    const fmt = s.format === 'emom' ? `EMOM ${s.durationMin ?? '?'}' (${mult} rondas${s.emomIntervalS && s.emomIntervalS !== 60 ? `, cada ${s.emomIntervalS / 60}'` : ''})` : s.format === 'amrap' ? `AMRAP ${s.durationMin ?? '?'}'` : s.format === 'for_time' ? `For Time${s.rounds ? ` ${s.rounds} rondas` : ''}${s.timeCapMin ? ` (cap ${s.timeCapMin}')` : ''}` : s.format ?? '';
+    const fmt = s.format === 'intervals' ? `Intervalos${s.durationMin ? ` ${s.durationMin}'` : ''}${s.rounds ? ` (${s.rounds} rondas)` : ''}` : s.format === 'emom' ? `EMOM ${s.durationMin ?? '?'}' (${mult} rondas${s.emomIntervalS && s.emomIntervalS !== 60 ? `, cada ${s.emomIntervalS / 60}'` : ''})` : s.format === 'amrap' ? `AMRAP ${s.durationMin ?? '?'}'` : s.format === 'for_time' ? `For Time${s.rounds ? ` ${s.rounds} rondas` : ''}${s.timeCapMin ? ` (cap ${s.timeCapMin}')` : ''}` : s.format ?? '';
     const items = s.items.map((i) => {
       const total = i.repScheme ? i.repScheme.split('-').map(Number).reduce((a, b) => a + b, 0) : (i.reps ?? 0) * (s.format === 'emom' || s.format === 'rounds' || s.rounds ? mult : 1);
       const qty = i.calories != null ? `${i.calories * mult} cal` : i.distanceM != null ? `${i.distanceM * mult} m` : total ? `${total} reps` : i.durationS ? `${(i.durationS * mult) / 60}'` : '';
       const ex = resolveExercise(i.exercise); const nm = ex ? getExercise(ex.id) .name : i.exercise;
-      return `${nm}${i.notes ? ` (${i.notes})` : ''}${qty ? ` · ${qty}` : ''}${i.loadKg != null ? ` @ ${i.loadKg} kg` : i.loadText ? ` (${i.loadText})` : ''}`;
+      return `${i.round ? `R${i.round} ` : ''}${nm}${i.notes ? ` (${i.notes})` : ''}${qty ? ` · ${qty}` : ''}${i.loadKg != null ? ` @ ${i.loadKg} kg` : i.loadText ? ` (${i.loadText})` : ''}`;
     });
     return `${s.title ?? KIND_LABEL[s.kind]} — ${fmt}: ${items.join('; ')}`;
   });
