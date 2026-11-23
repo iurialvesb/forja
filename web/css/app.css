@@ -215,7 +215,12 @@ button.eat { flex: none; width: 48px; height: 48px; padding: 0; border-radius: v
 label { display: block; margin: var(--space-sm) 0 var(--space-2xs); font: 500 var(--text-sm)/1.3 var(--font-body); color: var(--color-muted); }
 input, select, textarea { width: 100%; min-height: 44px; padding: var(--space-xs) var(--space-sm); border: var(--rule-hair) solid var(--color-rule); border-radius: var(--radius-card); background: var(--color-paper); color: var(--color-ink); font: 400 var(--text-md)/1.35 var(--font-body); transition: border-color var(--dur-micro) var(--ease-out); }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--color-focus); outline-offset: 0; border-color: var(--color-focus); }
-textarea { min-height: 110px; resize: vertical; } textarea.mono { font: 500 var(--text-sm)/1.45 var(--font-outlier); min-height: 180px; }
+textarea { min-height: 110px; resize: vertical; } textarea.mono { font: 500 var(--text-md)/1.45 var(--font-outlier); min-height: 180px; }
+/* iOS amplía la página al enfocar un campo de menos de 16 px y no la devuelve: los cuadros se salen y se mueven de lado */
+input, select, textarea { font-size: max(16px, 1em); }
+#sheet .panel { overflow-x: hidden; }
+.grid2 > *, .grid3 > * { min-width: 0; }
+.grid2 > button, .grid3 > button { overflow-wrap: anywhere; text-wrap: balance; }
 input[type=checkbox] { width: 22px; height: 22px; min-height: 0; accent-color: var(--color-accent-deep); }
 input[type=range] { padding: 0; min-height: 0; accent-color: var(--color-accent-deep); }
 input.num { width: 60px; min-width: 0; text-align: center; padding: var(--space-xs) var(--space-2xs); font-family: var(--font-outlier); }

@@ -290,6 +290,10 @@ await shot('#/entrenos', '05k-jerk-intervalos', async () => {
   if (/No entiendo/.test(prev) || !/Push Jerk/.test(prev) || !/Split Jerk/.test(prev)) errors.push(`jerk/intervalos: ${prev.slice(0, 300)}`); else console.log('Push/Split Jerk e intervalos OK');
   await page.getByRole('button', { name: 'Registrar', exact: true }).click(); await page.waitForSelector('#logger'); await page.waitForTimeout(300);
   await page.screenshot({ path: `${OUT}/05k-jerk-registro.png` });
+  const ov = await page.evaluate(() => { const p = document.querySelector('#sheet .panel'); const R = p.getBoundingClientRect().right; const bad = [...p.querySelectorAll('*')].filter((n) => n.getBoundingClientRect().right > R - 15 + 0.5 && n.getBoundingClientRect().width > 0).map((n) => `${n.tagName}.${n.className}:${Math.round(n.getBoundingClientRect().right)}`); return { sw: p.scrollWidth, cw: p.clientWidth, R, bad: [...new Set(bad)].slice(0, 15) }; });
+  const small = await page.evaluate(() => [...document.querySelectorAll('input:not([type=checkbox]):not([type=range]), select, textarea')].filter((n) => parseFloat(getComputedStyle(n).fontSize) < 16).map((n) => n.id || n.className));
+  if (small.length) errors.push(`campos de menos de 16 px (iOS hace zoom): ${small.join(', ')}`);
+  if (ov.sw > ov.cw) errors.push(`registro se desborda en horizontal: ${JSON.stringify(ov)}`); else console.log('Registro sin desborde horizontal', JSON.stringify(ov.bad.slice(0, 6)));
   await page.evaluate(() => document.querySelectorAll('*').forEach((n) => { if (n.scrollHeight > n.clientHeight + 50 && getComputedStyle(n).overflowY !== 'visible') n.scrollTop = n.scrollHeight * 0.62; }));
   await page.waitForTimeout(200);
 });

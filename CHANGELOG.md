@@ -6,6 +6,7 @@
 - Intervalos «4 INTERVALOS (12 MIN)» y «2 minutos ON / 1 minuto OFF»; las listas numeradas («1. 200 m Run») ya no se leen como repeticiones y las frases explicativas pasan a notas.
 - «Peso corporal» se anota, no se confunde con el nombre del ejercicio.
 - Arreglo: los ejercicios nuevos se dan de alta en la base de datos (migración 0020); antes guardar fallaba con «session_sets_exercise_id_fkey». Un test impide que vuelva a pasar.
+- Arreglo en iPhone: al pegar texto el cuadro tenía letra de 14 px y Safari ampliaba la página; los módulos se salían por la derecha y se movían de lado. Todos los campos tienen ya 16 px y la hoja no se desplaza en horizontal.
 
 ## Gráficos legibles (skill dataviz)
 - Paleta de gráficos propia y validada para daltonismo y contraste: azul, naranja y verde en orden fijo; rampa de un solo azul para magnitudes.
