@@ -1,5 +1,9 @@
 # Changelog
 
+## Recuperar un entreno borrado
+- Perfil → Intervals.icu → «Recuperar un entreno borrado»: vuelve a traer de Intervals.icu los entrenos de los últimos 14 días que borraste en Forja (con FC, zonas y vueltas).
+- Al importar, un vínculo a una sesión borrada ya no bloquea la importación.
+
 ## Más ejercicios de CrossFit y rondas escritas una a una
 - Catálogo de 62 a 159 ejercicios: Push/Split/Power/Squat Jerk por separado, S2OH, G2OH, Cluster, Hang Power/Squat Clean y Snatch, pulls, Snatch Balance, Knees to Chest («rodillas al pecho»), K2E, V-ups, Burpees Over Bar, BFB, BBJO, Burpee Pull-ups, Strict/Deficit/Wall-facing HSPU, Chin-ups, Ring Rows, Pegboard, mancuerna y kettlebell (DB Thrusters, DHCJ, Box Step Overs, KB Clean, TGU), sacos, D-ball, cargas, accesorios y más.
 - «RONDA 1:», «RONDA 2:»… se entienden: si son iguales se registra una ronda tipo × N con el peso de cada ronda (40-40-40-44 kg); si son distintas, cada ronda va en su grupo.

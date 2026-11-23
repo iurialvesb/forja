@@ -13,7 +13,9 @@ export async function ingestSession(sb: SupabaseClient, userId: string, s: Sessi
   if (source === 'strava') throw new HttpError(400, 'Las actividades de Strava no se guardan como sesiones (API Policy de Strava). Usa Apple Health como fuente.');
   if (s.externalId) {
     const { data: link } = await sb.from('session_sources').select('session_id').eq('user_id', userId).eq('source', source).eq('external_id', s.externalId).maybeSingle();
-    if (link) return { sessionId: link.session_id, merged: false, duplicateOf: link.session_id, prs: [], changes: [] };
+    // Si la sesión vinculada se borró, se vuelve a importar (el vínculo se rehace al final)
+    const { data: alive } = link ? await sb.from('sessions').select('id').eq('id', link.session_id).is('deleted_at', null).maybeSingle() : { data: null };
+    if (link && alive) return { sessionId: link.session_id, merged: false, duplicateOf: link.session_id, prs: [], changes: [] };
   }
   // Candidatas: misma franja de ±6 h.
   const t = Date.parse(s.startedAt);

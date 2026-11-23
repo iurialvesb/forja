@@ -3,6 +3,7 @@
 //                  { action:'pull' }                         → trae lo nuevo de Intervals.icu y lo procesa al momento
 //                  { action:'process' }                      → procesa el siguiente lote del buzón (importación del historial)
 //                  { action:'history', days }                → busca de nuevo en Intervals.icu un periodo largo
+//                  { action:'restore', days }                → vuelve a traer los entrenos borrados en Forja (últimos N días)
 //                  { action:'status' } | { action:'disconnect' }
 //  pg_cron (x-cron-secret): { action:'pull' } → para cada usuario conectado, deja lo nuevo en el buzón y avisa al móvil.
 import webpush from 'npm:web-push@3';
@@ -85,6 +86,19 @@ Deno.serve(handler(async (req) => {
     const r = await pullToInbox(sb, conn, { oldest });
     const { count } = await sb.from('intervals_inbox').select('id', { count: 'exact', head: true }).eq('kind', 'activity').is('processed_at', null);
     return json({ connected: true, found: r.newActivities.length, pending: count ?? 0 });
+  }
+  if (action === 'restore') {
+    // Vuelve a traer de Intervals.icu los entrenos que se borraron en Forja (últimos N días).
+    const since = new Date(Date.now() - (Number(body.days) || 14) * 864e5).toISOString();
+    const { data: rows } = await sb.from('intervals_inbox').select('id, result, payload').eq('user_id', userId).eq('kind', 'activity').not('processed_at', 'is', null).gte('received_at', addDays(todayMadrid(new Date()), -120));
+    const recent = (rows ?? []).filter((r: any) => (r.payload?.start_date ?? r.payload?.start_date_local ?? '') >= since.slice(0, 10) && r.result?.sessionId);
+    const ids = recent.map((r: any) => r.result.sessionId);
+    const { data: dead } = ids.length ? await sb.from('sessions').select('id').in('id', ids).not('deleted_at', 'is', null) : { data: [] };
+    const deadIds = new Set((dead ?? []).map((d: any) => d.id));
+    const redo = recent.filter((r: any) => deadIds.has(r.result.sessionId)).map((r: any) => r.id);
+    if (redo.length) await sb.from('intervals_inbox').update({ processed_at: null, result: null }).in('id', redo);
+    const r = await processIcuInbox(sb, userId, Math.max(12, redo.length));
+    return json({ connected: true, restored: redo.length, ...r });
   }
   if (action === 'pull') {
     try { await pullToInbox(sb, conn); } catch (e) { await sb.from('intervals_connections').update({ last_error: String((e as Error).message ?? e) }).eq('user_id', userId); throw e; }
