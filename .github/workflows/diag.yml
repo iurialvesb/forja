@@ -1,0 +1,17 @@
+name: Diagnóstico
+on:
+  push:
+    paths: ['.github/workflows/diag.yml']
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Registros de menu-plan
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          REF: ${{ secrets.SUPABASE_PROJECT_ID }}
+        run: |
+          S=$(date -u -d '-2 days' +%Y-%m-%dT%H:%M:%SZ); E=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          lg() { echo "== $1"; curl -s -G "https://api.supabase.com/v1/projects/$REF/analytics/endpoints/logs" -H "Authorization: Bearer $TOKEN" --data-urlencode "sql=$2" --data-urlencode "iso_timestamp_start=$S" --data-urlencode "iso_timestamp_end=$E" | jq -c '.result // .' | cut -c1-6000; }
+          lg llamadas "select timestamp, log_attributes['execution_time_ms'] ms, log_attributes['response.status_code'] st from logs where source = 'function_edge_logs' and log_attributes['request.pathname'] like '%menu-plan%' order by timestamp desc limit 15"
+          lg errores "select timestamp, substring(event_message, 1, 400) m from logs where source = 'function_logs' and (event_message ilike '%error%' or event_message ilike '%menu%' or event_message ilike '%gemini%' or event_message ilike '%timeout%') order by timestamp desc limit 25"
