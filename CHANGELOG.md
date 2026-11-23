@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-11-23 · Logo nuevo
+- Icono más tranquilo: rayo azul pizarra sobre gris verdoso claro (opción B), también en la pantalla de entrada.
+
 ## 2026-11-23 · Pesado en crudo
 - Arroz, pasta o legumbre pesados en crudo: el nombre es el alimento («Arroz») y la cantidad dice «80 g en crudo» (Diario, menú, batch, recetas). Las calorías ya eran las del crudo (80 g ≈ 287 kcal). El batch guarda la marca «en crudo» en vez de meterla en el nombre.
 
