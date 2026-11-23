@@ -38,6 +38,7 @@ export const REFERENCE_FOODS         = [
   F('kiwi', 'Kiwi', 61, 1.1, 14.7, 0.5, 3, 92.7, 17, 75),
   F('fresas', 'Fresas', 32, 0.7, 7.7, 0.3, 2, 58.8, 13),
   F('brocoli', 'Brócoli', 34, 2.8, 6.6, 0.4, 2.6, 89.2, 21),
+  F('calabaza', 'Calabaza', 45, 1, 11.7, 0.1, 2, 21, 34),
   F('espinacas', 'Espinacas', 23, 2.9, 3.6, 0.4, 2.2, 28.1, 79),
   F('pimiento_rojo', 'Pimiento rojo', 31, 1, 6, 0.3, 2.1, 127.7, 12),
   F('tomate', 'Tomate', 18, 0.9, 3.9, 0.2, 1.2, 13.7, 11),

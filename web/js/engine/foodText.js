@@ -55,8 +55,24 @@ const singular = (w        ) => (w.length > 4 && w.endsWith('es') && !/(aves|ese
 export const foodTokens = (s        ) => norm(s).split(' ').filter((w) => w && !STOP.has(w) && !/^\d/.test(w) && w !== '%').map(singular);
 
 /** Texto libre → alimentos con gramos y comida (si la dices). */
+const FRAC                         = { 'un cuarto': 0.25, 'un tercio': 1 / 3, 'la mitad': 0.5, mitad: 0.5, medio: 0.5, media: 0.5, 'dos tercios': 2 / 3, 'tres cuartos': 0.75 };
+/** «1/4 de las verduras del horno (150 g de brócoli + 500 g de patata)» → «38 g de brócoli, 125 g de patata»: la parte que comiste de una tanda. */
+export function expandFractions(text        )         {
+  return text.replace(/(\d+(?:[.,]\d+)?\s*\/\s*\d+|un cuarto|un tercio|la mitad|mitad|medio|media|dos tercios|tres cuartos)\s+(?:de\s+)?(?:l[ao]s?\s+|el\s+)?[^(),;\n]*?\(([^)]+)\)/gi, (_m, f        , list        ) => {
+    const fl = f.toLowerCase().replace(/\s+/g, ' ').trim();
+    const k = /\//.test(fl) ? Number(fl.split('/')[0].replace(',', '.')) / Number(fl.split('/')[1]) : FRAC[fl] ?? 1;
+    return list.split(/\+|,|;|\s+y\s+/).map((x) => x.trim()).filter(Boolean).map((x) => {
+      const m = x.match(/^(\d+(?:[.,]\d+)?)\s*(kg|kilos?|g|gr|grs|gramos?|ml|l|litros?)\b/i);
+      if (!m) return x;
+      const n = Number(m[1].replace(',', '.')) * k;
+      const big = /^(kg|kilo|l$|litro)/i.test(m[2]);
+      return `${Math.round(big ? n * 1000 : n)} ${/^(ml|l|litro)/i.test(m[2]) ? 'ml' : 'g'}${x.slice(m[0].length)}`;
+    }).join(', ');
+  });
+}
+
 export function parseFoodText(text        )                 {
-  let t = norm(text).replace(/\bmedio\b/g, ' medio ');
+  let t = norm(expandFractions(text)).replace(/\bmedio\b/g, ' medio ');
   let slot                    ;
   // «como almuerzo», «para cenar», «en la comida»
   for (const [re, s] of SLOTS) {
@@ -68,6 +84,8 @@ export function parseFoodText(text        )                 {
   // Compuestos de diario: se reparten en sus ingredientes con la cantidad típica del acompañamiento.
   t = t.replace(/\bcafe con leche\b/g, 'cafe, 100 ml de leche').replace(/\bcafe cortado\b/g, 'cafe, 30 ml de leche')
     .replace(/\bcon tomate( rallado| triturado)?\b/g, ', 30 g de tomate').replace(/\bcon aceite\b/g, ', 5 g de aceite').replace(/\bcon un chorrito de aceite\b/g, ', 5 g de aceite');
+  // Sinónimos de mercado: patata dulce = boniato; calabaza cacahuete/violín/butternut = calabaza
+  t = t.replace(/\b(patatas? dulces?|batatas?|camotes?)\b/g, 'boniato').replace(/\bcalabaza (cacahuete|violin|butternut|moscada)\b/g, 'calabaza');
   const KEEP_CON = /(arroz con leche|leche con cacao)/;
   const parts = t.split(/[,;+\n]|\s+y\s+|\s+e\s+|\.\s/).flatMap((p) => (KEEP_CON.test(p) ? [p] : p.split(/\s+con\s+/))).map((p) => p.trim()).filter((p) => p.length > 1);
   const items                 = [];

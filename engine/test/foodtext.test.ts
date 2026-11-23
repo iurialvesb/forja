@@ -14,3 +14,11 @@ test('Comida dictada → alimentos y gramos al instante, sin IA', () => {
   assert.deepEqual(ids('una lata de atún de 80 g con 150 g de arroz cocido').items, [['atun_lata_natural', 80], ['arroz_blanco_cocido', 150]]);
   assert.equal(ids('una coca de llanda').items[0][0], null);   // lo desconocido no se inventa: va al servidor
 });
+
+test('parte de una tanda: «1/4 de las verduras del horno (150 g de brócoli + 500 g de patata dulce + 500 g de calabaza)»', () => {
+  const r = parseFoodText('1/4 de las verduras del horno (150 g de brócoli + 500 g de patata dulce + 500 g de calabaza cacahuete)');
+  assert.deepEqual(r.items.map((i) => i.grams), [38, 125, 125]);
+  assert.deepEqual(r.items.map((i) => matchFood(i.name, cat, i.brand, i.cooked)?.id), ['brocoli', 'boniato', 'calabaza']);
+  assert.ok(r.items.every((i) => i.gramsConfidence === 'dicho'));
+  assert.deepEqual(parseFoodText('la mitad del caldo (600 ml de caldo, 200 g de pollo)').items.map((i) => i.grams), [300, 100]);
+});

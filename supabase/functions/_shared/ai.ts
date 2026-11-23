@@ -62,7 +62,9 @@ async function gemini(a: GenArgs): Promise<GenResult> {
   else if (a.smart) body.generationConfig.thinkingConfig = { thinkingLevel: 'low' };   // razona, pero sin pasarse de tiempo
   // Si el modelo está saturado (503) o sin cupo (429), se reintenta y luego se pasa al siguiente modelo.
   // lite: textos sencillos (comidas, despensa) primero con Flash-Lite (≈1 s); smart: primero Pro.
-  const models = [...new Set([...(a.smart && !a.fast ? [Deno.env.get('GEMINI_SMART_MODEL') ?? 'gemini-pro-latest'] : []), ...(a.lite ? ['gemini-flash-lite-latest'] : []), MODEL(), 'gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'])];
+  const models = [...new Set([...(a.smart && !a.fast ? [Deno.env.get('GEMINI_SMART_MODEL') ?? 'gemini-pro-latest'] : []), ...(a.lite ? ['gemini-flash-lite-latest', 'gemini-3.5-flash-lite'] : []), MODEL(), 'gemini-flash-latest', 'gemini-3.5-flash', 'gemini-flash-lite-latest', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'])];
+  // El error que se muestra es el más útil (cupo o saturación), no el «404» del último modelo retirado de la lista.
+  let worst: { status: number; text: string } | undefined;
   let res: Response | undefined;
   let lastStatus = 0;
   const deadline = Date.now() + (a.fast ? 30_000 : 110_000);       // nunca más que esto en total (la función corta a los 150 s)
@@ -82,16 +84,18 @@ async function gemini(a: GenArgs): Promise<GenResult> {
         else delete body.generationConfig.thinkingConfig;
         attempt--; continue;
       }
-      if (res.status === 404) break;                                                 // ese modelo no existe en tu cuenta: siguiente
+      if (res.status === 404) { if (!worst) worst = { status: 404, text: await res.clone().text() }; break; }   // ese modelo no existe en tu cuenta: siguiente
       if (res.status !== 429 && res.status !== 503 && res.status !== 500) break outer;
       lastStatus = res.status;
+      if (!worst || worst.status === 404) worst = { status: res.status, text: await res.clone().text() };
       await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)));
     }
     if (think) body.generationConfig.thinkingConfig = think;
   }
   if (!res!.ok) {
-    const t = await res!.text();
-    const st = res!.status || lastStatus;
+    const useWorst = worst && worst.status !== 404;
+    const t = useWorst ? worst!.text : await res!.text();
+    const st = useWorst ? worst!.status : res!.status || lastStatus;
     if (st === 429) throw new Error('Has llegado al límite de uso de la IA de Google (por minuto o por día). Prueba en un rato.');
     if (st === 503 || st === 500 || st === 504) throw new Error('La IA de Google está saturada o tarda demasiado (lo he intentado con varios modelos). Prueba de nuevo en un minuto.');
     throw new Error(`La IA ha dado un error (${st}). ${t.slice(0, 160)}`);

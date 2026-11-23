@@ -1,5 +1,10 @@
 # Changelog
 
+## IA de comidas y raciones de una tanda
+- Gemini 2.5 Flash-Lite ya no admite cuentas nuevas: Forja pasa a Gemini 3.5 Flash-Lite / 3.5 Flash. Si la IA falla, el aviso dice el motivo real (cupo o saturación) y no el «404» de un modelo retirado.
+- «1/4 de las verduras del horno (150 g de brócoli + 500 g de patata dulce + 500 g de calabaza)» se reparte solo: 38 g + 125 g + 125 g, sin IA. También «la mitad», «un tercio», «tres cuartos».
+- Patata dulce = boniato; calabaza cacahuete/violín = calabaza (nuevo alimento de referencia).
+
 ## Recuperar un entreno borrado
 - Perfil → Intervals.icu → «Recuperar un entreno borrado»: vuelve a traer de Intervals.icu los entrenos de los últimos 14 días que borraste en Forja (con FC, zonas y vueltas).
 - Al importar, un vínculo a una sesión borrada ya no bloquea la importación.
