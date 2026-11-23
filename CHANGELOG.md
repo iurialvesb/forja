@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-23 · «Ya he cocinado» entiende batch reales
+- La IA usa el modelo que razona (antes el rápido sin razonamiento) y sabe de rendimientos: pesos en crudo o con hueso → carne cocinada (cuarto trasero ≈ 42 %), piezas ya comidas, caldo triturado con sus verduras repartido en raciones, arroz/pasta en crudo por ración, pescado del día, «al menos N días», verduras al horno repartidas entre cenas.
+- El resultado se enseña en una hoja: los cálculos que ha hecho, las comidas por día con sus gramos, lo que necesita aclarar (con botón para responder) y lo que no tiene datos nutricionales. Antes era un aviso que se cortaba a dos líneas y no se veían las preguntas.
+
 ## 2026-11-21 · Rediseño completo con Hallmark (tema Sport)
 - Nuevo sistema visual «hoja de resultados»: papel gris hormigón frío, tinta azul-negra, un único acento volt siempre como relleno (botón principal, pestaña actual, selección). Títulos en Saira Condensed en mayúsculas, texto en Albert Sans, tiempos y cifras de datos en JetBrains Mono. Fuentes propias (sin Barlow).
 - Todo color y tipo pasa por tokens (`web/css/tokens.css`, `base.css`); `app.css` reescrito desde cero (antes 114 fallos del mínimo de Hallmark, ahora 0).

@@ -131,8 +131,8 @@ await page.reload(); await page.waitForTimeout(800); if (errors.length) console.
 const shot = async (hash, name, fn) => { await page.evaluate(() => { const s = document.getElementById('sheet'); if (!s.hidden) { s.hidden = true; s.innerHTML = ''; } }); await page.goto(`http://forja.test/index.html${hash}`); await page.waitForTimeout(700); if (fn) { await fn(); await page.waitForTimeout(600); } await page.screenshot({ path: `${OUT}/${name}.png`, fullPage: false }); };
 await shot('#/inicio', '01-inicio');
 await shot('#/plan', '02-plan');
-await shot('#/plan', '02b-plan-ayer', async () => { if (new Date(today + 'T12:00:00Z').getUTCDay() === 1) { await page.getByRole('button', { name: '‹' }).click(); await page.waitForTimeout(500); } const n = new Date(Date.parse(today + 'T12:00:00Z') - 864e5).getUTCDate(); await page.locator('.day', { hasText: String(n).padStart(2, '0') }).first().click(); });
-await shot('#/plan', '03-sesion', async () => { if (new Date(today + 'T12:00:00Z').getUTCDay() === 1) { await page.getByRole('button', { name: '›' }).click(); await page.waitForTimeout(500); } await page.locator('.day').first().click(); await page.waitForTimeout(400); await page.locator('#view .card.row').first().click(); });
+await shot('#/plan', '02b-plan-ayer', async () => { if (new Date(today + 'T12:00:00Z').getUTCDay() === 1) { await page.getByRole('button', { name: 'Anterior' }).first().click(); await page.waitForTimeout(500); } const n = new Date(Date.parse(today + 'T12:00:00Z') - 864e5).getUTCDate(); await page.locator('.day', { hasText: String(n).padStart(2, '0') }).first().click(); });
+await shot('#/plan', '03-sesion', async () => { if (new Date(today + 'T12:00:00Z').getUTCDay() === 1) { await page.getByRole('button', { name: 'Siguiente' }).first().click(); await page.waitForTimeout(500); } await page.locator('.day').first().click(); await page.waitForTimeout(400); await page.locator('#view .card.row').first().click(); });
 await shot('#/entrenos', '04-entrenos');
 const reopen = async () => { await page.goto('http://forja.test/index.html#/inicio'); await page.waitForTimeout(300); await page.goto('http://forja.test/index.html#/entrenos'); await page.waitForTimeout(700); };
 const WOD = `Afternoon Workout\n\nFERZA\nEMOM 10’\n- 6 FRONT SQUATS @ 50 kg\n- 15 HEELS ON PLATE 16KG GOBLET SQUATS\n\nWOD\nEMOM 24’ (4R)\n- 16 CAL ROW\n- 20 DEAD LIFT 50kg\n- 10 BURPEES OVER BAR\n- REST.\n- REST\n- REST.\n\nAMRAP 8\n- 10 wall balls 9kg\n- 10 box jumps`;
@@ -217,6 +217,16 @@ await shot('#/nutricion', '07e-editar-entrada', async () => { await page.locator
 await page.evaluate(() => document.querySelector('#sheet')?.setAttribute('hidden', ''));
 await shot('#/nutricion', '08-compra', () => page.getByRole('button', { name: 'Compra', exact: true }).click());
 await shot('#/nutricion', '09-batch', () => page.getByRole('button', { name: 'Batch', exact: true }).click());
+{ // «Ya he cocinado»: el resultado se enseña en una hoja con cálculos y preguntas (antes, un aviso cortado a dos líneas)
+  const d1 = new Date(Date.now() + 864e5).toISOString().slice(0, 10), d2 = new Date(Date.now() + 2 * 864e5).toISOString().slice(0, 10);
+  FN['menu-plan'] = (b) => (b.action === 'describe' ? { meals: [{ date: d1, slot: 'comida', title: 'Puré de caldo con pollo desmenuzado y arroz', ingredients: [{ name: 'Pollo asado desmenuzado', grams: 130 }, { name: 'Arroz blanco (crudo)', grams: 80 }, { name: 'Verduras del caldo', grams: 360 }] }, { date: d1, slot: 'cena', title: 'Merluza + verduras al horno', ingredients: [{ name: 'Merluza', grams: 180 }, { name: 'Verduras al horno', grams: 230 }] }, { date: d2, slot: 'comida', title: 'Puré de caldo con pollo desmenuzado y arroz', ingredients: [{ name: 'Pollo asado desmenuzado', grams: 130 }, { name: 'Arroz blanco (crudo)', grams: 80 }] }],
+    notes: ['3 cuartos traseros (≈1,24 kg crudos) → ≈520 g de carne cocinada sin piel ni hueso → 130 g por comida (4 comidas).', 'Verduras del caldo (≈1,4 kg) repartidas en 4 purés: ≈360 g por ración.'], questions: ['¿Quieres el puré también el quinto día?'], unresolved: [], pantryUsed: [] } : { ok: true });
+  await page.getByRole('button', { name: /Ya he cocinado/ }).click(); await page.waitForTimeout(500);
+  await page.locator('#ctext').fill('Caldo con 3 cuartos traseros de pollo…'); await page.getByRole('button', { name: 'Añadir a mi menú' }).click();
+  await page.waitForSelector('#sheet[data-state="open"] .well', { timeout: 8000 }); await page.waitForTimeout(450);
+  await page.screenshot({ path: `${OUT}/09b-batch-resultado.png` });
+  await page.getByRole('button', { name: 'Listo' }).click(); await page.waitForTimeout(350);
+}
 await shot('#/nutricion', '10-despensa', () => page.getByRole('button', { name: 'Despensa', exact: true }).click());
 const patches = [];
 page.on('request', (r) => { if (r.method() === 'PATCH' && r.url().includes('pantry_items')) patches.push(r.postData()); });

@@ -467,14 +467,29 @@ function describeCooking() {
       const t = document.getElementById('ctext').value.trim(); if (!t) return;
       try { localStorage.setItem('forja:cooked', t); } catch { /* */ }
       closeSheet();
-      toast('Organizando lo que has cocinado… Puedes seguir usando Forja: te aviso al terminar (suele tardar 20-60 s).', 6000);
+      toast('Organizando tu batch… Sigue usando Forja: te lo enseño al terminar (unos 30–60 s).', 6000);
       api.fn('menu-plan', { action: 'describe', text: t }).then((r) => {
         try { localStorage.removeItem('forja:cooked'); } catch { /* */ }
-        invalidate('nutweek', 'shopping', 'pantry'); render();
-        toast([`${r.meals.length} comidas añadidas a tu menú`, ...(r.pantryUsed?.length ? [`Descontado de casa: ${[...new Set(r.pantryUsed.map((u) => u.from))].join(', ')}`] : []), ...(r.unresolved?.length ? [`Sin datos nutricionales: ${r.unresolved.join(', ')}`] : []), ...(r.questions || [])].join(' · '), 10000);
+        invalidate('nutweek', 'shopping', 'pantry'); render({ soft: true });
+        cookedResult(r);
       }).catch((e) => toast(`No he podido organizarlo: ${e.message}. Tu texto está guardado: vuelve a «Ya he cocinado» y pulsa otra vez.`, 10000));
     })}">Añadir a mi menú</button>
     <p class="xs muted">Esas comidas quedan fijadas (${raw(ic('lock', 17))}): si luego generas el menú, solo se completan las que falten (almuerzos, postres…).</p>`);
+}
+
+/** Resultado del batch: qué queda en el menú, los cálculos (rendimientos, raciones) y lo que hay que aclarar. */
+function cookedResult(r) {
+  const byDate = {}; for (const m of r.meals) (byDate[m.date] ??= []).push(m);
+  const body = html`
+    ${r.notes?.length ? html`<div class="well small" style="margin-bottom:12px">${r.notes.map((n) => html`<div style="margin:4px 0">${n}</div>`)}</div>` : ''}
+    ${Object.keys(byDate).sort().map((d) => html`<div class="sect">${dayName(d)}</div>${byDate[d].map((m) => html`<div class="entry" style="cursor:default"><div class="grow"><div class="en">${slotName(m.slot)} · ${m.title}</div><div class="xs muted">${(m.ingredients ?? []).map((i) => `${i.name} ${i.grams} g`).join(' · ')}</div></div></div>`)}`)}
+    ${r.questions?.length ? html`<div class="card notice" style="display:block">${r.questions.map((q) => html`<div class="small" style="margin:4px 0">${q}</div>`)}<button class="sm" style="margin-top:8px" data-act="${act(describeCooking)}">Aclararlo</button></div>` : ''}
+    ${r.unresolved?.length ? html`<p class="xs muted">Sin datos nutricionales (no cuentan en los macros): ${r.unresolved.join(', ')}</p>` : ''}
+    ${r.pantryUsed?.length ? html`<p class="xs muted">Descontado de casa: ${[...new Set(r.pantryUsed.map((u) => u.from))].join(', ')}</p>` : ''}
+    <button class="primary block" data-act="${act(closeSheet)}">Listo</button>`;
+  const sh = document.getElementById('sheet');
+  if (!sh.hidden && sh.dataset.state === 'open') toast(`Batch organizado: ${r.meals.length} comidas en tu menú`, 4000);
+  else { document.getElementById('toast')?.removeAttribute('data-on'); sheet(`${r.meals.length} comidas en tu menú`, body); }
 }
 
 // ---------------- DESPENSA ----------------

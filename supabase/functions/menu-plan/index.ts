@@ -52,6 +52,7 @@ const describeSchema = { type: 'object', required: ['dishes', 'meals'], properti
   meals: { type: 'array', items: { type: 'object', required: ['date', 'slot', 'dish'], properties: {
     date: { type: 'string', description: 'YYYY-MM-DD' }, slot: { type: 'string', enum: ['desayuno', 'media_manana', 'comida', 'merienda', 'cena'] },
     dish: { type: 'number', description: 'Índice (desde 0) del plato en dishes' }, extra: { type: 'string', description: 'Solo si a ese plato se le añade algo ese día (p. ej. proteína a la plancha en la cena)' } } } },
+  notes: { type: 'array', description: 'Cálculos que has hecho, en una frase cada uno (p. ej. «3 cuartos traseros (≈1,24 kg crudos) → ≈520 g de carne cocinada sin piel ni hueso → 130 g por comida»)', items: { type: 'string' } },
   usedFromPantry: { type: 'array', description: 'Lo gastado de casa al cocinar, total y como lo guarda (seco/crudo)', items: { type: 'object', required: ['nameEs', 'grams'], properties: { nameEs: { type: 'string' }, grams: { type: 'number' } } } },
   questions: { type: 'array', items: { type: 'string' } },
 } };
@@ -59,16 +60,22 @@ const describeSchema = { type: 'object', required: ['dishes', 'meals'], properti
 async function describeCooking(sb: any, userId: string, ctx: any, text: string, weekStart: string) {
   const { data: st } = await sb.from('nutrition_settings').select('preferences').maybeSingle();
   const days = [...Array(10)].map((_, i) => addDays(ctx.today, i)).map((d) => `${d} (${new Intl.DateTimeFormat('es-ES', { weekday: 'long', timeZone: 'UTC' }).format(new Date(`${d}T12:00:00Z`))})`);
-  const r0 = await structured<{ dishes: any[]; meals: any[]; usedFromPantry?: { nameEs: string; grams: number }[]; questions?: string[] }>(sb, {
+  const r0 = await structured<{ dishes: any[]; meals: any[]; notes?: string[]; usedFromPantry?: { nameEs: string; grams: number }[]; questions?: string[] }>(sb, {
     system: `Eres dietista deportivo. El usuario cuenta lo que ha cocinado (batch cooking) y qué va a comer cada día. Conviértelo en comidas por día y franja.
 - Usa las fechas reales de la lista (hoy es ${ctx.today}). "mañana", "el lunes", "de lunes a jueves" → fechas concretas.
 - Cada plato UNA vez en dishes (ingredientes por ración) y en meals qué fecha y franja lo comes. Si reparte un guiso en N táperes, cada ración = total / N. Si no dice cantidades, raciones típicas españolas para un deportista.
 - Gramos en el estado indicado en queryEn (normalmente cocinado).
 - Él solo cocina en batch las comidas y la guarnición de las cenas; la ensalada se la hace el día antes. Si en la cena solo hay guarnición, crea un plato «guarnición + proteína a la plancha» con una proteína sencilla (pollo, huevos o pescado).
-- No inventes platos que no menciona. Pregunta en "questions" lo que no quede claro.
+- Pesos en crudo o con hueso: calcula lo comestible cocinado y explícalo en "notes". Referencias: cuarto trasero de pollo asado ≈ 42 % del peso crudo en carne sin piel ni hueso; muslo deshuesado ≈ 70 %; pechuga ≈ 75 %; la carcasa es para el caldo (no cuenta como carne). Si dice que ya se ha comido una pieza, réstala en proporción.
+- Caldo: si lo tritura con sus verduras, esas verduras (y unos 250 ml de caldo de pollo) van repartidas a partes iguales en las raciones del puré. Usa queryEn de verduras cocidas.
+- Arroz, pasta o legumbre en crudo por ración (p. ej. «80 g de arroz en crudo»): ponlo en crudo con queryEn «rice white raw» (o similar) y esos gramos.
+- Lo que cocina cada día (pescado a la plancha…): ración típica (merluza 180 g, salmón 150 g en crudo). Si da dos opciones, altérnalas.
+- «Al menos N días»: N comidas desde la próxima franja libre (si hoy ya es por la tarde, desde mañana); di en "questions" si quiere más.
+- Verduras al horno para varias cenas: total / número de cenas.
+- No inventes platos que no menciona. Pregunta en "questions" lo que no quede claro (máximo 2 preguntas).
 - En usedFromPantry pon lo que ha gastado de casa (total, no por ración), tal como lo tiene guardado (en seco/crudo).
 Preferencias: ${st?.preferences ?? 'sin indicar'}`,
-    text: `Días: ${days.join(', ')}\n\nLo que cuenta:\n${text}`, tool: 'comidas_cocinadas', schema: describeSchema, maxTokens: 3500, fast: true });
+    text: `Ahora: ${ctx.today} ${new Intl.DateTimeFormat('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' }).format(new Date())}\nDías: ${days.join(', ')}\n\nLo que cuenta:\n${text}`, tool: 'comidas_cocinadas', schema: describeSchema, maxTokens: 6000, smart: true });
   const r = { ...r0, meals: r0.meals.filter((m) => r0.dishes[m.dish]).map((m) => ({ date: m.date, slot: m.slot, title: m.extra ? `${r0.dishes[m.dish].name} + ${m.extra}` : r0.dishes[m.dish].name, ingredients: r0.dishes[m.dish].ingredients })) };
   const cache = new Map<string, any>();
   const names = [...new Map(r.meals.flatMap((m) => m.ingredients).map((i: any) => [i.nameEs.toLowerCase(), i])).values()];
@@ -85,7 +92,7 @@ Preferencias: ${st?.preferences ?? 'sin indicar'}`,
   const d = await deductPantry(sb, used);
   const weeks = [...new Set(rows.map((x) => mondayOf(x.date)))];
   for (const w of weeks.length ? weeks : [weekStart]) await computeWeek(sb, ctx, w, true);
-  return { meals: rows.map((x) => ({ date: x.date, slot: x.slot, title: x.title })), questions: r.questions ?? [], unresolved: [...new Set(unresolved)], pantryUsed: d.used, pantryMissing: d.missing };
+  return { meals: rows.map((x) => ({ date: x.date, slot: x.slot, title: x.title, ingredients: x.ingredients.map((i: any) => ({ name: i.name, grams: i.grams })) })), notes: r0.notes ?? [], questions: r.questions ?? [], unresolved: [...new Set(unresolved)], pantryUsed: d.used, pantryMissing: d.missing };
 }
 
 Deno.serve(handler(async (req) => {
