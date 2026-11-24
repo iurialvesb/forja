@@ -1,5 +1,11 @@
 # Changelog
 
+## Arreglos de Salud
+- Tira de días ordenada de hoy (izquierda) hacia atrás; flechas de día anterior/siguiente; enlace «Ver sueño y salud por días» en Inicio.
+- Atajo: las duraciones «m:ss» de Atajos se leían como horas (90 h de profundo); ahora se leen bien, y los segundos sueltos también. Las claves se aceptan con tildes, mayúsculas o espacios («básico »).
+- Guía: el filtro «in the last 1 day» cuenta desde ayer a las 00:00 y sumaba dos noches; ahora se usa Adjust Date (−16 h).
+- Accesibilidad: «Ver datos» con 44 px de toque y jerarquía de títulos sin saltos.
+
 ## Salud día a día
 - Salud se abre tocando Sueño · VFC · Reposo en Inicio y ahora va por días: tira de los últimos 14 días (cada uno con su barrita de horas) y ficha del día elegido con la noche (total, fases, nota), VFC, pulso en reposo, pasos, respiración, oxígeno y temperatura de muñeca, cada uno comparado en palabras con tu media de 7 días, más los entrenos de ese día.
 - Tendencia (7/30/90 días): sueño en barras apiladas por fases (profundo, básico, REM; gris si esa noche no hay fases) y pasos; tocar una barra abre ese día.

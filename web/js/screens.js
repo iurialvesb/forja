@@ -59,6 +59,7 @@ export async function HOME() {
           <div><div class="l">${raw(ic('pulse', 13))} VFC${notToday(H.hrv?.r?.date, H.today)}</div><div class="v">${H.hrv ? html`<span data-count="${Math.round(H.hrv.v)}">${Math.round(H.hrv.v)}</span>` : '–'}<small> ms</small></div></div>
           <div><div class="l">${raw(ic('heart', 13))} Reposo${notToday(H.rhr?.r?.date, H.today)}</div><div class="v">${H.rhr ? html`<span data-count="${H.rhr.v}">${H.rhr.v}</span>` : '–'}<small> ppm</small></div></div>
         </div>
+        <a class="hero-more" href="#/salud">Ver sueño y salud por días ${raw(ic('chevron', 14))}</a>
       </div>
       ${noWod.map((s) => html`<div class="card tight row notice"><span class="bub" style="width:40px;height:40px;background:var(--accentSoft);color:var(--accent2)">${raw(ic('watch', 22))}</span><div class="grow"><b class="small">${sessionName(s)} · ${timeOf(s.started_at)}</b><div class="xs muted">Llegó del Apple Watch sin el WOD.</div></div><button class="sm primary" data-act="${act(() => addWodTo(s))}">Añadir WOD</button></div>`)}
       ${todayCard(t, todays, nd, nut, supLogs)}
@@ -142,8 +143,8 @@ export async function HEALTH(params = []) {
   const sleepMean = (() => { const v = prev7.map((d) => num(by[d]?.sleep_h) ?? (asleepOf(nb[d]) != null ? asleepOf(nb[d]) / 60 : null)).filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; })();
   const hrvM = mean('hrv_ms'), hrvS = sd7('hrv_ms');
   const go2 = (d, n = span) => `salud/${n}/${d}`;
-  // Tira de días (14): cada chip lleva una barrita con las horas de sueño
-  const strip = [...Array(14)].map((_, i) => addDays(t, -(13 - i)));
+  // Tira de días (14, de hoy hacia atrás): cada chip lleva una barrita con las horas de sueño
+  const strip = [...Array(14)].map((_, i) => addDays(t, -i));   // más reciente a la izquierda
   const chip = (d) => { const h = num(by[d]?.sleep_h) ?? (asleepOf(nb[d]) != null ? asleepOf(nb[d]) / 60 : null); const wd = dayName(d).split(' ')[0].replace('.', '');
     return html`<a class="dchip ${d === D ? 'on' : ''} ${hasDay(d) ? '' : 'empty'}" href="#/${go2(d)}" aria-current="${d === D ? 'date' : 'false'}" aria-label="${dayName(d, true)}${h != null ? `, ${fmtSleep(h)} de sueño` : ''}">
       <span class="wd">${wd}</span><b>${d.slice(8).replace(/^0/, '')}</b><span class="mb"><i style="height:${h != null ? Math.min(100, (h / 10) * 100) : 0}%"></i></span><span class="hh">${h != null ? fmtSleep(h).replace(' ', '') : '–'}</span></a>`; };
@@ -180,6 +181,7 @@ export async function HEALTH(params = []) {
   const hasStagesEver = nights.some((n) => asleepOf(n) != null);
   const others = sessions.filter((s) => (s.started_at ?? '').slice(0, 10) !== D).slice(0, 10);
   return {
+    after: () => { const on = document.querySelector('.dstrip .dchip.on'); if (on && on.previousElementSibling) on.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' }); },
     title: 'Salud', sub: 'Día a día',
     right: html`<button class="icon-btn" aria-label="Cerrar" data-act="${act(() => go('inicio'))}">✕</button>`,
     body: html`
@@ -187,7 +189,11 @@ export async function HEALTH(params = []) {
         <ol class="small"><li>Abre <b>HealthFit</b> → pestaña <b>Ajustes</b> → <b>Intervals.icu</b>.</li><li>Activa <b>Sincronizar datos de salud / Health metrics</b> (sueño, VFC, FC en reposo, peso, pasos).</li><li>Pulsa <b>Sincronizar ahora</b>. En unos minutos aparece aquí (traigo los últimos 120 días).</li></ol></div>` : ''}
       <nav class="dstrip" aria-label="Elige un día">${strip.map(chip)}</nav>
       <section class="card dcard">
-        <div class="dhead"><h3>${dayName(D, true)}</h3><span class="small muted">${D === t ? 'Hoy · ' : ''}noche del ${addDays(D, -1).slice(8).replace(/^0/, '')} al ${D.slice(8).replace(/^0/, '')}</span></div>
+        <div class="dhead">
+          <button class="icon-btn" aria-label="Día anterior" data-act="${act(() => go(go2(addDays(D, -1))))}">${raw(ic('back', 18))}</button>
+          <div class="grow"><h2 class="h3">${dayName(D, true)}</h2><span class="small muted">${D === t ? 'Hoy · ' : ''}noche del ${addDays(D, -1).slice(8).replace(/^0/, '')} al ${D.slice(8).replace(/^0/, '')}</span></div>
+          <button class="icon-btn" aria-label="Día siguiente" ${D >= t ? 'disabled' : ''} data-act="${act(() => go(go2(addDays(D, 1))))}">${raw(ic('chevron', 18))}</button>
+        </div>
         <div class="dsleep"><div class="l">${raw(ic('moon', 14))} Sueño</div>
           <div class="kpi">${sleepH != null ? fmtSleep(sleepH) : '–'}</div>
           ${vsAvg(sleepH, sleepMean, (v) => fmtSleep(v).replace(/^0h /, ''), { tol: 0.15 })}
@@ -254,7 +260,7 @@ function todayCard(t, todays, nd, nut, supLogs) {
     invalidate('suplog', 'supps'); render();
   });
   return html`<div class="card">
-    <div class="row"><h3 class="grow">Hoy <small class="muted" style="font-weight:400">${dayName(t, true)}</small></h3>${items.length ? html`<span class="tag ${doneN === items.length ? 'green' : 'accent'}">${doneN}/${items.length}</span>` : ''}</div>
+    <div class="row"><h2 class="h3 grow">Hoy <small class="muted" style="font-weight:400">${dayName(t, true)}</small></h2>${items.length ? html`<span class="tag ${doneN === items.length ? 'green' : 'accent'}">${doneN}/${items.length}</span>` : ''}</div>
     ${items.length ? bar(doneN, items.length, 'var(--green)') : ''}
     <div class="xs muted" style="margin-top:8px">Entreno</div>
     ${todays.length ? todays.map((s) => { const st = planState(s); const rec = !s.from_calendar && !s.reserved && s.discipline === 'crossfit' && s.status !== 'done';

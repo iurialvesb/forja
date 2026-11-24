@@ -269,7 +269,7 @@ await page.evaluate(() => window.scrollTo(0, 900)); await page.screenshot({ path
 { // Elegir un día: tocar un chip de la tira cambia la ficha del día
   const chips = page.locator('.dstrip .dchip'); const n = await chips.count();
   await chips.nth(n - 3).click(); await page.waitForTimeout(500);
-  const h = await page.locator('.dcard .dhead h3').innerText({ timeout: 1500 });
+  const h = await page.locator('.dcard .dhead h2').innerText({ timeout: 1500 });
   const on = await page.locator('.dstrip .dchip.on').count();
   if (n !== 14 || on !== 1 || !/\d/.test(h)) errors.push(`salud día a día: chips ${n}, activo ${on}, título «${h}»`); else console.log('Salud día a día OK:', h);
   await page.screenshot({ path: `${OUT}/25c-salud-dia.png` });
@@ -398,7 +398,7 @@ if (process.env.AUDIT) {
     for (const svg of document.querySelectorAll('#view svg, #top svg, #tabs svg')) { if (!vis(svg) || svg.closest('.ring,.chart,.spark,svg svg') || svg.getAttribute('aria-hidden') === 'true' || svg.getAttribute('role') === 'img') continue; if (svg.closest('button,a,.l,.tag,.bub,.ico,summary,.small,div')) { out.deco.push(desc(svg.parentElement)); } }
     // Desbordes horizontales
     if (document.documentElement.scrollWidth > innerWidth + 1) out.overflow.push(`página ${document.documentElement.scrollWidth}px > ${innerWidth}px`);
-    for (const el of document.querySelectorAll('#view *')) { if (el.closest('.hscroll,.chips,.days,pre,.scroll-x,table')) continue; const r = el.getBoundingClientRect(); if (r.right > innerWidth + 2 && vis(el) && getComputedStyle(el).position !== 'fixed') { out.overflow.push(desc(el) + ` → ${Math.round(r.right)}`); if (out.overflow.length > 6) break; } }
+    for (const el of document.querySelectorAll('#view *')) { if (el.closest('.hscroll,.chips,.days,.dstrip,pre,.scroll-x,table')) continue; const r = el.getBoundingClientRect(); if (r.right > innerWidth + 2 && vis(el) && getComputedStyle(el).position !== 'fixed') { out.overflow.push(desc(el) + ` → ${Math.round(r.right)}`); if (out.overflow.length > 6) break; } }
     for (const k of Object.keys(out)) out[k] = [...new Set(out[k])];
     return out;
   });
@@ -414,6 +414,9 @@ if (process.env.AUDIT) {
       const r = await AUD();
       for (const k of Object.keys(r)) for (const x of r[k]) total[k].add(`[${lbl} ${route}${tab ? ' ' + tab : ''}] ${x}`);
       if (lbl !== '390') await page.screenshot({ path: `${OUT}/aud-${lbl}-${(route + (tab ?? '')).replace(/[#/ ]+/g, '_')}.png` });
+      if (lbl === '390' && process.env.DUMP) { const { writeFileSync, mkdirSync: mk } = await import('node:fs'); mk(path.join(OUT, '..', 'dump'), { recursive: true });
+        const htmlx = (await page.content()).replace(/<script[\s\S]*?<\/script>/g, '').replace(/href="(css\/[^"]+)"/g, (m, h) => `href="../../web/${h}"`);
+        writeFileSync(path.join(OUT, '..', 'dump', `${(route + (tab ?? '')).replace(/[#/ ]+/g, '_')}.html`), htmlx); }
     }
   }
   // Texto grande (200 %): ¿se rompe algo?

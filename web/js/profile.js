@@ -187,13 +187,14 @@ export async function health() {
     <h3>Crear el Atajo (una vez)</h3>
     <ol class="small">
       <li>Abre <b>Shortcuts</b> → <b>＋</b> → nómbralo «Forja Sleep».</li>
-      <li><b>Find Health Samples</b> → <i>Sleep Analysis</i>, filtro <i>Value is Deep</i> y <i>Start Date is in the last 18 hours</i>. Después <b>Get Details of Health Samples</b> → <i>Duration</i>.</li>
+      <li>Primero <b>Adjust Date</b>: <i>Subtract 16 hours from Current Date</i> (así solo cuenta la última noche).</li>
+      <li><b>Find Health Samples</b> → <i>Sleep Analysis</i>, filtros <i>Value is Deep</i> y <i>Start Date is after</i> → <i>Adjusted Date</i>. Después <b>Get Details of Health Samples</b> → <i>Duration</i>.</li>
       <li>Duplica esas dos acciones para <i>REM</i>, <i>Core</i> y <i>Awake</i>.</li>
       <li><b>Get Contents of URL</b>: la URL de arriba · Method <i>POST</i> · Header <code>x-forja-token</code> = tu token · Request Body <i>JSON</i> con <code>profundo</code>, <code>rem</code>, <code>basico</code>, <code>despierto</code> → cada uno con su <i>Details of Health Samples</i>. Forja suma las duraciones y entiende minutos, horas o segundos.</li>
       <li><b>Automation</b> → <b>＋</b> → <i>Time of Day</i> 9:00 · Daily → <i>Run Immediately</i> → «Forja Sleep».</li>
     </ol>
     <h3>Añadir más datos (opcional)</h3>
-    <p class="small">Mismo patrón: <b>Find Health Samples</b> (tipo de abajo, <i>Start Date is in the last 1 day</i>) → <b>Get Details of Health Samples</b> → <i>Value</i> → nuevo campo en el JSON con esta clave:</p>
+    <p class="small">Mismo patrón: <b>Find Health Samples</b> (tipo de abajo, <i>Start Date is after Adjusted Date</i>) → <b>Get Details of Health Samples</b> → <i>Value</i> → nuevo campo en el JSON con esta clave:</p>
     <ul class="small">
       <li><i>Respiratory Rate</i> → <code>respiracion</code> (respiraciones por minuto dormido)</li>
       <li><i>Blood Oxygen Saturation</i> → <code>oxigeno</code></li>

@@ -1,0 +1,86 @@
+<!DOCTYPE html><html lang="es" data-dir="1" class=""><head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="Forja: tu plan de carrera, CrossFit, HYROX y nutrición en una sola app.">
+  <meta name="theme-color" content="#f7f9fb">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Forja">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="../../web/css/app.css">
+  <title>Forja</title>
+</head>
+<body>
+  <div id="app">
+    <header id="top"><h1>Nutrición</h1><button class="icon-btn" aria-label="Objetivos de nutrición" data-act="a2582"><svg class="ic" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="4.5"></circle><circle cx="12" cy="12" r="1"></circle></svg></button></header>
+    <main id="view"><div class="chips subtabs"><button class="chip " data-act="a2541">Diario</button><button class="chip " data-act="a2542">Menú</button><button class="chip " data-act="a2543">Compra</button><button class="chip " data-act="a2544">Batch</button><button class="chip on" data-act="a2545">Despensa</button><button class="chip " data-act="a2546">Suplementos</button></div>
+    <div class="psearch"><input id="pq" type="search" placeholder="Buscar en casa…" autocomplete="off" oninput="for (const r of document.querySelectorAll('.pitem')) r.style.display = r.dataset.name.includes(this.value.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')) ? '' : 'none'"></div>
+    <div class="chips"><button class="chip on" data-act="a2547">Todo <span class="muted">8</span></button><button class="chip " data-act="a2548">Congelador <span class="muted">1</span></button><button class="chip " data-act="a2549">Nevera <span class="muted">2</span></button><button class="chip " data-act="a2550">Despensa <span class="muted">5</span></button></div>
+    <div class="card notice"><div class="small alert"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5V12l3 2"></path></svg> Caduca pronto: Yogur griego 0 % (26 nov), Yogur natural (25 nov)</div>
+      <button class="sm" style="margin-top:8px" data-act="a2551"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11h13a0 0 0 0 1 0 0v1a6 6 0 0 1-6 6H9a6 6 0 0 1-6-6v-1ZM16 12h5"></path><path d="M8 7c0-1 1-1 1-2M11.5 7c0-1 1-1 1-2"></path></svg> Proponme una receta con esto</button></div>
+    <div class="grid2"><button class="primary" data-act="a2552"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg> Añadir</button><button data-act="a2553"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6v12M7 6v12M10.5 6v12M13 6v12M16.5 6v12M20 6v12"></path></svg> Escanear</button></div>
+    <div data-loc="congelador" class="ploc"><h2>Congelador <small>1</small></h2>
+      <div class="card tight list"><div class="item prod pitem" data-pid="p1" data-name="pechuga de pollo ">
+    <span class="drag" aria-label="Mover">⠿</span>
+    <span data-act="a2555"><div class="noimg"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3v8a3 3 0 0 0 3 3v7M10 3v6M13 3v8a3 3 0 0 1-3 3"></path><path d="M17 3c-1.7 1.2-2.5 3.4-2.5 6.5 0 1.6 1 2.5 2.5 2.5V21"></path></svg></div></span>
+    <div class="grow" data-act="a2556"><div class="small" style="font-weight:650">Pechuga de pollo</div><div class="pq"><b>600 g</b><span class="muted"> de 1 kg</span></div><div class="bar"><i style="width:60%;background:var(--color-ink-2)"></i></div></div>
+    <button class="sm" data-act="a2554">Usar</button>
+  </div>
+        </div></div><div data-loc="nevera" class="ploc"><h2>Nevera <small>2</small></h2>
+      <div class="card tight list"><div class="item prod pitem" data-pid="p3" data-name="yogur griego 0 % ">
+    <span class="drag" aria-label="Mover">⠿</span>
+    <span data-act="a2558"><div class="noimg"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3v8a3 3 0 0 0 3 3v7M10 3v6M13 3v8a3 3 0 0 1-3 3"></path><path d="M17 3c-1.7 1.2-2.5 3.4-2.5 6.5 0 1.6 1 2.5 2.5 2.5V21"></path></svg></div></span>
+    <div class="grow" data-act="a2559"><div class="small" style="font-weight:650">Yogur griego 0 %</div><div class="pq"><b>500 g</b><span class="muted"> de 1 kg</span></div><div class="bar"><i style="width:50%;background:var(--color-ink-2)"></i></div><div class="xs alert">caduca 26 nov</div></div>
+    <button class="sm" data-act="a2557">Usar</button>
+  </div><div class="item prod pitem" data-pid="pk3" data-name="huevos camperos ">
+    <span class="drag" aria-label="Mover">⠿</span>
+    <span data-act="a2562"><div class="noimg"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3v8a3 3 0 0 0 3 3v7M10 3v6M13 3v8a3 3 0 0 1-3 3"></path><path d="M17 3c-1.7 1.2-2.5 3.4-2.5 6.5 0 1.6 1 2.5 2.5 2.5V21"></path></svg></div></span>
+    <div class="grow" data-act="a2563"><div class="small" style="font-weight:650">Huevos camperos</div><div class="pq"><b>17</b> <span class="muted">huevos de 24</span></div>
+      <div class="dots-row"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i></div></div>
+    <div class="stepper"><button aria-label="Quitar una" data-act="a2560">−</button><button aria-label="Añadir una" data-act="a2561">+</button></div>
+  </div>
+        </div></div><div data-loc="despensa" class="ploc"><h2>Despensa <small>5</small></h2>
+      <div class="card tight list"><div class="item prod pitem" data-pid="p2" data-name="arroz blanco ">
+    <span class="drag" aria-label="Mover">⠿</span>
+    <span data-act="a2565"><div class="noimg"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3v8a3 3 0 0 0 3 3v7M10 3v6M13 3v8a3 3 0 0 1-3 3"></path><path d="M17 3c-1.7 1.2-2.5 3.4-2.5 6.5 0 1.6 1 2.5 2.5 2.5V21"></path></svg></div></span>
+    <div class="grow" data-act="a2566"><div class="small" style="font-weight:650">Arroz blanco</div><div class="pq"><b>1 kg</b></div><div class="bar"><i style="width:100%;background:var(--color-ink-2)"></i></div></div>
+    <button class="sm" data-act="a2564">Usar</button>
+  </div><div class="item prod pitem" data-pid="pk1" data-name="pure de patatas en sobres hacendado">
+    <span class="drag" aria-label="Mover">⠿</span>
+    <span data-act="a2569"><div class="noimg"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3v8a3 3 0 0 0 3 3v7M10 3v6M13 3v8a3 3 0 0 1-3 3"></path><path d="M17 3c-1.7 1.2-2.5 3.4-2.5 6.5 0 1.6 1 2.5 2.5 2.5V21"></path></svg></div></span>
+    <div class="grow" data-act="a2570"><div class="small" style="font-weight:650">Puré de patatas en sobres <span class="muted xs">Hacendado</span></div><div class="pq"><b>2</b> <span class="muted">sobres de 4</span></div>
+      <div class="dots-row"><i class="on"></i><i class="on"></i><i class=""></i><i class=""></i></div></div>
+    <div class="stepper"><button aria-label="Quitar una" data-act="a2567">−</button><button aria-label="Añadir una" data-act="a2568">+</button></div>
+  </div><div class="item prod pitem" data-pid="pk2" data-name="yogur natural hacendado">
+    <span class="drag" aria-label="Mover">⠿</span>
+    <span data-act="a2573"><div class="noimg"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3v8a3 3 0 0 0 3 3v7M10 3v6M13 3v8a3 3 0 0 1-3 3"></path><path d="M17 3c-1.7 1.2-2.5 3.4-2.5 6.5 0 1.6 1 2.5 2.5 2.5V21"></path></svg></div></span>
+    <div class="grow" data-act="a2574"><div class="small" style="font-weight:650">Yogur natural <span class="muted xs">Hacendado</span></div><div class="pq"><b>5</b> <span class="muted">yogures de 6</span></div>
+      <div class="dots-row"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class=""></i></div><div class="xs alert">caduca 25 nov</div></div>
+    <div class="stepper"><button aria-label="Quitar una" data-act="a2571">−</button><button aria-label="Añadir una" data-act="a2572">+</button></div>
+  </div><div class="item prod pitem" data-pid="pk4" data-name="atun claro al natural ">
+    <span class="drag" aria-label="Mover">⠿</span>
+    <span data-act="a2577"><div class="noimg"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3v8a3 3 0 0 0 3 3v7M10 3v6M13 3v8a3 3 0 0 1-3 3"></path><path d="M17 3c-1.7 1.2-2.5 3.4-2.5 6.5 0 1.6 1 2.5 2.5 2.5V21"></path></svg></div></span>
+    <div class="grow" data-act="a2578"><div class="small" style="font-weight:650">Atún claro al natural</div><div class="pq"><b>3</b> <span class="muted">latas de 3</span></div>
+      <div class="dots-row"><i class="on"></i><i class="on"></i><i class="on"></i></div></div>
+    <div class="stepper"><button aria-label="Quitar una" data-act="a2575">−</button><button aria-label="Añadir una" data-act="a2576">+</button></div>
+  </div><div class="item prod pitem" data-pid="pk5" data-name="macarrones ">
+    <span class="drag" aria-label="Mover">⠿</span>
+    <span data-act="a2580"><div class="noimg"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3v8a3 3 0 0 0 3 3v7M10 3v6M13 3v8a3 3 0 0 1-3 3"></path><path d="M17 3c-1.7 1.2-2.5 3.4-2.5 6.5 0 1.6 1 2.5 2.5 2.5V21"></path></svg></div></span>
+    <div class="grow" data-act="a2581"><div class="small" style="font-weight:650">Macarrones</div><div class="pq"><b>340 g</b><span class="muted"> de 500 g</span></div><div class="bar"><i style="width:68%;background:var(--color-ink-2)"></i></div></div>
+    <button class="sm" data-act="a2579">Usar</button>
+  </div>
+        </div></div>
+    <p class="xs muted" style="margin-top:14px">Lo que comes del menú o cocinas en el batch se descuenta solo. Toca un producto para cambiarlo; arrástralo por ⠿ para moverlo de sitio.</p></main>
+    <nav id="tabs" style="--i: 3; display: flex;"><span class="pill" aria-hidden="true" style="opacity: 1;"></span><a href="#/inicio" data-k="inicio" class=""><svg class="ic" width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"></path><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"></path></svg><span>Inicio</span></a><a href="#/plan" data-k="plan" class=""><svg class="ic" width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16.5" rx="3"></rect><path d="M3 9.5h18M8 2.5v4M16 2.5v4"></path></svg><span>Plan</span></a><a href="#/entrenos" data-k="entrenos" class=""><svg class="ic" width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"></path></svg><span>Entrenos</span></a><a href="#/nutricion" data-k="nutricion" class="on" aria-current="page"><svg class="ic" width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3v8a3 3 0 0 0 3 3v7M10 3v6M13 3v8a3 3 0 0 1-3 3"></path><path d="M17 3c-1.7 1.2-2.5 3.4-2.5 6.5 0 1.6 1 2.5 2.5 2.5V21"></path></svg><span>Nutrición</span></a><a href="#/coach" data-k="coach" class=""><svg class="ic" width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-5 4v-4.2A2.5 2.5 0 0 1 4 13.5Z"></path><path d="M8.5 8.5h7M8.5 11.5h4.5"></path></svg><span>Coach</span></a></nav>
+  </div>
+  <div id="sheet" data-state="open" hidden=""></div>
+  <div id="toast" data-swipe="1" hidden="">Tiempo guardado: 1:20:02</div>
+  
+  
+
+
+</body></html>

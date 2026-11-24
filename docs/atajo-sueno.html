@@ -118,15 +118,15 @@ code{font:500 14px ui-monospace,Menlo,monospace;background:light-dark(#e3ebe6,#2
       <li>En la barra de abajo <span class="en">Search for apps and actions</span>, escribe <b>health samples</b> y toca <span class="en">Find Health Samples</span>.</li>
       <li>En la acción, toca el tipo en azul (por defecto pone otro) y elige <span class="en">Sleep Analysis</span>.</li>
       <li>Toca <span class="en">Add Filter</span> → elige <span class="en">Value</span> → <span class="en">is</span> → <span class="en">Deep</span>.</li>
-      <li>Añade (o ajusta) el filtro <span class="en">Start Date</span> → <span class="en">is in the last</span> <b>1</b> <span class="en">day</span>.</li>
+      <li>Antes de esta acción, al principio del Atajo, añade <span class="en">Adjust Date</span> → <span class="en">Subtract</span> <b>16</b> <span class="en">hours</span> from <span class="en">Current Date</span>. Luego en el <span class="en">Find</span>: <span class="en">Add Filter</span> → <span class="en">Start Date</span> → <span class="en">is after</span> → <span class="en">Select Variable</span> → <span class="en">Adjusted Date</span>.</li>
     </ol>
-    <div class="tip">Si en <span class="en">Value</span> no aparece <span class="en">Deep</span>, puede que salga como <span class="en">Asleep (Deep)</span>; elige ese.</div>
+    <div class="tip">No uses «is in the last 1 day»: Atajos lo cuenta desde ayer a las 00:00 y suma dos noches. Si en <span class="en">Value</span> no aparece <span class="en">Deep</span>, puede que salga como <span class="en">Asleep (Deep)</span>; elige ese.</div>
   </div>
   <div class="phone"><div class="scr"><div class="isl"></div>
     <div class="nav"><span>‹</span><span style="color:#000;font-weight:600">Forja Sleep</span><span>▶</span></div>
     <div class="act"><span class="ic" style="background:#ff2d55">♥</span><b>Find</b> <span class="p">All</span> <span class="p hl">Sleep Analysis</span> where
       <div style="margin:6px 0 0 4px">· <span class="p">Value</span> is <span class="p hl">Deep</span></div>
-      <div style="margin:2px 0 0 4px">· <span class="p">Start Date</span> is in the last <span class="p">1</span> <span class="p">day</span></div>
+      <div style="margin:2px 0 0 4px">· <span class="p">Start Date</span> is after <span class="var">Adjusted Date</span></div>
       <div style="margin-top:6px"><span class="p">Add Filter</span></div>
       <div style="color:#8e8e93;font-size:13px">Sort by None · Limit Off</div></div>
     <div class="search" style="position:absolute;left:14px;right:14px;bottom:20px">Search for apps and actions</div>
@@ -275,7 +275,7 @@ code{font:500 14px ui-monospace,Menlo,monospace;background:light-dark(#e3ebe6,#2
 <section class="step">
   <div>
     <h3><span class="n">11</span>Mismo patrón, otra clave</h3>
-    <p>Para cada dato: <span class="en">Find Health Samples</span> con el tipo de la tabla y <span class="en">Start Date is in the last 1 day</span> → <span class="en">Get Details of Health Samples</span> → <span class="en">Value</span>. Luego, en <span class="en">Get Contents of URL</span>, <span class="en">Add new field</span> → <span class="en">Text</span> con la clave y esa variable.</p>
+    <p>Para cada dato: <span class="en">Find Health Samples</span> con el tipo de la tabla y <span class="en">Start Date is after Adjusted Date</span> → <span class="en">Get Details of Health Samples</span> → <span class="en">Value</span>. Luego, en <span class="en">Get Contents of URL</span>, <span class="en">Add new field</span> → <span class="en">Text</span> con la clave y esa variable.</p>
     <table style="width:100%;border-collapse:collapse;font-size:15px">
       <tr><th style="text-align:left;padding:6px 0;border-bottom:1px solid var(--rule)">Tipo en Shortcuts</th><th style="text-align:left;border-bottom:1px solid var(--rule)">Clave</th></tr>
       <tr><td style="padding:6px 0"><span class="en">Respiratory Rate</span></td><td><code>respiracion</code></td></tr>
@@ -288,7 +288,7 @@ code{font:500 14px ui-monospace,Menlo,monospace;background:light-dark(#e3ebe6,#2
   </div>
   <div class="phone"><div class="scr"><div class="isl"></div>
     <div class="nav"><span>‹</span><span style="color:#000;font-weight:600">Forja salud</span><span>▶</span></div>
-    <div class="act" style="padding:8px 10px">Find … Type is <span class="p hl">Sleeping Wrist Temperature</span> · last <span class="p">1 day</span></div>
+    <div class="act" style="padding:8px 10px">Find … Type is <span class="p hl">Sleeping Wrist Temperature</span> · after <span class="var">Adjusted Date</span></div>
     <div class="act" style="padding:8px 10px">Get <span class="p hl">Value</span> from <span class="var">Health Samples</span></div>
     <div class="act"><b>Request Body</b><div>profundo · <span class="var">Duration</span></div><div>…</div><div class="hl">temperatura · <span class="var">Value</span></div></div>
   </div></div>

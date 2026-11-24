@@ -17,22 +17,33 @@ const nums = (v: unknown): number[] => {
 export function durationsMin(v: unknown): number | null {
   if (v == null) return null;
   const parts = (Array.isArray(v) ? v.map(String) : String(v).split(/\n|;|(?<=[a-z])\s*,\s*/i)).map((x) => x.trim()).filter(Boolean);
-  let total = 0, unit = false;
+  let total = 0, unit = false; const bare: number[] = [];
   for (const p0 of parts) {
     const p = p0.replace(/(\d),(\d)/g, '$1.$2').toLowerCase();
+    // Atajos escribe la duración como «m:ss» (menos de 1 h), «h:mm:ss» (1 h o más) o solo segundos («30»)
     const hms = p.match(/^(\d+):(\d{2})(?::(\d{2}))?$/);
-    if (hms) { total += hms[3] != null ? +hms[1] * 60 + +hms[2] + +hms[3] / 60 : +hms[1] * 60 + +hms[2]; unit = true; continue; }
+    if (hms) { total += hms[3] != null ? +hms[1] * 60 + +hms[2] + +hms[3] / 60 : +hms[1] + +hms[2] / 60; unit = true; continue; }
     let m = 0, any = false;
     for (const [, n, u] of p.matchAll(/(\d+(?:\.\d+)?)\s*(h|hr|hrs|hora|horas|hour|hours|m|min|mins|minuto|minutos|minute|minutes|s|sec|secs|seg|segundos|second|seconds)\b/g)) {
       any = true; m += /^h/.test(u) ? +n * 60 : /^s/.test(u) ? +n / 60 : +n;
     }
-    if (any) { total += m; unit = true; } else { const n = Number(p.match(/-?\d+(?:\.\d+)?/)?.[0]); if (!Number.isNaN(n)) total += n; }
+    if (any) { total += m; unit = true; } else { const n = Number(p.match(/-?\d+(?:\.\d+)?/)?.[0]); if (!Number.isNaN(n)) bare.push(n); }
   }
+  // Números sueltos junto a «m:ss» son segundos (Atajos escribe 30 s como «30»)
+  if (unit) total += bare.reduce((a, b) => a + b, 0) / 60;
+  else total += bare.reduce((a, b) => a + b, 0);
   return unit ? Math.round(total * 10) / 10 : null;
 }
 const avg = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : undefined);
 const sum = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) : undefined);
-const pick = (o: any, ...keys: string[]) => { for (const k of keys) if (o?.[k] != null && o[k] !== '') return o[k]; return undefined; };
+// Claves tal como las escribe la persona en Atajos: sin tildes, mayúsculas ni espacios sobrantes («básico » = «basico»)
+const nk = (k: string) => k.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/\s+/g, '_');
+const pick = (o: any, ...keys: string[]) => {
+  if (!o || typeof o !== 'object') return undefined;
+  const want = new Set(keys.map(nk));
+  for (const [k, v] of Object.entries(o)) if (want.has(nk(k)) && v != null && v !== '') return v;
+  return undefined;
+};
 
 export function parseShortcut(p: any, today: string): { day?: ShortcutDay; workouts: ShortcutWorkout[] } {
   const date = String(pick(p, 'fecha', 'date') ?? today).slice(0, 10);
