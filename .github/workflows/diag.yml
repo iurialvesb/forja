@@ -1,0 +1,22 @@
+name: diag
+on: push
+jobs:
+  d:
+    if: contains(github.event.head_commit.message, '[diag]')
+    runs-on: ubuntu-latest
+    steps:
+      - env: { T: "${{ secrets.SUPABASE_ACCESS_TOKEN }}", P: "${{ secrets.SUPABASE_PROJECT_ID }}" }
+        run: |
+          q() { curl -s -X POST "https://api.supabase.com/v1/projects/$P/database/query" -H "Authorization: Bearer $T" -H 'content-type: application/json' -d "$(jq -n --arg q "$1" '{query:$q}')"; echo; }
+          q "select received_at, processed_at, left(payload::text, 2500) p, result from health_inbox where received_at > now() - interval '30 minutes' order by received_at desc limit 3"
+          q "select date, deep_min, core_min, rem_min, awake_min, updated_at from sleep_nights order by date desc limit 1"
+          curl -s "https://www.icloud.com/shortcuts/api/records/c1f87392277d45eca6f0a0f79fd8dc1b" | jq -r '.fields.name.value, .fields.shortcut.value.downloadURL' 2>/dev/null | head -3 > /tmp/u.txt; cat /tmp/u.txt | head -1
+          U=$(sed -n 2p /tmp/u.txt); [ -n "$U" ] && curl -sL "${U//\$\{f\}/x.shortcut}" -o /tmp/s.plist && python3 -c "
+          import plistlib,json
+          d=plistlib.load(open('/tmp/s.plist','rb'))
+          for a in d.get('WFWorkflowActions',[]):
+              p=a.get('WFWorkflowActionParameters',{})
+              s=json.dumps(p,default=str)
+              import re; s=re.sub(r'fj_[A-Za-z0-9]+','fj_***',s)
+              print(a['WFWorkflowActionIdentifier'], s[:600])
+          "
