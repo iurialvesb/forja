@@ -1,5 +1,10 @@
 # Changelog
 
+## Fases del sueño
+- Salud → Sueño muestra profundo, básico, REM y despierto de la última noche (barra, minutos, % y media de 7 noches) y la tabla de las últimas 14 noches.
+- Llegan del Atajo de Apple Salud (Intervals.icu no las da): nuevas claves `profundo_min`, `rem_min`, `basico_min`, `despierto_min`; tabla `sleep_nights` (migración 0022).
+- El Atajo ya no borra la VFC o el pulso que vinieran de Intervals.icu cuando no los envía.
+
 ## Sueño de qué noche
 - Inicio: si el sueño, la VFC o el pulso en reposo aún no han llegado para hoy, se muestra el último con su día («Sueño · dom»), para no confundirlo con la noche pasada.
 

@@ -1,6 +1,7 @@
 // Normaliza lo que envía un Atajo de iOS. Los Atajos convierten listas en texto con saltos de línea, usan coma decimal
 // y nombres de campo en español; aquí se acepta todo eso sin inventar valores.
-export interface ShortcutDay { date: string; hrvMs?: number; rhr?: number; sleepH?: number; steps?: number; activeKcal?: number; exerciseMin?: number; weightKg?: number }
+export interface SleepStages { asleepMin?: number; deepMin?: number; remMin?: number; coreMin?: number; awakeMin?: number; inBedMin?: number; bedtime?: string; wakeTime?: string }
+export interface ShortcutDay { date: string; hrvMs?: number; rhr?: number; sleepH?: number; stages?: SleepStages; steps?: number; activeKcal?: number; exerciseMin?: number; weightKg?: number }
 export interface ShortcutWorkout { start: string; durationS: number; type: string; kcal?: number; avgHr?: number; maxHr?: number; distanceM?: number }
 
 const nums = (v: unknown): number[] => {
@@ -19,7 +20,24 @@ export function parseShortcut(p: any, today: string): { day?: ShortcutDay; worko
   if (sleepMin != null && sleepMin > 1440) sleepMin = sleepMin / 60; // el Atajo envió segundos
   let sleepH = sleepMin != null ? sleepMin / 60 : sum(nums(pick(p, 'sueño_h', 'sueno_h', 'sleep_h', 'sueño', 'sueno', 'sleep')));
   if (sleepH != null && sleepH > 24) sleepH = sleepH > 1440 ? sleepH / 3600 : sleepH / 60;    // segundos o minutos
+  // Fases: «profundo_min», «rem_min», «basico_min»/«core_min», «despierto_min», «en_cama_min». Si alguna pasa de 1440 el Atajo mandó segundos (todas).
+  const raw: Record<string, number | undefined> = {
+    deepMin: sum(nums(pick(p, 'profundo_min', 'sueño_profundo_min', 'sueno_profundo_min', 'deep_min'))),
+    remMin: sum(nums(pick(p, 'rem_min', 'sueño_rem_min', 'sueno_rem_min'))),
+    coreMin: sum(nums(pick(p, 'basico_min', 'básico_min', 'ligero_min', 'core_min', 'sueño_basico_min', 'sueno_basico_min'))),
+    awakeMin: sum(nums(pick(p, 'despierto_min', 'awake_min'))),
+    inBedMin: sum(nums(pick(p, 'en_cama_min', 'in_bed_min'))),
+  };
+  const secs = Object.values(raw).some((v) => v != null && v > 1440) || (sleepMin != null && sum(nums(pick(p, 'sueño_min', 'sueno_min', 'sleep_min')))! > 1440);
+  const r1 = (v?: number) => (v == null ? undefined : Math.round((secs ? v / 60 : v) * 10) / 10);
+  const ts = (v: unknown) => { const t = v != null ? Date.parse(String(v)) : NaN; return Number.isNaN(t) ? undefined : new Date(t).toISOString(); };
+  const stages: SleepStages = { deepMin: r1(raw.deepMin), remMin: r1(raw.remMin), coreMin: r1(raw.coreMin), awakeMin: r1(raw.awakeMin), inBedMin: r1(raw.inBedMin),
+    bedtime: ts(pick(p, 'acostarse', 'hora_acostarse', 'bedtime')), wakeTime: ts(pick(p, 'despertar', 'hora_despertar', 'wake_time')) };
+  const stageSum = [stages.deepMin, stages.remMin, stages.coreMin].some((v) => v != null) ? (stages.deepMin ?? 0) + (stages.remMin ?? 0) + (stages.coreMin ?? 0) : undefined;
+  if (stageSum != null) { stages.asleepMin = Math.round(stageSum * 10) / 10; if (sleepH == null) sleepH = stageSum / 60; }
+  const hasStages = Object.values(stages).some((v) => v != null);
   const day: ShortcutDay = {
+    stages: hasStages ? stages : undefined,
     date, hrvMs: avg(nums(pick(p, 'vfc', 'hrv', 'variabilidad'))), rhr: avg(nums(pick(p, 'fc_reposo', 'rhr', 'resting_hr'))),
     sleepH: sleepH != null ? Math.round(sleepH * 100) / 100 : undefined, steps: sum(nums(pick(p, 'pasos', 'steps'))),
     activeKcal: sum(nums(pick(p, 'kcal_activas', 'energia_activa', 'active_kcal'))), exerciseMin: sum(nums(pick(p, 'minutos_ejercicio', 'exercise_min'))),

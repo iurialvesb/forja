@@ -178,7 +178,7 @@ async function watchSync() {
 }
 
 // ---------- Apple Salud vía Atajos ----------
-async function health() {
+export async function health() {
   let created = null;
   const draw = () => setSheet(html`
     <p class="small">Una web no puede leer Apple Salud directamente. La forma gratuita es un <b>Atajo</b> de la app Atajos de tu iPhone que lee tus datos y los envía a Forja cada día (y al terminar un entreno, si tu iOS lo permite).</p>
@@ -187,9 +187,10 @@ async function health() {
     <h3>Crear el Atajo (una vez)</h3>
     <ol class="small">
       <li>Abre <b>Atajos</b> → <b>＋</b> → nómbralo «Forja Salud».</li>
-      <li>Añade <b>Buscar muestras de salud</b> → Tipo: <i>Variabilidad de la frecuencia cardíaca</i>, Fecha de inicio: <i>en las últimas 24 horas</i>. Después <b>Calcular estadísticas</b> → <i>Promedio</i>.</li>
-      <li>Repite con <i>Frecuencia cardíaca en reposo</i> (Promedio), <i>Pasos</i> (Suma), <i>Energía activa</i> (Suma) y <i>Análisis del sueño</i> con valor <i>Dormido</i> en las últimas 18 horas → <b>Obtener detalles</b> → <i>Duración</i> → <b>Calcular estadísticas</b> → <i>Suma</i> (minutos).</li>
-      <li>Añade <b>Diccionario</b> con las claves: <code>fecha</code> (Fecha actual, formato aaaa-MM-dd), <code>vfc</code>, <code>fc_reposo</code>, <code>pasos</code>, <code>kcal_activas</code>, <code>sueño_min</code> (cada una con su resultado).</li>
+      <li>Añade <b>Buscar muestras de salud</b> (<i>Find Health Samples</i>) → Tipo: <i>Variabilidad de la frecuencia cardíaca</i> (<i>Heart Rate Variability</i>), Fecha de inicio: <i>en las últimas 24 horas</i>. Después <b>Calcular estadísticas</b> (<i>Calculate Statistics</i>) → <i>Promedio</i>.</li>
+      <li>Repite con <i>Frecuencia cardíaca en reposo</i> (Promedio), <i>Pasos</i> (Suma) y <i>Energía activa</i> (Suma).</li>
+      <li><b>Fases del sueño</b>: añade <b>Buscar muestras de salud</b> → <i>Análisis del sueño</i> (<i>Sleep Analysis</i>), <i>Valor</i> es <i>Profundo</i> (<i>Deep</i>), Fecha de inicio en las últimas 18 horas → <b>Obtener detalles de las muestras de salud</b> → <i>Duración</i> → <b>Calcular estadísticas</b> → <i>Suma</i>. Repite igual para <i>REM</i>, <i>Básico</i> (<i>Core</i>) y <i>Despierto</i> (<i>Awake</i>).</li>
+      <li>Añade <b>Diccionario</b> con las claves: <code>fecha</code> (Fecha actual, formato aaaa-MM-dd), <code>vfc</code>, <code>fc_reposo</code>, <code>pasos</code>, <code>kcal_activas</code>, <code>profundo_min</code>, <code>rem_min</code>, <code>basico_min</code>, <code>despierto_min</code> (cada una con su resultado). El sueño total lo suma Forja; si la duración llega en segundos, también lo detecta.</li>
       <li>Añade <b>Obtener contenido de URL</b>: URL de arriba · Método <i>POST</i> · Cabecera <code>x-forja-token</code> = tu token · Cuerpo de la solicitud <i>JSON</i> → el Diccionario.</li>
       <li>En <b>Automatización</b> → <b>＋</b> → <i>Hora del día</i> 9:00 → Ejecutar inmediatamente → «Forja Salud».</li>
     </ol>
