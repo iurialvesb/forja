@@ -2,7 +2,10 @@
 # Se ejecuta al subir cambios a main o a mano (Actions → Desplegar Forja → Run workflow).
 name: Desplegar Forja
 on:
-  push: { branches: [main] }
+  push:
+    branches: [main]
+    # Cambios que no afectan a la app (documentación, diagnósticos) no despliegan ni mandan correos de fallo.
+    paths-ignore: ['**.md', '.github/workflows/diag.yml']
   workflow_dispatch:
 permissions: { contents: read, pages: write, id-token: write }
 concurrency: { group: deploy, cancel-in-progress: false }
@@ -50,12 +53,13 @@ jobs:
               VAPID_PRIVATE_KEY="$(echo "$KEYS" | node -pe 'JSON.parse(require("fs").readFileSync(0)).privateKey')"
           fi
       - name: Funciones
-        run: supabase functions deploy --yes --project-ref "$PROJECT_ID" --use-api
+        # Supabase a veces corta por tiempo («request timed out»): se reintenta hasta 3 veces antes de dar error.
+        run: for i in 1 2 3; do supabase functions deploy --yes --project-ref "$PROJECT_ID" --use-api && exit 0; echo "Reintento $i…"; sleep $((i * 20)); done; exit 1
 
   web:
     needs: test
     runs-on: ubuntu-latest
-    environment: { name: github-pages, url: '${{ steps.deploy.outputs.page_url }}' }
+    environment: { name: github-pages, url: '${{ steps.deploy.outputs.page_url || steps.deploy2.outputs.page_url || steps.deploy1.outputs.page_url }}' }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -69,5 +73,18 @@ jobs:
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with: { path: web }
+      # GitHub Pages falla a veces al publicar; se reintenta dos veces antes de avisar.
+      - id: deploy1
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+      - if: steps.deploy1.outcome == 'failure'
+        run: sleep 45
+      - id: deploy2
+        if: steps.deploy1.outcome == 'failure'
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+      - if: steps.deploy1.outcome == 'failure' && steps.deploy2.outcome == 'failure'
+        run: sleep 90
       - id: deploy
+        if: steps.deploy1.outcome == 'failure' && steps.deploy2.outcome == 'failure'
         uses: actions/deploy-pages@v4
