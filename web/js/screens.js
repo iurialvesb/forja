@@ -434,7 +434,7 @@ export async function PLAN() {
   return {
     title: 'Plan',
     body: html`
-      <div class="chips">${phases.filter((p) => p.kind !== 'base').map((p) => html`<span class="chip ${p.start_date <= t && t <= p.end_date ? 'on' : ''}">${phaseName(p.kind)} · ${shortDate(p.start_date)}–${shortDate(p.end_date)}</span>`)}</div>
+      <div class="chips">${phases.filter((p) => p.kind !== 'base').map((p) => html`<span class="chip phase ${p.start_date <= t && t <= p.end_date ? 'on' : ''}"><b>${phaseName(p.kind)}</b><small>${shortDate(p.start_date)} – ${shortDate(p.end_date)}</small></span>`)}</div>
       <div class="row"><button class="sm" data-act="${act(() => { planOffset--; render(); })}" aria-label="Anterior">${raw(ic('back', 20))}</button><b class="grow" style="text-align:center">Semana del ${shortDate(mon)}</b><button class="sm" data-act="${act(() => { planOffset++; render(); })}" aria-label="Siguiente">${raw(ic('chevron', 20))}</button></div>
       <div class="days">${days.map((d) => html`<button class="day ${d === planDay ? 'on' : ''} ${d === t ? 'today' : ''}" data-act="${act(() => { planDay = d; render(); })}"><div class="w">${dayName(d).split(' ')[0]}</div><div class="d">${d.slice(8)}</div><div class="dots">${ses.filter((s) => s.date === d && s.status !== 'skipped').map((s) => raw(`<i style="background:${DC[s.discipline] ?? 'var(--muted)'}"></i>`))}</div></button>`)}</div>
       ${(() => {
@@ -590,7 +590,7 @@ function bodyCard(rows, ns) {
     : mode === 'definicion' ? (slope <= -0.15 ? `Bajando ${f(Math.abs(slope), 2)} kg/semana: vas bien${slope < -0.8 ? ', aunque algo rápido: cuidado con el rendimiento' : ''}.` : 'Peso estable: si la cintura tampoco baja, te ajusto las calorías.')
     : mode === 'volumen' ? (slope >= 0.1 ? `Subiendo ${f(slope, 2)} kg/semana: en rango.` : 'No estás subiendo: conviene comer algo más.')
     : `Tendencia ${slope >= 0 ? '+' : ''}${f(slope, 2)} kg/semana.`;
-  return html`<div class="card"><div class="row"><h3 class="grow">Cuerpo</h3><button class="sm" data-act="${act(addBody)}">${raw(ic('plus', 17))} Peso / cintura</button></div>
+  return html`<div class="card"><div class="row"><h2 class="h3 grow">Cuerpo</h2><button class="sm" data-act="${act(addBody)}">${raw(ic('plus', 17))} Peso / cintura</button></div>
     <div class="stats"><div class="stat"><div class="l">Peso</div><div class="v">${w.length ? f(w[w.length - 1].kg) : '–'}<span class="u"> kg</span></div></div>
       <div class="stat"><div class="l">Cintura</div><div class="v">${wa.length ? f(wa[wa.length - 1].waist) : '–'}<span class="u"> cm</span></div></div>
       <div class="stat"><div class="l">Tendencia</div><div class="v" style="font-size:16px">${slope == null ? '–' : `${slope >= 0 ? '+' : ''}${f(slope, 2)}`}<span class="u"> kg/sem</span></div><div class="xs muted">objetivo ${rate > 0 ? '+' : ''}${f(rate, 2)}</div></div></div>

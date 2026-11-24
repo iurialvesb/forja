@@ -427,7 +427,7 @@ async function compra() {
     <div class="seg"><button class="${shopWeek === 0 ? 'on' : ''}" data-act="${act(() => { shopWeek = 0; render(); })}">Esta semana</button><button class="${shopWeek === 7 ? 'on' : ''}" data-act="${act(() => { shopWeek = 7; render(); })}">Semana que viene</button></div>
     <p class="xs muted">Lo que comerás esa semana menos lo que tienes en congelador, nevera y despensa, descontando lo que aún comerás antes y lo que caduca antes de usarlo (+5 % de margen).</p>
     ${l.note ? html`<div class="card muted small">${l.note}</div>` : ''}
-    <div class="row small" style="gap:8px;margin-top:6px"><span class="muted">Ordenada como el recorrido de</span><select style="width:auto" data-change="${act((el) => { try { localStorage.setItem('forja:store', el.value); } catch { /* */ } render(); })}">${Object.keys(STORE_ROUTE).map((k) => html`<option value="${k}" ${store() === k ? 'selected' : ''}>${STORE_NAME[k]}</option>`)}</select></div>
+    <div class="row small" style="gap:8px;margin-top:6px"><label for="store-route" class="muted" style="margin:0;white-space:nowrap">Orden de pasillos</label><select id="store-route" class="grow" data-change="${act((el) => { try { localStorage.setItem('forja:store', el.value); } catch { /* */ } render(); })}">${Object.keys(STORE_ROUTE).map((k) => html`<option value="${k}" ${store() === k ? 'selected' : ''}>${STORE_NAME[k]}</option>`)}</select></div>
     ${aisles.map((a) => html`<h2>${a}</h2><div class="card tight list">${by[a].map((i) => html`
       <label class="item" style="margin:0"><input type="checkbox" ${checked.has(i.foodId) ? 'checked' : ''} data-change="${act((el) => api.fn('shopping-list', { action: 'check', weekStart: mon, foodId: i.foodId, checked: el.checked }).then(() => invalidate(`shopping:${mon}`)))}">
         <div class="grow"><div style="color:var(--text)">${i.name}</div><div class="xs muted">Necesitas ${qy(i.name, i.needG)} · tienes ${qy(i.name, i.haveG)} · desde el ${dayName(i.firstNeeded)}</div>${i.note ? html`<div class="xs alert">${i.note}</div>` : ''}</div>
@@ -446,7 +446,7 @@ async function batch() {
   const w = await week(mon);
   const p = w.batchPlan;
   return html`
-    <div class="card"><h3>Menú semanal y batch cooking</h3>
+    <div class="card"><h2 class="h3">Menú semanal y batch cooking</h2>
       <p class="small muted">Con lo que tienes en casa diseño las recetas del batch, reparto los táperes por días y ajusto cada ración a tus macros según el entreno de ese día. Usa la IA (tarda 1-2 min).</p>
       <div class="seg"><button class="${batchWeek === 0 ? 'on' : ''}" data-act="${act(() => { batchWeek = 0; render(); })}">Esta semana</button><button class="${batchWeek === 7 ? 'on' : ''}" data-act="${act(() => { batchWeek = 7; render(); })}">Semana que viene</button></div>
       <button class="primary block" data-act="${act((b) => busy(b, async () => {
@@ -741,7 +741,8 @@ async function suplementos() {
           const s = mine.find((x) => x.id === r.supplementId); if (s?.stock > 0) await api.db.update('supplements', { stock: s.stock - 1 }, { id: `eq.${s.id}` });
           invalidate('supps'); render();
         }))}">Marcar tomado</button>`) : ''}</div>
-      ${r.take && r.when ? html`<div class="small" style="color:var(--color-ink-2)">${r.when}</div>` : ''}<div class="small muted">${r.reason}</div></div>`)}
+      ${r.take && r.when ? html`<div class="when">${raw(ic('clock', 14))}<span>${r.when}</span></div>` : ''}<div class="small muted">${r.reason}</div>
+      ${r.take && !r.supplementId ? html`<div class="xs muted" style="margin-top:6px">No está en «Los que tengo»: añádelo abajo para marcarlo.</div>` : ''}</div>`)}
     ${w.supplements.notes.map((n) => html`<p class="xs muted">${n}</p>`)}
     ${w.supplements.week?.length && mine.length ? html`<h2>Esta semana</h2><div class="card tight">${w.supplements.week.map((d) => html`<div class="row top" style="padding:5px 0;border-bottom:1px solid var(--line)"><b class="small" style="width:70px">${dayName(d.date).split(' ')[0]} ${d.date.slice(8)}</b><div class="grow small">${d.take.length ? d.take.map((t) => html`<span class="chip" title="${t.when ?? ''}">${t.name}</span>`) : html`<span class="muted">Nada</span>`}</div></div>`)}
       <p class="xs muted">Según los entrenos que tienes ese día: colágeno + vitamina C en días de saltos, series o fuerza; electrolitos en sesiones largas; creatina todos los días.</p></div>` : ''}

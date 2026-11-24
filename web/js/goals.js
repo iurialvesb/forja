@@ -29,7 +29,7 @@ function race(g, o) {
       <div class="stat"><div class="l">Objetivo</div><div class="v" style="color:var(--color-ink-2)">${clockH(o.targetS)}</div><div class="xs muted">${o.targetPace ? pace(o.targetPace) : '—'}</div></div>
       <div class="stat"><div class="l">Tirada larga (28 d)</div><div class="v">${o.longestRun28dKm}<span class="u"> km</span></div></div>
     </div>
-    <div class="card"><h3>Kilómetros por semana</h3>${barChart(o.weeks.map((w) => ({ label: shortDate(w.week), value: w.km })), { height: 120 })}</div>
+    <div class="card"><h2 class="h3">Kilómetros por semana</h2>${barChart(o.weeks.map((w) => ({ label: shortDate(w.week), value: w.km })), { height: 120 })}</div>
     ${o.longRunPlan.length ? html`<div class="card"><h3>Progresión de la tirada larga</h3>${barChart(o.longRunPlan.map((w) => ({ label: shortDate(w.week), value: w.km })), { height: 110 })}
       <p class="xs muted">Sube ~1,5 km por semana hasta el pico 3 semanas antes; después baja para llegar fresco.</p></div>` : ''}
     ${o.racePaceRuns.length ? html`<div class="card tight"><h3>Rodajes a ritmo de carrera</h3>${o.racePaceRuns.map((x) => html`<div class="row small"><span class="grow">${dayName(x.date)}</span><span>${x.km} km</span><b style="margin-left:10px">${pace(x.pace)}</b></div>`)}</div>` : ''}`;

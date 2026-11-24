@@ -1,5 +1,11 @@
 # Changelog
 
+## Pasada Impeccable por toda la app
+- Jerarquía de títulos sin saltos (Progreso, Batch, objetivo) y botones de icono con 44 px de toque.
+- Plan: las fases ya no se parten palabra a palabra (nombre arriba, fechas debajo).
+- Suplementos: el «cuándo» va en una etiqueta con reloj, separado de la explicación; aviso si un suplemento recomendado no está en «Los que tengo».
+- Compra: «Orden de pasillos» en una línea; Perfil con flechas de verdad; menos hueco bajo las pestañas.
+
 ## Tus RM y porcentajes
 - Nueva pantalla «Tus RM» (Entrenos → «% RM», o Progreso): buscador de ejercicios (nombre o alias en español e inglés; Intro abre el primero) y lista con tu 1RM.
 - Por ejercicio: 1RM real o estimado (último o mejor), cuadrícula de porcentajes del 100 % al 30 % en kg redondeados a 0,5, «Otro %» libre, kg para 1–12 repeticiones, tu evolución y la tabla de registros (los añadidos a mano se pueden borrar).

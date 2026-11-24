@@ -9,7 +9,7 @@ const DAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', '
 const GOAL_TYPES = [['half_marathon', 'Media maratón'], ['marathon', 'Maratón'], ['10k', '10K'], ['5k', '5K'], ['hyrox', 'HYROX'], ['crossfit_comp', 'Competición CrossFit'], ['strength', 'Fuerza'], ['general', 'General']];
 
 export async function PROFILE() {
-  const item = (icon, label, fn, sub = '') => html`<div class="item" data-act="${act(fn)}"><div class="ico">${raw(ic(icon, 19))}</div><div class="grow"><div>${label}</div>${sub ? html`<div class="xs muted">${sub}</div>` : ''}</div><span class="muted">›</span></div>`;
+  const item = (icon, label, fn, sub = '') => html`<div class="item" data-act="${act(fn)}"><div class="ico">${raw(ic(icon, 19))}</div><div class="grow"><div>${label}</div>${sub ? html`<div class="xs muted">${sub}</div>` : ''}</div><span class="muted" aria-hidden="true">${raw(ic('chevron', 16))}</span></div>`;
   const tokenRow = await get('ingest_token', async () => (await api.db.select('ingest_tokens', { user_id: `eq.${uid()}` }))[0], 300_000).catch(() => null);
   const icuConn = await get('icuconn', async () => (await api.db.select('intervals_connections', { select: 'athlete_id,last_pull_at,last_error' }))[0], 120_000).catch(() => null);
   const cal = await get('calset', async () => (await api.db.select('calendar_settings', { user_id: `eq.${uid()}` }))[0], 300_000).catch(() => null);

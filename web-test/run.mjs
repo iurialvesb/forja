@@ -370,7 +370,7 @@ if (process.env.SPEED) {
 }
 // ---------- Auditoría UX (ui-ux-pro-max): contraste, tamaño de toque, nombres accesibles, iconos decorativos, desbordes ----------
 if (process.env.AUDIT) {
-  const screens = [['#/inicio'], ['#/salud'], ['#/objetivo/g1'], ['#/plan'], ['#/entrenos'], ['#/entrenos', 'Progreso'], ['#/nutricion', 'Diario'], ['#/nutricion', 'Menú'], ['#/nutricion', 'Compra'], ['#/nutricion', 'Batch'], ['#/nutricion', 'Despensa'], ['#/nutricion', 'Suplementos'], ['#/coach'], ['#/perfil']];
+  const screens = [['#/inicio'], ['#/salud'], ['#/rm'], ['#/rm/front_squat'], ['#/objetivo/g1'], ['#/plan'], ['#/entrenos'], ['#/entrenos', 'Progreso'], ['#/nutricion', 'Diario'], ['#/nutricion', 'Menú'], ['#/nutricion', 'Compra'], ['#/nutricion', 'Batch'], ['#/nutricion', 'Despensa'], ['#/nutricion', 'Suplementos'], ['#/coach'], ['#/perfil']];
   const AUD = async () => page.evaluate(() => {
     const out = { contrast: [], touch: [], name: [], deco: [], overflow: [] };
     const rgb = (c) => { const m = c.match(/rgba?\(([^)]+)\)/); if (!m) return null; const v = m[1].split(/[ ,/]+/).filter(Boolean).map(Number); return [v[0], v[1], v[2], v[3] ?? 1]; };

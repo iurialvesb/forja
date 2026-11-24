@@ -106,7 +106,7 @@ h2 + .card, .card:first-child { border-top: 0; }
 .mini > div { padding: var(--space-sm) var(--space-xs) 0 0; }
 .mini > div + div { padding-left: var(--space-sm); border-left: var(--rule-hair) solid color-mix(in oklab, var(--color-paper) 22%, var(--color-ink)); }
 .mini .l { display: flex; align-items: center; gap: var(--space-2xs); font-size: var(--text-xs); color: color-mix(in oklab, var(--color-paper) 72%, var(--color-ink)); }
-.mini .v { font: 500 var(--text-xl)/1.1 var(--font-outlier); margin-top: var(--space-2xs); } .mini .v small { font: 500 var(--text-xs) var(--font-body); color: color-mix(in oklab, var(--color-paper) 72%, var(--color-ink)); }
+.mini .v { word-spacing: -0.35em; font: 500 var(--text-xl)/1.1 var(--font-outlier); margin-top: var(--space-2xs); } .mini .v small { font: 500 var(--text-xs) var(--font-body); color: color-mix(in oklab, var(--color-paper) 72%, var(--color-ink)); }
 
 /* ---------- Cifras ---------- */
 .kpi { font: var(--display-weight) var(--text-3xl)/1 var(--font-display); font-variant-numeric: tabular-nums; }
@@ -230,6 +230,12 @@ figure.viz.pick svg { cursor: pointer; }
 .rmtable > div.h { color: var(--color-muted); font-size: var(--text-xs); min-height: 32px; }
 .rmtable > div.on { background: var(--color-paper-2); }
 .rmtable > div > span:nth-child(n+2):nth-child(-n+4) { text-align: right; }
+.when { display: inline-flex; align-items: center; gap: var(--space-2xs); margin: var(--space-2xs) 0 var(--space-xs); padding: 2px var(--space-xs); border-radius: var(--radius-pill); background: var(--color-paper-2); font-size: var(--text-sm); color: var(--color-ink); }
+.when svg { flex: none; color: var(--color-ink-2); }
+.subtabs + h2, .seg + h2 { margin-top: var(--space-md); }
+.chip.phase { flex: 0 0 auto; display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: var(--space-xs) var(--space-sm); white-space: nowrap; min-height: 56px; justify-content: center; }
+.chip.phase b { font-weight: 600; font-size: var(--text-sm); }
+.chip.phase small { font-size: var(--text-xs); opacity: 0.8; font-variant-numeric: tabular-nums; }
 .stages { display: grid; gap: var(--space-3xs); font-size: var(--text-sm); }
 .stages .row { gap: var(--space-xs); align-items: center; }
 .stages i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
@@ -260,7 +266,7 @@ button.ghost { background: transparent; border-color: transparent; color: var(--
 button.sm.ghost { min-width: 40px; }
 button.danger { color: var(--color-error); }
 button:disabled, button[aria-disabled="true"] { background: var(--color-paper-3); border-color: var(--color-paper-3); color: var(--color-muted); cursor: not-allowed; transform: none; }
-.icon-btn { background: transparent; border-color: transparent; padding: var(--space-2xs); color: var(--color-ink); }
+.icon-btn { flex: none; min-width: 44px; display: inline-grid; place-items: center; background: transparent; border-color: transparent; padding: var(--space-2xs); color: var(--color-ink); }
 button.opt { justify-content: flex-start; text-align: left; gap: var(--space-sm); padding: var(--space-sm) var(--space-md); }
 button.opt b { display: block; font-size: var(--text-md); } button.opt small { display: block; font: 400 var(--text-xs)/1.35 var(--font-body); margin-top: var(--space-3xs); }
 button.eat { flex: none; width: 48px; height: 48px; padding: 0; border-radius: var(--radius-card); background: var(--color-paper); border: var(--rule-bar) solid var(--color-ink); color: var(--color-ink); }
