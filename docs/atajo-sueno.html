@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atajo de sueño para Forja</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@400;500;600&family=Saira+Condensed:wght@800&display=swap" rel="stylesheet">
+<style>
+/* VOICE: guía tranquila, paso a paso, como un manual de montaje bien hecho.
+   IDEA: hoja de instrucciones con «capturas» del iPhone al lado de cada paso.
+   PICTURE: maquetas del iPhone en inglés (Shortcuts) con lo que hay que tocar marcado.
+   COLOUR and TYPE: Forja «Fragua tranquila» (salvia, pizarra, latón) + iOS gris claro dentro del teléfono. Saira Condensed títulos, Albert Sans texto.
+   LAYOUT: una columna de pasos; texto a la izquierda, teléfono a la derecha; en móvil, texto y debajo el teléfono. */
+:root{color-scheme:light dark;--bg:light-dark(#f3f7f4,#141b24);--ink:light-dark(#232f3e,#e6ece8);--muted:light-dark(#5a6878,#9fb0bf);--rule:light-dark(#cfdad3,#2c3a4a);--band:light-dark(#2b3a4e,#0e141c);--brass:#c9a86a;--card:light-dark(#ffffff,#1b2430)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "Albert Sans",system-ui,sans-serif;overflow-x:clip}
+h1,h2{font-family:"Saira Condensed",sans-serif;font-weight:800;line-height:1.05;text-wrap:balance;margin:0}
+h1{font-size:clamp(34px,7vw,52px)}h2{font-size:clamp(26px,4.5vw,34px)}
+.band{padding:clamp(28px,4vw,56px) max(5vw,16px)}
+.top{background:var(--band);color:#eef2ef}.top p{color:#c7d1da;max-width:62ch}.top b{color:var(--brass)}
+.wrap{max-width:1040px;margin:0 auto}
+.toc{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}.toc a{color:#eef2ef;border:1px solid #4a5b70;border-radius:999px;padding:8px 14px;text-decoration:none;font-size:14px}
+.step{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:clamp(20px,4vw,48px);align-items:start;padding:28px 0;border-top:1px solid var(--rule)}
+.step:first-of-type{border-top:0}
+.n{display:inline-grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--ink);color:var(--bg);font-weight:600;margin-right:10px;font-size:15px}
+.step h3{display:flex;align-items:center;font-size:20px;margin:0 0 8px}
+.step p,.step li{max-width:60ch}.step ol,.step ul{padding-left:1.2em}
+.en{font-weight:600;background:light-dark(#e3ebe6,#253242);border-radius:6px;padding:1px 6px;white-space:nowrap}
+code{font:500 14px ui-monospace,Menlo,monospace;background:light-dark(#e3ebe6,#253242);padding:1px 5px;border-radius:5px;overflow-wrap:anywhere}
+.tip{border-left:3px solid var(--brass);padding:8px 12px;background:var(--card);border-radius:0 8px 8px 0;font-size:15px;color:var(--muted);margin-top:12px}
+.part{margin:8px 0 4px;color:var(--muted);font-size:15px}
+/* Teléfono */
+.phone{width:300px;justify-self:center;border-radius:42px;padding:10px;background:#1c1c1e;box-shadow:0 18px 40px -18px rgba(0,0,0,.45)}
+.scr{border-radius:33px;background:#f2f2f7;color:#000;font:15px/1.35 -apple-system,"SF Pro Text",system-ui,sans-serif;min-height:430px;overflow:hidden;position:relative;padding:44px 14px 16px}
+.scr.dark{background:#000;color:#fff}
+.isl{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:92px;height:26px;border-radius:14px;background:#000}
+.nav{display:flex;justify-content:space-between;align-items:center;color:#007aff;font-size:16px;margin-bottom:8px}
+.ttl{font:700 26px/1.1 -apple-system,system-ui,sans-serif;margin:4px 0 12px}
+.act{background:#fff;border-radius:12px;padding:11px 12px;margin-bottom:8px;font-size:14.5px;line-height:1.5}
+.act .ic{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:6px;color:#fff;font-size:12px;margin-right:6px;vertical-align:-5px}
+.p{color:#007aff;font-weight:500}.pill{display:inline-block;background:#e5f0ff;color:#007aff;border-radius:7px;padding:0 7px;font-weight:500}
+.var{display:inline-block;background:#ff9f0a22;color:#c26a00;border-radius:7px;padding:0 7px;font-weight:500}
+.hl{outline:2.5px solid #ff3b30;outline-offset:2px;border-radius:8px}
+.row{display:flex;justify-content:space-between;align-items:center;background:#fff;padding:11px 12px;border-bottom:.5px solid #d1d1d6;font-size:14.5px}
+.row:first-child{border-radius:12px 12px 0 0}.row:last-child{border-radius:0 0 12px 12px;border-bottom:0}.row:only-child{border-radius:12px}
+.grp{margin-bottom:12px}.lbl{font-size:12.5px;color:#6d6d72;margin:12px 4px 6px}
+.search{background:#e3e3e8;border-radius:10px;padding:8px 10px;color:#8e8e93;margin-bottom:10px}
+.btn{display:block;text-align:center;background:#007aff;color:#fff;border-radius:12px;padding:12px;font-weight:600;margin-top:10px}
+.tab{position:absolute;bottom:0;left:0;right:0;display:flex;justify-content:space-around;background:#f9f9f9ee;border-top:.5px solid #c6c6c8;padding:8px 0 18px;font-size:11px;color:#8e8e93}
+.tab .on{color:#007aff}
+.tog{width:44px;height:26px;border-radius:13px;background:#34c759;position:relative}.tog::after{content:"";position:absolute;right:2px;top:2px;width:22px;height:22px;border-radius:50%;background:#fff}
+.tog.off{background:#e9e9eb}.tog.off::after{right:auto;left:2px}
+.fj{background:#f3f7f4;color:#232f3e;font-family:"Albert Sans",system-ui}
+.fj .h{font:800 26px "Saira Condensed",sans-serif;margin:6px 0 10px}
+.fj input{width:100%;font:13px ui-monospace,monospace;border:1px solid #cfdad3;border-radius:8px;padding:8px;background:#fff;color:#232f3e}
+.fj .b{background:#2b3a4e;color:#fff;border-radius:10px;padding:11px;text-align:center;font-weight:600;margin:10px 0}
+.seg{display:flex;gap:3px;height:12px;margin:8px 0}.seg i{border-radius:99px}
+.cap{font-size:13px;color:var(--muted);text-align:center;margin-top:8px}
+.end{background:var(--card);border-radius:14px;padding:18px 20px}
+@media(max-width:760px){.step{grid-template-columns:minmax(0,1fr)}.phone{width:min(300px,100%)}}
+@media(prefers-reduced-motion:no-preference){.hl{animation:pulse 2.4s ease-in-out infinite}@keyframes pulse{50%{outline-color:#ff3b3066}}}
+</style>
+</head>
+<body>
+<header class="band top">
+  <div class="wrap">
+    <h1>Fases del sueño en Forja con un Atajo</h1>
+    <p>HealthFit solo manda a Intervals.icu el total de horas. Este Atajo lee de Apple Salud tu sueño <b>profundo, REM, básico (Core) y despierto</b> y lo envía a Forja cada mañana. Se monta una vez, unos 10 minutos. Los nombres en <b>negrita y en inglés</b> son exactamente lo que verás en tu iPhone.</p>
+    <nav class="toc"><a href="#forja">1 · Token en Forja</a><a href="#atajo">2 · Crear el Atajo</a><a href="#auto">3 · Cada mañana</a><a href="#comprobar">4 · Comprobar</a></nav>
+  </div>
+</header>
+
+<main class="band"><div class="wrap">
+
+<h2 id="forja">1 · Saca tu token en Forja</h2>
+<section class="step">
+  <div>
+    <h3><span class="n">1</span>Crea el token</h3>
+    <p>En Forja: <b>Perfil</b> → <b>Apple Salud (Atajo)</b> → <b>Crear mi token</b>.</p>
+    <p>Aparecen dos cosas: el <b>token</b> (una clave larga) y la <b>URL</b>. Tócalas y cópialas en una nota de la app Notes, porque el token solo se muestra una vez.</p>
+    <div class="tip">Si lo pierdes, crea otro: el anterior deja de valer y solo tendrás que pegar el nuevo en el Atajo.</div>
+  </div>
+  <div class="phone"><div class="scr fj"><div class="isl"></div>
+    <div class="h">Apple Salud</div>
+    <div style="font-size:13px;color:#5a6878">Tu token (cópialo ahora, no se vuelve a mostrar):</div>
+    <input readonly value="fj_9c1e…b72a" class="hl">
+    <div style="font-size:13px;color:#5a6878;margin-top:10px">URL:</div>
+    <input readonly value="https://xyiweguuofslgjryofdx.supabase.co/functions/v1/health-inbox" class="hl">
+    <div class="b">Crear mi token</div>
+    <div style="font-size:13px;color:#5a6878">Token y URL de ejemplo; los tuyos serán distintos.</div>
+  </div></div>
+</section>
+
+<h2 id="atajo">2 · Crea el Atajo en Shortcuts</h2>
+<section class="step">
+  <div>
+    <h3><span class="n">2</span>Atajo nuevo</h3>
+    <p>Abre la app <span class="en">Shortcuts</span>. En la pestaña <span class="en">Shortcuts</span>, toca <span class="en">+</span> arriba a la derecha.</p>
+    <p>Toca el nombre de arriba (<span class="en">New Shortcut</span>) → <span class="en">Rename</span> → escribe <b>Forja Sleep</b>.</p>
+  </div>
+  <div class="phone"><div class="scr"><div class="isl"></div>
+    <div class="nav"><span></span><span>Select</span><span class="hl" style="font-size:24px;padding:0 6px">+</span></div>
+    <div class="ttl">All Shortcuts</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div style="background:#5e5ce6;color:#fff;border-radius:14px;padding:12px;height:86px">Music Quiz</div>
+      <div style="background:#30b0c7;color:#fff;border-radius:14px;padding:12px;height:86px">Text Last Image</div>
+    </div>
+    <div class="tab"><span class="on">Shortcuts</span><span>Automation</span><span>Gallery</span></div>
+  </div></div>
+</section>
+
+<section class="step">
+  <div>
+    <h3><span class="n">3</span>Busca muestras de sueño profundo</h3>
+    <ol>
+      <li>En la barra de abajo <span class="en">Search for apps and actions</span>, escribe <b>health samples</b> y toca <span class="en">Find Health Samples</span>.</li>
+      <li>En la acción, toca el tipo en azul (por defecto pone otro) y elige <span class="en">Sleep Analysis</span>.</li>
+      <li>Toca <span class="en">Add Filter</span> → elige <span class="en">Value</span> → <span class="en">is</span> → <span class="en">Deep</span>.</li>
+      <li>Si hay un filtro <span class="en">Start Date</span>, déjalo en <span class="en">is in the last</span> <b>18</b> <span class="en">hours</span>. Si no, añádelo con <span class="en">Add Filter</span>.</li>
+    </ol>
+    <div class="tip">Si en <span class="en">Value</span> no aparece <span class="en">Deep</span>, puede que salga como <span class="en">Asleep (Deep)</span>; elige ese.</div>
+  </div>
+  <div class="phone"><div class="scr"><div class="isl"></div>
+    <div class="nav"><span>‹</span><span style="color:#000;font-weight:600">Forja Sleep</span><span>▶</span></div>
+    <div class="act"><span class="ic" style="background:#ff2d55">♥</span><b>Find</b> <span class="p">All</span> <span class="p hl">Sleep Analysis</span> where
+      <div style="margin:6px 0 0 4px">· <span class="p">Value</span> is <span class="p hl">Deep</span></div>
+      <div style="margin:2px 0 0 4px">· <span class="p">Start Date</span> is in the last <span class="p">18</span> <span class="p">hours</span></div>
+      <div style="margin-top:6px"><span class="p">Add Filter</span></div>
+      <div style="color:#8e8e93;font-size:13px">Sort by None · Limit Off</div></div>
+    <div class="search" style="position:absolute;left:14px;right:14px;bottom:20px">Search for apps and actions</div>
+  </div></div>
+</section>
+
+<section class="step">
+  <div>
+    <h3><span class="n">4</span>Saca la duración</h3>
+    <p>Busca <b>get details</b> y añade <span class="en">Get Details of Health Samples</span> justo debajo. Toca <span class="en">Detail</span> y elige <span class="en">Duration</span>.</p>
+    <p>No hace falta sumar nada: Forja suma todos los trozos de la noche y entiende minutos, horas o segundos.</p>
+  </div>
+  <div class="phone"><div class="scr"><div class="isl"></div>
+    <div class="nav"><span>‹</span><span style="color:#000;font-weight:600">Forja Sleep</span><span>▶</span></div>
+    <div class="act"><span class="ic" style="background:#ff2d55">♥</span><b>Find</b> <span class="p">All</span> <span class="p">Sleep Analysis</span> where <span class="p">Value</span> is <span class="p">Deep</span> …</div>
+    <div class="act"><span class="ic" style="background:#ff2d55">♥</span><b>Get</b> <span class="p hl">Duration</span> from <span class="var">Health Samples</span></div>
+  </div></div>
+</section>
+
+<section class="step">
+  <div>
+    <h3><span class="n">5</span>Repite para REM, Core y Awake</h3>
+    <p>Lo más rápido es duplicar las dos acciones:</p>
+    <ol>
+      <li>Mantén pulsada la acción <span class="en">Find … Sleep Analysis</span> → <span class="en">Duplicate</span>. Haz lo mismo con <span class="en">Get Duration</span>.</li>
+      <li>Arrastra las copias al final, en orden: primero el <span class="en">Find</span>, debajo su <span class="en">Get Duration</span>.</li>
+      <li>En la copia, cambia <span class="en">Deep</span> por <span class="en">REM</span>.</li>
+      <li>Repite para <span class="en">Core</span> y para <span class="en">Awake</span>.</li>
+    </ol>
+    <p>Te quedan 8 acciones: 4 parejas de <span class="en">Find</span> + <span class="en">Get Duration</span>.</p>
+  </div>
+  <div class="phone"><div class="scr"><div class="isl"></div>
+    <div class="nav"><span>‹</span><span style="color:#000;font-weight:600">Forja Sleep</span><span>▶</span></div>
+    <div class="act" style="padding:8px 10px">Find … Value is <span class="p">Deep</span></div>
+    <div class="act" style="padding:8px 10px">Get <span class="p">Duration</span> from <span class="var">Health Samples</span></div>
+    <div class="act" style="padding:8px 10px">Find … Value is <span class="p hl">REM</span></div>
+    <div class="act" style="padding:8px 10px">Get <span class="p">Duration</span> from <span class="var">Health Samples</span></div>
+    <div class="act" style="padding:8px 10px">Find … Value is <span class="p hl">Core</span></div>
+    <div class="act" style="padding:8px 10px">Get <span class="p">Duration</span> from <span class="var">Health Samples</span></div>
+    <div class="act" style="padding:8px 10px">Find … Value is <span class="p hl">Awake</span></div>
+    <div class="act" style="padding:8px 10px">Get <span class="p">Duration</span> from <span class="var">Health Samples</span></div>
+  </div></div>
+</section>
+
+<section class="step">
+  <div>
+    <h3><span class="n">6</span>Envíalo a Forja</h3>
+    <ol>
+      <li>Busca <b>get contents</b> y añade <span class="en">Get Contents of URL</span> al final.</li>
+      <li>Toca <span class="en">URL</span> y pega la URL que copiaste en el paso 1.</li>
+      <li>Toca la flecha <span class="en">›</span> de la acción para ver más opciones. <span class="en">Method</span>: <span class="en">POST</span>.</li>
+      <li><span class="en">Headers</span> → <span class="en">Add new header</span>. En <span class="en">Key</span> escribe <code>x-forja-token</code>; en <span class="en">Text</span> pega tu token.</li>
+      <li><span class="en">Request Body</span>: <span class="en">JSON</span>. Toca <span class="en">Add new field</span> → <span class="en">Text</span> cuatro veces, con estas claves: <code>profundo</code>, <code>rem</code>, <code>basico</code>, <code>despierto</code>.</li>
+    </ol>
+  </div>
+  <div class="phone"><div class="scr"><div class="isl"></div>
+    <div class="nav"><span>‹</span><span style="color:#000;font-weight:600">Forja Sleep</span><span>▶</span></div>
+    <div class="act"><span class="ic" style="background:#8e8e93">⇣</span><b>Get contents of</b> <span class="pill">https://xyiw…/health-inbox</span>
+      <div class="lbl" style="margin:10px 0 4px">Method</div><div><span class="p hl">POST</span></div>
+      <div class="lbl" style="margin:10px 0 4px">Headers</div>
+      <div>x-forja-token · <span class="pill hl">fj_9c1e…b72a</span></div>
+      <div class="lbl" style="margin:10px 0 4px">Request Body · <span class="p">JSON</span></div>
+      <div>profundo · <span class="var">…</span></div><div>rem · <span class="var">…</span></div><div>basico · <span class="var">…</span></div><div>despierto · <span class="var">…</span></div>
+    </div>
+  </div></div>
+</section>
+
+<section class="step">
+  <div>
+    <h3><span class="n">7</span>Pon el valor de cada fase</h3>
+    <p>Cada clave necesita la duración que le toca:</p>
+    <ol>
+      <li>Toca el valor de <code>profundo</code> → en la barra de encima del teclado toca <span class="en">Select Variable</span>.</li>
+      <li>La pantalla resalta las acciones: toca la <b>primera</b> <span class="en">Get Duration</span> (la de <span class="en">Deep</span>).</li>
+      <li>Haz lo mismo: <code>rem</code> → la segunda, <code>basico</code> → la tercera (<span class="en">Core</span>), <code>despierto</code> → la cuarta (<span class="en">Awake</span>).</li>
+    </ol>
+    <div class="tip">Truco para no liarte: toca cada variable naranja ya puesta → <span class="en">Rename</span> y llámala «Deep», «REM»… Así ves que cada una está en su sitio.</div>
+  </div>
+  <div class="phone"><div class="scr"><div class="isl"></div>
+    <div class="nav"><span>‹</span><span style="color:#000;font-weight:600">Forja Sleep</span><span>Done</span></div>
+    <div class="act" style="padding:8px 10px;opacity:.55">Find … Value is Deep</div>
+    <div class="act hl" style="padding:8px 10px">Get <span class="p">Duration</span> from <span class="var">Health Samples</span></div>
+    <div class="act" style="padding:8px 10px;opacity:.55">Find … Value is REM</div>
+    <div class="act" style="padding:8px 10px;opacity:.55">Get Duration …</div>
+    <div class="act"><b>Request Body</b><div>profundo · <span class="var hl">Health Sample Details</span></div><div>rem · <span class="var">Health Sample Details</span></div><div>basico · <span class="var">Health Sample Details</span></div><div>despierto · <span class="var">Health Sample Details</span></div></div>
+    <div style="position:absolute;left:0;right:0;bottom:0;background:#d1d3d9;padding:8px 12px;font-size:13px;color:#000;display:flex;gap:14px"><span class="hl" style="color:#007aff">Select Variable</span><span>Ask Each Time</span></div>
+  </div></div>
+</section>
+
+<section class="step">
+  <div>
+    <h3><span class="n">8</span>Pruébalo</h3>
+    <p>Toca <span class="en">▶</span> abajo a la derecha. La primera vez, iOS te pedirá permiso para leer Salud: toca <span class="en">Allow</span> o activa <span class="en">Sleep</span> y confirma.</p>
+    <p>Si todo va bien, al final verás un texto con <code>"ok": true</code> y «Recibido. Se procesará cuando abras Forja.».</p>
+    <div class="tip">Si sale <code>Token no válido</code>, revisa la cabecera <code>x-forja-token</code> (sin espacios) o crea otro token.</div>
+  </div>
+  <div class="phone"><div class="scr"><div class="isl"></div>
+    <div class="ttl" style="font-size:20px;text-align:center;margin-top:30px">“Forja Sleep” would like to access Health data</div>
+    <div class="grp"><div class="row"><span>Sleep</span><span class="tog hl"></span></div></div>
+    <div class="btn">Allow</div>
+    <div class="act" style="margin-top:24px;font:13px ui-monospace,monospace">{"ok":true,"mensaje":"Recibido. Se procesará cuando abras Forja."}</div>
+  </div></div>
+</section>
+
+<h2 id="auto">3 · Que se ejecute solo cada mañana</h2>
+<section class="step">
+  <div>
+    <h3><span class="n">9</span>Automatización diaria</h3>
+    <ol>
+      <li>En Shortcuts, pestaña <span class="en">Automation</span> → <span class="en">+</span> (o <span class="en">New Automation</span>).</li>
+      <li>Elige <span class="en">Time of Day</span>. Pon <b>9:00 AM</b>, <span class="en">Repeat</span>: <span class="en">Daily</span>.</li>
+      <li>Marca <span class="en">Run Immediately</span> y desactiva <span class="en">Notify When Run</span> si no quieres aviso.</li>
+      <li><span class="en">Next</span> → elige <b>Forja Sleep</b>.</li>
+    </ol>
+    <div class="tip">Pon la hora después de levantarte. Si te despiertas tarde algún día, ese día faltará un trozo; puedes ejecutarlo a mano con <span class="en">▶</span>.</div>
+  </div>
+  <div class="phone"><div class="scr"><div class="isl"></div>
+    <div class="nav"><span>Cancel</span><span style="color:#000;font-weight:600">Time of Day</span><span>Next</span></div>
+    <div class="grp" style="margin-top:12px"><div class="row"><span>Time of Day</span><span class="p hl">9:00 AM</span></div><div class="row"><span>Repeat</span><span class="p">Daily</span></div></div>
+    <div class="grp"><div class="row"><span>Run After Confirmation</span><span></span></div><div class="row hl"><span>Run Immediately</span><span style="color:#007aff">✓</span></div></div>
+    <div class="grp"><div class="row"><span>Notify When Run</span><span class="tog off"></span></div></div>
+    <div class="tab"><span>Shortcuts</span><span class="on">Automation</span><span>Gallery</span></div>
+  </div></div>
+</section>
+
+<h2 id="comprobar">4 · Compruébalo en Forja</h2>
+<section class="step">
+  <div>
+    <h3><span class="n">10</span>Mira tus fases</h3>
+    <p>Abre Forja (los datos se procesan al abrirla) → <b>Inicio</b> → toca el sueño, o ve a <b>Salud</b> → <b>Sueño</b>. Debajo de la duración verás <b>Fases</b>: la barra, el tiempo de cada fase, su % y tu media de 7 noches.</p>
+    <p>El total de horas sigue llegando también de HealthFit; no tienes que quitar nada.</p>
+  </div>
+  <div class="phone"><div class="scr fj"><div class="isl"></div>
+    <div class="h">Sueño</div>
+    <div style="font:800 34px 'Saira Condensed'">6h 12 <span style="font:400 14px 'Albert Sans';color:#5a6878">anoche</span></div>
+    <div style="font-size:13px;margin-top:12px">Fases</div>
+    <div class="seg"><i style="flex:46;background:#203e73"></i><i style="flex:221;background:#4c74b6"></i><i style="flex:103;background:#93aed9"></i><i style="flex:4;background:#d0692f"></i></div>
+    <div style="font-size:14px;display:grid;gap:4px">
+      <div>■ Profundo <b style="float:right">46 min</b></div><div>■ Básico <b style="float:right">3h 41</b></div><div>■ REM <b style="float:right">1h 43</b></div><div>■ Despierto <b style="float:right">4 min</b></div>
+    </div>
+    <div style="font-size:12px;color:#5a6878;margin-top:12px">Cifras de ejemplo.</div>
+  </div></div>
+</section>
+
+<div class="end">
+  <b>Si algo no cuadra</b>
+  <ul>
+    <li>No sale nada en Fases: ejecuta el Atajo a mano y abre Forja. Si el Atajo dio <code>"ok": true</code>, pásame una captura de Salud → Sueño.</li>
+    <li>Los minutos salen raros: comprueba que cada clave apunta a su <span class="en">Get Duration</span> (paso 7).</li>
+    <li>Las capturas de esta guía son simuladas; en tu versión de iOS algún texto o icono puede variar un poco.</li>
+  </ul>
+</div>
+
+</div></main>
+</body>
+</html>
