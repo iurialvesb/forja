@@ -64,3 +64,14 @@ test('WOD registrado a mano a las 9:00 + Apple Watch a las 9:20 del mismo día �
   assert.equal(titleFor('crossfit', 'Cross Training'), 'CrossFit');
   assert.equal(titleFor('running', 'Carrera'), 'Carrera');
 });
+
+test('fases del sueño en campos personalizados de Intervals.icu (segundos, minutos u horas)', () => {
+  const base = { id: '2026-11-24', sleepSecs: 22295 };
+  const s1 = icuWellnessToDaily({ ...base, SleepDeep: 2760, SleepREM: 6180, SleepCore: 13260, SleepAwake: 240 }).stages!;
+  assert.deepEqual(s1, { deepMin: 46, remMin: 103, coreMin: 221, awakeMin: 4 });
+  const s2 = icuWellnessToDaily({ ...base, deep_sleep_min: 46, rem_sleep_min: 103, light_sleep_min: 221 }).stages!;
+  assert.equal(s2.coreMin, 221);
+  const s3 = icuWellnessToDaily({ ...base, DeepSleep: 0.77, REMSleep: 1.72, CoreSleep: 3.68 }).stages!;
+  assert.equal(Math.round(s3.deepMin!), 46);
+  assert.equal(icuWellnessToDaily({ ...base, readiness: 80, mood: 3 }).stages, undefined);
+});

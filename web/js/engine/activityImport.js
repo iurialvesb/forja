@@ -174,7 +174,28 @@ export function icuToActivity(act     , streams             , profile           
 
 /** Wellness de Intervals.icu → datos diarios de Forja (solo lo que viene relleno). */
                                                                                                                                                                                       
-                                                                                                                                                                              
+                                                                                                                                                                             
+                                                                                       
+
+/**
+ * Fases del sueño que algunas apps (p. ej. BreakAway) suben a Intervals.icu como campos personalizados de bienestar.
+ * Los nombres los elige cada app o el usuario, así que se reconocen por palabra (deep/profundo, rem, core/light/básico, awake/despierto)
+ * y la unidad (segundos, minutos u horas) se deduce comparando la suma con el sueño total.
+ */
+export function sleepStagesFromExtras(extras                         , sleepSecs         )                          {
+  const pick = (re        ) => { for (const [k, v] of Object.entries(extras)) { const n = num(v); if (n != null && n >= 0 && re.test(k)) return n; } return undefined; };
+  const raw = { deepMin: pick(/deep|profund/i), remMin: pick(/rem(?![a-z])|rem$|^rem|sleeprem|remsleep/i), coreMin: pick(/core|light|ligero|basic|básico|basico/i), awakeMin: pick(/awake|despiert|wake(?!up)/i) };
+  const asleep = [raw.deepMin, raw.remMin, raw.coreMin].filter((x)              => x != null);
+  if (asleep.length < 2) return undefined;
+  const tot = asleep.reduce((a, b) => a + b, 0);
+  const all = Object.values(raw).filter((x)              => x != null);
+  // Factor a minutos: el que mejor cuadra con el sueño total; sin total, por magnitud
+  const cands = [1 / 60, 1, 60];
+  const f = sleepSecs ? cands.reduce((b, c) => (Math.abs(tot * c - sleepSecs / 60) < Math.abs(tot * b - sleepSecs / 60) ? c : b), 1)
+    : Math.max(...all) > 1440 ? 1 / 60 : tot <= 16 ? 60 : 1;
+  const m = (v         ) => (v == null ? undefined : Math.round(v * f * 10) / 10);
+  return { deepMin: m(raw.deepMin), remMin: m(raw.remMin), coreMin: m(raw.coreMin), awakeMin: m(raw.awakeMin) };
+}
 /** Día de salud de Intervals.icu (lo que HealthFit sube del Apple Watch) → fila de daily_health. Lo que no tiene columna va a extras. */
 export function icuWellnessToDaily(w     )                {
   const sdnn = num(w.hrvSDNN), rmssd = num(w.hrv);
@@ -189,5 +210,6 @@ export function icuWellnessToDaily(w     )                {
     steps: round(num(w.steps)), weightKg: num(w.weight), avgSleepingHr: round(num(w.avgSleepingHR)),
     sleepScore: round(num(w.sleepScore)), sleepQuality: round(num(w.sleepQuality)), spo2: round(num(w.spO2), 1), respiration: round(num(w.respiration), 1),
     bodyFat: round(num(w.bodyFat), 1), vo2max: round(num(w.vo2max), 1), kcalConsumed: round(num(w.kcalConsumed)), extras,
+    stages: sleepStagesFromExtras(extras, num(w.sleepSecs)),
   };
 }

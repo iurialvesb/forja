@@ -57,7 +57,7 @@ export async function processIcuInbox(sb: SupabaseClient, userId: string, limit 
   // Salud diaria
   const { data: wl } = await sb.from('intervals_inbox').select('*').eq('user_id', userId).eq('kind', 'wellness').is('processed_at', null).limit(200);
   // En bloque: una escritura para todos los días (rápido aunque sean 120 días de historial).
-  const rows: Record<string, unknown>[] = [], weights: Record<string, unknown>[] = [];
+  const rows: Record<string, unknown>[] = [], weights: Record<string, unknown>[] = [], nights: Record<string, unknown>[] = [];
   const more: [string, string][] = [['sleepScore', 'sleep_score'], ['sleepQuality', 'sleep_quality'], ['spo2', 'spo2'], ['respiration', 'respiration'], ['bodyFat', 'body_fat'], ['vo2max', 'vo2max'], ['kcalConsumed', 'kcal_consumed']];
   for (const it of wl ?? []) {
     const d: any = icuWellnessToDaily(it.payload);
@@ -66,12 +66,15 @@ export async function processIcuInbox(sb: SupabaseClient, userId: string, limit 
       extras: Object.keys(d.extras).length ? d.extras : null };
     for (const [k, col] of more) row[col] = d[k] ?? null;
     rows.push(row);
+    if (d.stages) nights.push({ user_id: userId, date: d.date, deep_min: d.stages.deepMin ?? null, rem_min: d.stages.remMin ?? null, core_min: d.stages.coreMin ?? null, awake_min: d.stages.awakeMin ?? null,
+      asleep_min: (d.stages.deepMin ?? 0) + (d.stages.remMin ?? 0) + (d.stages.coreMin ?? 0), source: 'intervals', updated_at: new Date().toISOString() });
     if (d.weightKg) weights.push({ user_id: userId, date: d.date, weight_kg: d.weightKg, source: 'healthkit' });
   }
   if (rows.length) {
     // Un mismo día puede venir dos veces (se reprocesa): se queda la última versión.
     const byDate = new Map(rows.map((r) => [r.date as string, r]));
     await sb.from('daily_health').upsert([...byDate.values()], { onConflict: 'user_id,date' });
+    if (nights.length) await sb.from('sleep_nights').upsert([...new Map(nights.map((n) => [n.date as string, n])).values()], { onConflict: 'user_id,date' });
     if (weights.length) await sb.from('body_metrics').upsert([...new Map(weights.map((w) => [w.date as string, w])).values()], { onConflict: 'user_id,date,source' });
     await sb.from('intervals_inbox').update({ processed_at: new Date().toISOString(), result: { ok: true } }).in('id', (wl ?? []).map((x: any) => x.id));
     out.days = byDate.size;
