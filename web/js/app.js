@@ -4,6 +4,7 @@ import { html, raw, act, toast, busy, today, addDays, closeSheet, countUp } from
 import { ic } from './icons.js';
 import { HOME, PLAN, WORKOUTS, COACH, HEALTH } from './screens.js';
 import { RM } from './rm.js';
+import { RUNNING } from './running.js';
 import { NUTRITION, prefetchNutrition } from './nutrition.js';
 import { PROFILE, ONBOARDING } from './profile.js';
 import { GOAL } from './goals.js';
@@ -72,13 +73,13 @@ export function clearCache() {
 
 // ---------- Navegación ----------
 const TABS = [['inicio', 'home', 'Inicio'], ['plan', 'calendar', 'Plan'], ['entrenos', 'activity', 'Entrenos'], ['nutricion', 'food', 'Nutrición'], ['coach', 'chat', 'Coach']];
-const ROUTES = { inicio: HOME, plan: PLAN, entrenos: WORKOUTS, nutricion: NUTRITION, coach: COACH, perfil: PROFILE, onboarding: ONBOARDING, objetivo: GOAL, salud: HEALTH, rm: RM };
+const ROUTES = { inicio: HOME, plan: PLAN, entrenos: WORKOUTS, nutricion: NUTRITION, coach: COACH, perfil: PROFILE, onboarding: ONBOARDING, objetivo: GOAL, salud: HEALTH, rm: RM, carrera: RUNNING };
 
 export const go = (path) => { if (location.hash !== `#/${path}`) location.hash = `#/${path}`; else render(); };
 const route = () => { const [name = 'inicio', ...rest] = location.hash.replace(/^#\/?/, '').split('/'); return { name, params: rest }; };
 
 let rendering = 0, lastRoute = '', countedHome = false;
-const SUBS = { perfil: 'inicio', salud: 'inicio', objetivo: 'inicio', rm: 'entrenos' };
+const SUBS = { perfil: 'inicio', salud: 'inicio', objetivo: 'inicio', rm: 'entrenos', carrera: 'entrenos' };
 const tabIndex = (name) => TABS.findIndex(([k]) => k === (SUBS[name] ?? name));
 // La barra de pestañas se construye una vez; al navegar solo se mueve la píldora (transición, interrumpible).
 function paintTabs(tabs, name) {

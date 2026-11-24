@@ -1,5 +1,11 @@
 # Changelog
 
+## Tu evolución corriendo
+- Nueva pantalla «Tu carrera» (Entrenos → Progreso): 4 semanas, 12, 26 o 1 año.
+- Km, salidas, ritmo medio, tiempo, FC media, desnivel y carrera más larga, comparados con el periodo anterior.
+- Km por semana; zonas de pulso (reparto total Z1–Z5, % suave con consejo 80/20 y minutos por zona cada semana en barras apiladas).
+- Evolución del ritmo, ritmo más rápido en 5 km o más, eficiencia aeróbica (metros por latido), cadencia y lista de carreras con ritmo, pulso y zonas.
+
 ## Pasada Impeccable por toda la app
 - Jerarquía de títulos sin saltos (Progreso, Batch, objetivo) y botones de icono con 44 px de toque.
 - Plan: las fases ya no se parten palabra a palabra (nombre arriba, fechas debajo).

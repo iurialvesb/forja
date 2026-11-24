@@ -34,7 +34,9 @@ const batch = E.buildBatchPlan(E.addDays(mon, -1), days.flatMap((d) => d.meals).
   r2: { id: 'r2', name: 'Salmón con patata', ingredients: [], fridgeDays: 2, freezable: true, steps: [{ text: 'Cocer patata', minutes: 20, hands: 'pasiva', equipment: 'fuego' }, { text: 'Salmón a la plancha', minutes: 8, hands: 'activa', equipment: 'fuego' }] } });
 const supp = E.recommendSupplements({ available: [{ id: 'colageno', name: 'Colágeno', doseText: '15 g' }, { id: 'vitamina_c', name: 'Vitamina C', doseText: '500 mg' }, { id: 'magnesio', name: 'Magnesio', doseText: '300 mg', stock: 4 }], last7Days: Array(7).fill({ kcal: 2300, protein: 170, carbs: 240, fat: 70, vitCMg: 140, magnesiumMg: 250 }), daysWithMicros: 7, today: plan.filter((p) => p.date === today) });
 const sessions = [{ id: 's1', started_at: `${E.addDays(today, -1)}T17:02:00Z`, duration_s: 3540, discipline: 'crossfit', title: 'Afternoon Workout', distance_m: null, avg_hr: 148, rpe: 8, primary_source: 'healthkit', internal_load: 472, leg_index: 310 },
-  { id: 's2', started_at: `${E.addDays(today, -2)}T07:00:00Z`, duration_s: 2900, discipline: 'running', title: 'Carrera', distance_m: 9100, avg_hr: 151, primary_source: 'healthkit' }];
+  { id: 's2', started_at: `${E.addDays(today, -2)}T07:00:00Z`, duration_s: 2900, discipline: 'running', title: 'Carrera', distance_m: 9100, avg_hr: 151, primary_source: 'healthkit', hr_zone_s: [300, 1500, 800, 250, 50], cadence_spm: 172 },
+  ...[...Array(16)].map((_, i) => ({ id: `r${i}`, started_at: `${E.addDays(today, -5 - i * 5)}T07:30:00Z`, duration_s: 2400 + (i % 4) * 600, discipline: 'running', title: i % 3 ? 'Rodaje' : 'Series', distance_m: 7000 + (i % 4) * 1800 - i * 40, avg_hr: 148 + (i % 3) * 6, primary_source: 'healthkit', hr_zone_s: [200 + i * 10, 1400 - i * 20, 500 + (i % 3) * 200, 150 + (i % 3) * 120, i % 3 ? 0 : 120], cadence_spm: 168 + (i % 5) })),
+];
 
 const parseText = (() => { const p = E.parseWorkoutText(`Afternoon Workout\n\nFERZA\nEMOM 10’\n- 6 FRONT SQUATS @ 50 kg\n- 15 HEELS ON PLATE 16KG GOBLET SQUATS\n\nWOD\nEMOM 24’ (4R)\n- 16 CAL ROW\n- 20 DEAD LIFT 50kg\n- 10 BURPEES OVER BAR\n- REST.\n- REST\n- REST.`); return { parsed: p, summary: E.describeParsed(p), questions: E.collectQuestions(p, { sex: 'male' }), engine: 'motor', candidates: [{ id: 's1', startedAt: sessions[0].started_at, minutes: 59, title: 'Entrenamiento funcional', avgHr: 148, source: 'healthkit' }] }; })();
 
@@ -277,6 +279,8 @@ await shot('#/rm', '28-rm-lista', async () => { await page.fill('#rmq', 'sentadi
 await shot('#/rm/front_squat', '28b-rm-detalle', async () => {
   const cells = await page.locator('.rmgrid .rmcell').count(); await page.fill('#rmpct', '72,5'); await page.waitForTimeout(100);
   const o = await page.locator('#rmpcto').innerText(); if (cells < 20 || !/kg/.test(o)) errors.push(`detalle RM: ${cells} celdas, otro % «${o}»`); else console.log('Detalle RM OK', o); });
+await shot('#/carrera', '29-carrera'); { const k = await page.locator('.runkpis > div').count(); if (k < 4) errors.push('Tu carrera: faltan KPIs'); else console.log('Tu carrera OK', k); }
+await page.evaluate(() => window.scrollTo(0, 1100)); await page.screenshot({ path: `${OUT}/29b-carrera-zonas.png` });
 await shot('#/salud', '25-salud');
 await page.evaluate(() => window.scrollTo(0, 900)); await page.screenshot({ path: `${OUT}/25b-salud-abajo.png` });
 { // Elegir un día: tocar un chip de la tira cambia la ficha del día

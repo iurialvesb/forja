@@ -545,6 +545,7 @@ async function progress() {
     <div class="card"><h3>Km por semana</h3>${barChart(r.weeks.map((w) => ({ value: w.km, label: shortDate(w.week) })))}</div>
     ${r.runs.length >= 3 ? html`<div class="card"><h3>Evolución del ritmo</h3>${lineChart([{ fmt: pace, points: r.runs.slice(-30).map((x) => ({ x: shortDate(x.date), y: x.paceSecPerKm })) }], { invert: true })}</div>` : ''}
     <h2>Fuerza</h2>
+    <a class="card rmlink" href="#/carrera"><span class="grow"><b>Tu evolución corriendo</b><small>Km, zonas de pulso, ritmo, eficiencia y cadencia</small></span>${raw(ic('chevron', 18))}</a>
     <a class="card rmlink" href="#/rm"><span class="grow"><b>Tus RM y porcentajes</b><small>Busca un ejercicio y mira el 50 %, 70 %… en kg</small></span>${raw(ic('chevron', 18))}</a>
     <div class="grid2"><button class="block" data-act="${act(() => addRM())}">${raw(ic('plus', 17))} Añadir RM</button><button class="block" data-act="${act(() => exerciseHistory())}">${raw(ic('activity', 17))} Historial por ejercicio</button></div>
     ${d.lifts.length ? d.lifts.map((l) => html`<div class="card"><h3>${l.name}</h3>
