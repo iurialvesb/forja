@@ -8,12 +8,12 @@
   --color-error: oklch(52% 0.12 32); --color-success: oklch(50% 0.08 155);
   --container: 1440px; --gutter: 64px; --gap-columns: 32px; --section-gap-s: 120px; --section-gap: 144px; --section-gap-l: 176px;
   --z-base: 1; --z-raised: 10; --z-dropdown: 100; --z-sticky: 200; --z-sticky-nav: 300; --z-modal: 400; --z-toast: 500; --z-tooltip: 600;
-  --color-paper: oklch(97.5% 0.006 155); --color-paper-2: oklch(94.5% 0.011 158); --color-paper-3: oklch(91% 0.013 160);
+  --color-paper: oklch(98% 0.005 250); --color-paper-2: oklch(95% 0.006 250); --color-paper-3: oklch(91.5% 0.007 250);
   --color-ink: oklch(29% 0.035 255); --color-ink-2: oklch(38% 0.035 255); --color-muted: oklch(50% 0.022 230);
-  --color-rule: oklch(84% 0.012 160); --color-rule-2: oklch(40% 0.035 255);
-  --color-accent: oklch(36% 0.045 255); --color-accent-ink: oklch(97.5% 0.006 155); --color-accent-deep: oklch(55% 0.05 220);
+  --color-rule: oklch(84% 0.008 250); --color-rule-2: oklch(40% 0.035 255);
+  --color-accent: oklch(36% 0.045 255); --color-accent-ink: oklch(98% 0.005 250); --color-accent-deep: oklch(55% 0.05 220);
   --color-brass: oklch(74% 0.085 80);
-  /* Gráficos (skill dataviz, validado sobre #f4f7f4): categórica en orden fijo y rampa secuencial de un tono */
+  /* Gráficos (skill dataviz, validado sobre #f7f9fb): categórica en orden fijo y rampa secuencial de un tono */
   --series-1: #3a6fb8; --series-2: #d0692f; --series-3: #2a9a70;
   --seq-1: #93aed9; --seq-2: #6e90c8; --seq-3: #4c74b6; --seq-4: #32599e; --seq-5: #203e73;
   --color-focus: oklch(52% 0.09 245); --color-slot: oklch(76% 0.07 258);

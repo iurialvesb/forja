@@ -166,7 +166,7 @@ export const bar = (value, max, color) => raw(`<div class="bar"><i style="width:
 
 /** Barras con degradado. points: [{label, value, color?}]. goal: línea de referencia. */
 // ---------- Gráficos (skill dataviz): marcas finas, un eje, leyenda si hay ≥ 2 series, capa de hover y tabla de datos ----------
-// Paleta categórica validada (validate_palette.js, superficie #f4f7f4: CVD ΔE ≥ 9,5, normal ≥ 22, contraste ≥ 3:1): --series-1..3.
+// Paleta categórica validada (validate_palette.js, superficie #f7f9fb: CVD ΔE ≥ 9,5, normal ≥ 22, contraste ≥ 3:1): --series-1..3.
 const nice = (v) => { if (v <= 0) return 1; const e = 10 ** Math.floor(Math.log10(v)); const m = v / e; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * e; };
 export const tbl = (head, rows) => `<details class="dtable"><summary>Ver datos</summary><table><thead><tr>${head.map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></details>`;
 const tipData = (o) => esc(JSON.stringify(o));
