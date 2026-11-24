@@ -186,14 +186,13 @@ export async function health() {
       : html`<button class="primary block" data-act="${act((b) => busy(b, async () => { created = await api.fn('health-token'); invalidate('ingest_token'); draw(); }))}">Crear mi token</button>`}
     <h3>Crear el Atajo (una vez)</h3>
     <ol class="small">
-      <li>Abre <b>Atajos</b> → <b>＋</b> → nómbralo «Forja Salud».</li>
-      <li>Añade <b>Buscar muestras de salud</b> (<i>Find Health Samples</i>) → Tipo: <i>Variabilidad de la frecuencia cardíaca</i> (<i>Heart Rate Variability</i>), Fecha de inicio: <i>en las últimas 24 horas</i>. Después <b>Calcular estadísticas</b> (<i>Calculate Statistics</i>) → <i>Promedio</i>.</li>
-      <li>Repite con <i>Frecuencia cardíaca en reposo</i> (Promedio), <i>Pasos</i> (Suma) y <i>Energía activa</i> (Suma).</li>
-      <li><b>Fases del sueño</b>: añade <b>Buscar muestras de salud</b> → <i>Análisis del sueño</i> (<i>Sleep Analysis</i>), <i>Valor</i> es <i>Profundo</i> (<i>Deep</i>), Fecha de inicio en las últimas 18 horas → <b>Obtener detalles de las muestras de salud</b> → <i>Duración</i> → <b>Calcular estadísticas</b> → <i>Suma</i>. Repite igual para <i>REM</i>, <i>Básico</i> (<i>Core</i>) y <i>Despierto</i> (<i>Awake</i>).</li>
-      <li>Añade <b>Diccionario</b> con las claves: <code>fecha</code> (Fecha actual, formato aaaa-MM-dd), <code>vfc</code>, <code>fc_reposo</code>, <code>pasos</code>, <code>kcal_activas</code>, <code>profundo_min</code>, <code>rem_min</code>, <code>basico_min</code>, <code>despierto_min</code> (cada una con su resultado). El sueño total lo suma Forja; si la duración llega en segundos, también lo detecta.</li>
-      <li>Añade <b>Obtener contenido de URL</b>: URL de arriba · Método <i>POST</i> · Cabecera <code>x-forja-token</code> = tu token · Cuerpo de la solicitud <i>JSON</i> → el Diccionario.</li>
-      <li>En <b>Automatización</b> → <b>＋</b> → <i>Hora del día</i> 9:00 → Ejecutar inmediatamente → «Forja Salud».</li>
+      <li>Abre <b>Shortcuts</b> → <b>＋</b> → nómbralo «Forja Sleep».</li>
+      <li><b>Find Health Samples</b> → <i>Sleep Analysis</i>, filtro <i>Value is Deep</i> y <i>Start Date is in the last 18 hours</i>. Después <b>Get Details of Health Samples</b> → <i>Duration</i>.</li>
+      <li>Duplica esas dos acciones para <i>REM</i>, <i>Core</i> y <i>Awake</i>.</li>
+      <li><b>Get Contents of URL</b>: la URL de arriba · Method <i>POST</i> · Header <code>x-forja-token</code> = tu token · Request Body <i>JSON</i> con <code>profundo</code>, <code>rem</code>, <code>basico</code>, <code>despierto</code> → cada uno con su <i>Details of Health Samples</i>. Forja suma las duraciones y entiende minutos, horas o segundos.</li>
+      <li><b>Automation</b> → <b>＋</b> → <i>Time of Day</i> 9:00 · Daily → <i>Run Immediately</i> → «Forja Sleep».</li>
     </ol>
+    <p class="xs muted">Opcional: añade al JSON <code>vfc</code>, <code>fc_reposo</code>, <code>pasos</code> o <code>kcal_activas</code> con <i>Find Health Samples</i> + <i>Calculate Statistics</i>.</p>
     <details><summary>Entrenos del Apple Watch (opcional)</summary><p class="small">Si tu iOS ofrece la automatización «Entreno del Apple Watch → al terminar», puedes añadir al Diccionario una clave <code>entrenos</code> (lista) con <code>inicio</code>, <code>fin</code>, <code>tipo</code>, <code>kcal</code>, <code>fc_media</code> y <code>distancia_km</code>. Si no, registra el entreno pegando el texto o con «Manual»: Forja lo une igual a tu plan.</p></details>
     <p class="xs muted">Los datos llegan a tu buzón y se procesan con tus permisos cuando abres Forja. Puedes crear un token nuevo cuando quieras (el anterior deja de funcionar).</p>`);
   sheet('Apple Salud', ''); draw();
