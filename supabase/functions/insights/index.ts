@@ -10,7 +10,7 @@ Deno.serve(handler(async (req) => {
   const km = weeklyRunKm(ctx.sessions); const w0 = mondayOf(ctx.today);
   const weeks = Array.from({ length: 16 }, (_, i) => addDays(w0, -7 * (15 - i))).map((w) => ({ week: w, km: Math.round((km.get(w) ?? 0) * 10) / 10 }));
   const runs = ctx.sessions.filter((s) => s.discipline === 'running' && s.distanceM && s.distanceM >= 3000)
-    .map((s) => ({ date: isoDate(s.startedAt), km: s.distanceM! / 1000, paceSecPerKm: s.durationS / (s.distanceM! / 1000), avgHr: s.avgHr ?? null }));
+    .map((s) => ({ date: isoDate(s.startedAt), km: s.distanceM! / 1000, paceSecPerKm: (s.movingS ?? s.durationS) / (s.distanceM! / 1000), avgHr: s.avgHr ?? null }));
   const since28 = addDays(ctx.today, -28);
   return json({
     running: {

@@ -55,7 +55,7 @@ export function rowToSession(r: any): Session {
       })),
     }));
   return {
-    id: r.id, startedAt: r.started_at, durationS: r.duration_s, discipline: r.discipline, title: r.title ?? undefined,
+    id: r.id, startedAt: r.started_at, durationS: r.duration_s, movingS: r.moving_s ?? undefined, discipline: r.discipline, title: r.title ?? undefined,
     rpe: r.rpe != null ? Number(r.rpe) : undefined, avgHr: r.avg_hr ?? undefined, maxHr: r.max_hr ?? undefined,
     hrZoneSeconds: r.hr_zone_s ?? undefined, distanceM: r.distance_m != null ? Number(r.distance_m) : undefined,
     elevationGainM: r.elevation_gain_m != null ? Number(r.elevation_gain_m) : undefined, elevationLossM: r.elevation_loss_m != null ? Number(r.elevation_loss_m) : undefined,

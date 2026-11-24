@@ -127,6 +127,8 @@ export const dayName = (d, long = false) => fmt({ weekday: long ? 'long' : 'shor
 export const shortDate = (d) => fmt({ day: 'numeric', month: 'short' }).format(new Date(d.length > 10 ? d : d + 'T12:00:00Z'));
 export const timeOf = (iso) => fmt({ hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
 export const daysUntil = (d) => Math.round((Date.parse(d + 'T12:00:00Z') - Date.parse(today() + 'T12:00:00Z')) / 864e5);
+/** Tiempo que cuenta para el ritmo: en movimiento (sin pausas) si el reloj lo da. */
+export const runSec = (s) => +(s.moving_s || s.duration_s);
 export const pace = (s) => { const t = Math.round(s); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}/km`; };
 export const dur = (s) => { const t = Math.round(s), h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), r = t % 60; return h ? `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}` : `${m}:${String(r).padStart(2, '0')}`; };
 export const n0 = (x) => (x == null || Number.isNaN(+x) ? '–' : Math.round(+x).toLocaleString('es-ES'));

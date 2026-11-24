@@ -60,6 +60,7 @@ export interface Session {
   id: string;
   startedAt: string;           // ISO
   durationS: number;
+  movingS?: number;            // tiempo en movimiento (sin pausas): el que vale para el ritmo
   discipline: Discipline;
   title?: string;
   rpe?: number;                // RPE de sesión (Foster) 1-10

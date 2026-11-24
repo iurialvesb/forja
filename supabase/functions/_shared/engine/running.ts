@@ -91,9 +91,9 @@ export function effortsFromSessions(sessions: Session[], hrMax?: number): Effort
   for (const s of sessions) {
     if (s.discipline !== 'running' || !s.distanceM || s.distanceM < 1500) continue;
     const date = isoDate(s.startedAt);
-    if (s.isRace) out.push({ date, distanceM: s.distanceM, timeS: s.durationS, kind: 'race', sessionId: s.id });
-    else if (s.isTimeTrial) out.push({ date, distanceM: s.distanceM, timeS: s.durationS, kind: 'time_trial', sessionId: s.id });
-    else if (hrMax && s.avgHr && s.avgHr >= 0.88 * hrMax && s.durationS >= 1200) out.push({ date, distanceM: s.distanceM, timeS: s.durationS, kind: 'hard_effort', sessionId: s.id });
+    if (s.isRace) out.push({ date, distanceM: s.distanceM, timeS: s.movingS ?? s.durationS, kind: 'race', sessionId: s.id });
+    else if (s.isTimeTrial) out.push({ date, distanceM: s.distanceM, timeS: s.movingS ?? s.durationS, kind: 'time_trial', sessionId: s.id });
+    else if (hrMax && s.avgHr && s.avgHr >= 0.88 * hrMax && s.durationS >= 1200) out.push({ date, distanceM: s.distanceM, timeS: s.movingS ?? s.durationS, kind: 'hard_effort', sessionId: s.id });
   }
   return out;
 }

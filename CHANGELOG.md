@@ -1,5 +1,10 @@
 # Changelog
 
+## Ritmo con tiempo en movimiento
+- El ritmo usaba el tiempo total (con paradas en semáforos): la carrera del domingo salía a 7:04/km. Ahora usa el tiempo en movimiento del reloj (6:08/km) en Progreso, «Tu carrera», el detalle, la lista, el resumen para compartir y el cálculo de tus ritmos (VDOT).
+- El detalle de la carrera indica cuántos minutos de pausa se han descontado.
+- Fondo neutro como antes (sin tono verdoso).
+
 ## Tu evolución corriendo
 - Nueva pantalla «Tu carrera» (Entrenos → Progreso): 4 semanas, 12, 26 o 1 año.
 - Km, salidas, ritmo medio, tiempo, FC media, desnivel y carrera más larga, comparados con el periodo anterior.

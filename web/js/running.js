@@ -2,7 +2,7 @@
 // Todo sale de tus sesiones de running (Apple Watch vía HealthFit/Intervals.icu o registradas a mano).
 import * as api from './api.js';
 import { get, go } from './app.js';
-import { html, raw, act, today, addDays, monday, shortDate, pace, dur, barChart, lineChart } from './ui.js';
+import { html, raw, act, today, addDays, monday, shortDate, pace, dur, barChart, lineChart, runSec } from './ui.js';
 import { ic } from './icons.js';
 import { sessionRow } from './screens.js';
 
@@ -28,7 +28,7 @@ export async function RUNNING(params = []) {
   const all = await get(`runs:${weeks}`, () => api.db.select('sessions', { deleted_at: 'is.null', discipline: 'eq.running', started_at: `gte.${prevFrom}`, order: 'started_at.desc' }).catch(() => []), 300_000);
   const runs = all.filter((s) => s.started_at.slice(0, 10) >= from && +s.distance_m > 0);
   const prev = all.filter((s) => s.started_at.slice(0, 10) < from && +s.distance_m > 0);
-  const tot = (xs) => { const km = sum(xs.map((s) => s.distance_m)) / 1000, sec = sum(xs.map((s) => s.duration_s));
+  const tot = (xs) => { const km = sum(xs.map((s) => s.distance_m)) / 1000, sec = sum(xs.map(runSec));
     const hrW = xs.filter((s) => s.avg_hr), hr = hrW.length ? sum(hrW.map((s) => s.avg_hr * s.duration_s)) / sum(hrW.map((s) => s.duration_s)) : null;
     return { km, sec, n: xs.length, pace: km ? sec / km : null, hr, elev: sum(xs.map((s) => s.elevation_gain_m)) }; };
   const T = tot(runs), P = tot(prev);
@@ -48,13 +48,13 @@ export async function RUNNING(params = []) {
     return { x: shortDate(w), label: weeks > 12 ? shortDate(w) : shortDate(w).split(' ')[0], value: sum(z) / 60, segs: z.map((v, k) => ({ v: v / 60, color: ZC[k], name: ZN[k].split(' ')[0], fmt: (h) => hm(h * 3600) })) }; });
   // Ritmo y eficiencia por carrera (de más antigua a más reciente)
   const asc = [...runs].sort((a, b) => a.started_at.localeCompare(b.started_at));
-  const pacePts = asc.map((s) => ({ x: shortDate(s.started_at.slice(0, 10)), y: s.duration_s / (s.distance_m / 1000) }));
+  const pacePts = asc.map((s) => ({ x: shortDate(s.started_at.slice(0, 10)), y: runSec(s) / (s.distance_m / 1000) }));
   // Eficiencia aeróbica: metros que avanzas por cada latido (sube = mismo esfuerzo, más rápido)
-  const eff = asc.filter((s) => s.avg_hr > 0).map((s) => ({ x: shortDate(s.started_at.slice(0, 10)), y: s.distance_m / (s.avg_hr * (s.duration_s / 60)) }));
+  const eff = asc.filter((s) => s.avg_hr > 0).map((s) => ({ x: shortDate(s.started_at.slice(0, 10)), y: s.distance_m / (s.avg_hr * (runSec(s) / 60)) }));
   const effTrend = eff.length >= 4 ? (() => { const h = Math.floor(eff.length / 2); const a = sum(eff.slice(0, h).map((p) => p.y)) / h, b = sum(eff.slice(h).map((p) => p.y)) / (eff.length - h); return (b - a) / a; })() : null;
   const cad = asc.filter((s) => +s.cadence_spm > 0).map((s) => ({ x: shortDate(s.started_at.slice(0, 10)), y: +s.cadence_spm }));
   const longest = runs.reduce((a, b) => (+b.distance_m > +a.distance_m ? b : a));
-  const fastest = runs.filter((s) => +s.distance_m >= 5000).reduce((a, b) => (!a || b.duration_s / b.distance_m < a.duration_s / a.distance_m ? b : a), null);
+  const fastest = runs.filter((s) => +s.distance_m >= 5000).reduce((a, b) => (!a || runSec(b) / b.distance_m < runSec(a) / a.distance_m ? b : a), null);
   return {
     title: 'Tu carrera', sub: 'Evolución', right: back,
     body: html`
@@ -82,7 +82,7 @@ export async function RUNNING(params = []) {
 
       <h2>Ritmo</h2>
       <div class="card">${pacePts.length >= 2 ? lineChart([{ name: 'Ritmo', fmt: pace, points: pacePts }], { invert: true, height: 140 }) : html`<p class="small muted">Con dos carreras verás la evolución.</p>`}
-        ${fastest ? html`<p class="small" style="margin:8px 0 0">Tu ritmo más rápido en 5 km o más: <b>${pace(fastest.duration_s / (fastest.distance_m / 1000))}</b> (${es1(fastest.distance_m / 1000)} km, ${shortDate(fastest.started_at.slice(0, 10))}).</p>` : ''}</div>
+        ${fastest ? html`<p class="small" style="margin:8px 0 0">Tu ritmo más rápido en 5 km o más: <b>${pace(runSec(fastest) / (fastest.distance_m / 1000))}</b> (${es1(fastest.distance_m / 1000)} km, ${shortDate(fastest.started_at.slice(0, 10))}).</p>` : ''}</div>
 
       ${eff.length >= 3 ? html`<h2>Eficiencia aeróbica</h2>
       <div class="card">${lineChart([{ name: 'Metros por latido', fmt: (v) => `${es1(v, 2)} m`, points: eff }], { height: 130 })}
@@ -91,6 +91,6 @@ export async function RUNNING(params = []) {
       ${cad.length >= 3 ? html`<h2>Cadencia</h2><div class="card">${lineChart([{ name: 'Cadencia', fmt: (v) => `${Math.round(v)} ppm`, points: cad }], { height: 110 })}<p class="xs muted" style="margin:6px 0 0">Pasos por minuto. Entre 170 y 185 suele ser eficiente.</p></div>` : ''}
 
       <h2>Carreras</h2>
-      ${runs.slice(0, 30).map((s) => html`<div class="runrow">${sessionRow(s)}<div class="runmeta"><span>${pace(s.duration_s / (s.distance_m / 1000))}</span>${s.avg_hr ? html`<span>${s.avg_hr} ppm</span>` : ''}${Array.isArray(s.hr_zone_s) && sum(s.hr_zone_s) ? html`<span class="segbar mini" role="img" aria-label="Zonas">${raw(s.hr_zone_s.map((v, k) => (v ? `<i style="flex:${v} 0 0;background:${ZC[k]}"></i>` : '')).join(''))}</span>` : ''}</div></div>`)}`,
+      ${runs.slice(0, 30).map((s) => html`<div class="runrow">${sessionRow(s)}<div class="runmeta"><span>${pace(runSec(s) / (s.distance_m / 1000))}</span>${s.avg_hr ? html`<span>${s.avg_hr} ppm</span>` : ''}${Array.isArray(s.hr_zone_s) && sum(s.hr_zone_s) ? html`<span class="segbar mini" role="img" aria-label="Zonas">${raw(s.hr_zone_s.map((v, k) => (v ? `<i style="flex:${v} 0 0;background:${ZC[k]}"></i>` : '')).join(''))}</span>` : ''}</div></div>`)}`,
   };
 }

@@ -19,9 +19,9 @@ export function shareStats(s, blocks = []) {
   const km = (+s.distance_m || 0) / 1000;
   if (km > 0.2 && OUTDOOR.includes(s.discipline)) {
     out.push({ l: 'Distancia', v: num(km, km >= 100 ? 0 : 2), u: 'km' });
-    if (s.discipline === 'cycling') out.push({ l: 'Velocidad', v: num(km / (s.duration_s / 3600), 1), u: 'km/h' });
-    else if (s.discipline === 'swimming') out.push({ l: 'Ritmo', v: paceOf(s.duration_s / (km * 10)), u: '/100 m' });
-    else out.push({ l: 'Ritmo', v: paceOf(s.duration_s / km), u: '/km' });
+    if (s.discipline === 'cycling') out.push({ l: 'Velocidad', v: num(km / (+(s.moving_s || s.duration_s) / 3600), 1), u: 'km/h' });
+    else if (s.discipline === 'swimming') out.push({ l: 'Ritmo', v: paceOf(+(s.moving_s || s.duration_s) / (km * 10)), u: '/100 m' });
+    else out.push({ l: 'Ritmo', v: paceOf(+(s.moving_s || s.duration_s) / km), u: '/km' });
     out.push({ l: 'Tiempo', v: dur(s.duration_s), u: '' });
     return out;
   }

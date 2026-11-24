@@ -3,7 +3,7 @@ import * as api from './api.js';
 import { get, invalidate, go, render } from './app.js';
 import {
   html, raw, act, toast, sheet, setSheet, closeSheet, busy, today, addDays, monday, dayName, shortDate, timeOf, daysUntil, pace, dur, n0,
-  icon, intensityTag, levelColor, ring, bar, barChart, lineChart, steps, resizeImage, phaseName, slotName, SLOTS, spark, dec, plural, sessionName, tbl,
+  icon, intensityTag, levelColor, ring, bar, barChart, lineChart, steps, resizeImage, phaseName, slotName, SLOTS, spark, dec, plural, sessionName, tbl, runSec,
 } from './ui.js';
 import { ic } from './icons.js';
 import { EXERCISES, resolveExercise, getExercise } from './engine/exercises.js';
@@ -335,7 +335,7 @@ export const sessionRow = (s) => html`
   <div class="card tight row" data-act="${act(() => sessionDetail(s.id))}">
     ${icon(s.discipline)}
     <div class="grow"><div style="font-weight:600">${sessionName(s)}</div><div class="xs muted">${shortDate(s.started_at)} · ${timeOf(s.started_at)}</div></div>
-    <div style="text-align:right">${s.distance_m > 0 ? html`<div style="font-weight:600">${dec(s.distance_m / 1000, 2)} km</div>` : ''}<div class="xs muted">${dur(s.duration_s)}</div></div>
+    <div style="text-align:right">${s.distance_m > 0 ? html`<div style="font-weight:600">${dec(s.distance_m / 1000, 2)} km</div>` : ''}<div class="xs muted">${dur(s.discipline === 'running' && s.distance_m > 0 ? runSec(s) : s.duration_s)}</div></div>
   </div>`;
 
 async function sessionDetail(id) {
@@ -361,7 +361,7 @@ async function sessionDetail(id) {
       ${s.avg_hr ? html`<div class="stat"><div class="l">FC media</div><div class="v">${s.avg_hr}</div></div>` : ''}
       ${s.rpe ? html`<div class="stat"><div class="l">RPE</div><div class="v">${s.rpe}</div></div>` : ''}</div>
     <button class="block share-btn" data-act="${act(async () => { const { openShare } = await import('./share.js'); openShare(s, blocks, name); })}">${raw(ic('image', 18))} Compartir resumen</button>
-    ${s.discipline === 'running' && s.distance_m > 0 ? html`<p class="small">Ritmo medio: <b>${pace(s.duration_s / (s.distance_m / 1000))}</b></p>` : ''}
+    ${s.discipline === 'running' && s.distance_m > 0 ? html`<p class="small">Ritmo medio: <b>${pace(runSec(s) / (s.distance_m / 1000))}</b>${s.moving_s && s.duration_s - s.moving_s > 60 ? html` <span class="muted">(sin ${Math.round((s.duration_s - s.moving_s) / 60)} min de pausas)</span>` : ''}</p>` : ''}
     ${s.internal_load ? html`<p class="small muted">Carga del entreno ${n0(s.internal_load)} · impacto en piernas ${n0(s.leg_index)}</p>` : ''}
     ${watch}
     ${blocks.map((b) => {
