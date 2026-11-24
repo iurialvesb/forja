@@ -15,13 +15,13 @@ Deno.serve(handler(async (req) => {
       if (r.day) {
         const d = r.day;
         // Solo lo que envía el Atajo: un campo que no llega no borra el que ya vino de Intervals.icu
-        const vals: Record<string, unknown> = { hrv_ms: d.hrvMs, hrv_method: d.hrvMs ? 'sdnn' : undefined, rhr: d.rhr != null ? Math.round(d.rhr) : undefined, sleep_h: d.sleepH, steps: d.steps != null ? Math.round(d.steps) : undefined, active_kcal: d.activeKcal, exercise_min: d.exerciseMin != null ? Math.round(d.exerciseMin) : undefined };
+        const vals: Record<string, unknown> = { hrv_ms: d.hrvMs, hrv_method: d.hrvMs ? 'sdnn' : undefined, rhr: d.rhr != null ? Math.round(d.rhr) : undefined, sleep_h: d.sleepH, steps: d.steps != null ? Math.round(d.steps) : undefined, active_kcal: d.activeKcal, exercise_min: d.exerciseMin != null ? Math.round(d.exerciseMin) : undefined, respiration: d.respiration, spo2: d.spo2, vo2max: d.vo2max };
         const set = Object.fromEntries(Object.entries(vals).filter(([, v]) => v != null));
         if (Object.keys(set).length) await sb.from('daily_health').upsert({ user_id: userId, date: d.date, ...set, source: 'healthkit', updated_at: new Date().toISOString() }, { onConflict: 'user_id,date' });
         if (d.stages) {
           const st = d.stages;
           await sb.from('sleep_nights').upsert({ user_id: userId, date: d.date, asleep_min: st.asleepMin ?? null, deep_min: st.deepMin ?? null, rem_min: st.remMin ?? null, core_min: st.coreMin ?? null,
-            awake_min: st.awakeMin ?? null, in_bed_min: st.inBedMin ?? null, bedtime: st.bedtime ?? null, wake_time: st.wakeTime ?? null, source: 'healthkit', updated_at: new Date().toISOString() }, { onConflict: 'user_id,date' });
+            awake_min: st.awakeMin ?? null, in_bed_min: st.inBedMin ?? null, wrist_temp_c: st.wristTempC ?? null, bedtime: st.bedtime ?? null, wake_time: st.wakeTime ?? null, source: 'healthkit', updated_at: new Date().toISOString() }, { onConflict: 'user_id,date' });
         }
         if (d.weightKg) await sb.from('body_metrics').upsert({ user_id: userId, date: d.date, weight_kg: d.weightKg, source: 'healthkit' }, { onConflict: 'user_id,date,source' });
         days++;

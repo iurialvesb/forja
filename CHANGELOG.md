@@ -1,5 +1,10 @@
 # Changelog
 
+## Salud día a día
+- Salud se abre tocando Sueño · VFC · Reposo en Inicio y ahora va por días: tira de los últimos 14 días (cada uno con su barrita de horas) y ficha del día elegido con la noche (total, fases, nota), VFC, pulso en reposo, pasos, respiración, oxígeno y temperatura de muñeca, cada uno comparado en palabras con tu media de 7 días, más los entrenos de ese día.
+- Tendencia (7/30/90 días): sueño en barras apiladas por fases (profundo, básico, REM; gris si esa noche no hay fases) y pasos; tocar una barra abre ese día.
+- Atajo: nuevas claves opcionales `respiracion`, `oxigeno`, `temperatura` (migración 0023) y `vo2max`.
+
 ## Fases del sueño
 - Salud → Sueño muestra profundo, básico, REM y despierto de la última noche (barra, minutos, % y media de 7 noches) y la tabla de las últimas 14 noches.
 - Llegan del Atajo de Apple Salud (Intervals.icu no las da): nuevas claves `profundo_min`, `rem_min`, `basico_min`, `despierto_min`; tabla `sleep_nights` (migración 0022).

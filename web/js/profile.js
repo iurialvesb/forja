@@ -192,7 +192,16 @@ export async function health() {
       <li><b>Get Contents of URL</b>: la URL de arriba · Method <i>POST</i> · Header <code>x-forja-token</code> = tu token · Request Body <i>JSON</i> con <code>profundo</code>, <code>rem</code>, <code>basico</code>, <code>despierto</code> → cada uno con su <i>Details of Health Samples</i>. Forja suma las duraciones y entiende minutos, horas o segundos.</li>
       <li><b>Automation</b> → <b>＋</b> → <i>Time of Day</i> 9:00 · Daily → <i>Run Immediately</i> → «Forja Sleep».</li>
     </ol>
-    <p class="xs muted">Opcional: añade al JSON <code>vfc</code>, <code>fc_reposo</code>, <code>pasos</code> o <code>kcal_activas</code> con <i>Find Health Samples</i> + <i>Calculate Statistics</i>.</p>
+    <h3>Añadir más datos (opcional)</h3>
+    <p class="small">Mismo patrón: <b>Find Health Samples</b> (tipo de abajo, <i>Start Date is in the last 1 day</i>) → <b>Get Details of Health Samples</b> → <i>Value</i> → nuevo campo en el JSON con esta clave:</p>
+    <ul class="small">
+      <li><i>Respiratory Rate</i> → <code>respiracion</code> (respiraciones por minuto dormido)</li>
+      <li><i>Blood Oxygen Saturation</i> → <code>oxigeno</code></li>
+      <li><i>Sleeping Wrist Temperature</i> → <code>temperatura</code> (Forja la compara con tus noches: subidas de 0,5 °C suelen anticipar resfriado o fatiga)</li>
+      <li><i>Cardio Fitness</i> (VO₂ max), con <i>in the last 30 days</i> → <code>vo2max</code></li>
+      <li><i>Weight</i> → <code>peso</code></li>
+    </ul>
+    <p class="xs muted">VFC, pulso en reposo y pasos ya llegan por HealthFit; no hace falta añadirlos.</p>
     <details><summary>Entrenos del Apple Watch (opcional)</summary><p class="small">Si tu iOS ofrece la automatización «Entreno del Apple Watch → al terminar», puedes añadir al Diccionario una clave <code>entrenos</code> (lista) con <code>inicio</code>, <code>fin</code>, <code>tipo</code>, <code>kcal</code>, <code>fc_media</code> y <code>distancia_km</code>. Si no, registra el entreno pegando el texto o con «Manual»: Forja lo une igual a tu plan.</p></details>
     <p class="xs muted">Los datos llegan a tu buzón y se procesan con tus permisos cuando abres Forja. Puedes crear un token nuevo cuando quieras (el anterior deja de funcionar).</p>`);
   sheet('Apple Salud', ''); draw();

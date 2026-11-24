@@ -1,7 +1,7 @@
 // Normaliza lo que envía un Atajo de iOS. Los Atajos convierten listas en texto con saltos de línea, usan coma decimal
 // y nombres de campo en español; aquí se acepta todo eso sin inventar valores.
-export interface SleepStages { asleepMin?: number; deepMin?: number; remMin?: number; coreMin?: number; awakeMin?: number; inBedMin?: number; bedtime?: string; wakeTime?: string }
-export interface ShortcutDay { date: string; hrvMs?: number; rhr?: number; sleepH?: number; stages?: SleepStages; steps?: number; activeKcal?: number; exerciseMin?: number; weightKg?: number }
+export interface SleepStages { wristTempC?: number; asleepMin?: number; deepMin?: number; remMin?: number; coreMin?: number; awakeMin?: number; inBedMin?: number; bedtime?: string; wakeTime?: string }
+export interface ShortcutDay { date: string; hrvMs?: number; rhr?: number; sleepH?: number; stages?: SleepStages; respiration?: number; spo2?: number; vo2max?: number; steps?: number; activeKcal?: number; exerciseMin?: number; weightKg?: number }
 export interface ShortcutWorkout { start: string; durationS: number; type: string; kcal?: number; avgHr?: number; maxHr?: number; distanceM?: number }
 
 const nums = (v: unknown): number[] => {
@@ -64,9 +64,16 @@ export function parseShortcut(p: any, today: string): { day?: ShortcutDay; worko
     bedtime: ts(pick(p, 'acostarse', 'hora_acostarse', 'bedtime')), wakeTime: ts(pick(p, 'despertar', 'hora_despertar', 'wake_time')) };
   const stageSum = [stages.deepMin, stages.remMin, stages.coreMin].some((v) => v != null) ? (stages.deepMin ?? 0) + (stages.remMin ?? 0) + (stages.coreMin ?? 0) : undefined;
   if (stageSum != null) { stages.asleepMin = Math.round(stageSum * 10) / 10; if (sleepH == null) sleepH = stageSum / 60; }
+  // Temperatura de muñeca: el Atajo da el valor absoluto (≈ 35 °C) y la app Salud muestra la desviación; se guarda lo que llegue
+  // y Forja compara con tus noches anteriores.
+  const wt = avg(nums(pick(p, 'temperatura', 'temperatura_muñeca', 'temperatura_muneca', 'wrist_temp')));
+  if (wt != null && (Math.abs(wt) < 5 || (wt > 30 && wt < 42))) stages.wristTempC = Math.round(wt * 100) / 100;
   const hasStages = Object.values(stages).some((v) => v != null);
   const day: ShortcutDay = {
     stages: hasStages ? stages : undefined,
+    respiration: (() => { const v = avg(nums(pick(p, 'respiracion', 'respiración', 'frecuencia_respiratoria', 'respiration'))); return v != null ? Math.round(v * 10) / 10 : undefined; })(),
+    spo2: (() => { const v = avg(nums(pick(p, 'oxigeno', 'oxígeno', 'spo2', 'saturacion'))); return v == null ? undefined : Math.round((v <= 1 ? v * 100 : v) * 10) / 10; })(),
+    vo2max: (() => { const v = nums(pick(p, 'vo2max', 'vo2_max', 'vo2')).pop(); return v != null ? Math.round(v * 10) / 10 : undefined; })(),
     date, hrvMs: avg(nums(pick(p, 'vfc', 'hrv', 'variabilidad'))), rhr: avg(nums(pick(p, 'fc_reposo', 'rhr', 'resting_hr'))),
     sleepH: sleepH != null ? Math.round(sleepH * 100) / 100 : undefined, steps: sum(nums(pick(p, 'pasos', 'steps'))),
     activeKcal: sum(nums(pick(p, 'kcal_activas', 'energia_activa', 'active_kcal'))), exerciseMin: sum(nums(pick(p, 'minutos_ejercicio', 'exercise_min'))),

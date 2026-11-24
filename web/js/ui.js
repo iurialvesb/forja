@@ -171,7 +171,11 @@ const nice = (v) => { if (v <= 0) return 1; const e = 10 ** Math.floor(Math.log1
 export const tbl = (head, rows) => `<details class="dtable"><summary>Ver datos</summary><table><thead><tr>${head.map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></details>`;
 const tipData = (o) => esc(JSON.stringify(o));
 
-export function barChart(points, { color = 'var(--series-1)', height = 140, label = (p) => p.label, goal, fmt = (v) => Math.round(v), name = 'Valor' } = {}) {
+/**
+ * Barras (o barras apiladas si cada punto trae segs: [{ v, color, name }]): rejilla recesiva, extremo redondeado arriba,
+ * 2 px de separación entre tramos. hrefs: ruta por barra; tocarla abre ese día.
+ */
+export function barChart(points, { color = 'var(--series-1)', height = 140, label = (p) => p.label, goal, fmt = (v) => Math.round(v), name = 'Valor', hrefs, selected } = {}) {
   if (!points.length) return raw('<p class="muted small">Sin datos todavía.</p>');
   const W = 320, H = height, L = 30, R = 4, T = 14, B = 18;
   const top = nice(Math.max(1, goal ?? 0, ...points.map((p) => p.value || 0)) * 1.05);
@@ -179,18 +183,26 @@ export function barChart(points, { color = 'var(--series-1)', height = 140, labe
   const Y = (v) => H - B - ((H - B - T) * v) / top;
   const r4 = (x, y, w, h) => { const r = Math.min(4, w / 2, h); return h <= 0 ? '' : `M${x},${H - B}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${H - B}Z`; };
   const every = Math.ceil(points.length / 7), last = points.length - 1;
+  const stack = (p, x) => { let base = H - B; const segs = p.segs.filter((sg) => sg.v > 0);
+    return segs.map((sg, k) => { const h = ((H - B - T) * sg.v) / top, y = base - h, last1 = k === segs.length - 1, b0 = base; base = y;
+      if (!last1) return `<path d="M${x},${b0}V${y + 2}H${x + bw}V${b0}Z" fill="${sg.color}"/>`;
+      const r = Math.min(4, bw / 2, h); return `<path d="M${x},${b0}V${y + r}Q${x},${y} ${x + r},${y}H${x + bw - r}Q${x + bw},${y} ${x + bw},${y + r}V${b0}Z" fill="${sg.color}"/>`; }).join(''); };
   const bars = points.map((p, i) => { const v = p.value || 0, x = L + i * slot + (slot - bw) / 2, y = Y(v);
-    return `<path d="${r4(x, y, bw, H - B - y)}" fill="${p.color ?? color}" opacity="${p.dim ? 0.45 : 1}"/>${i % every === 0 || i === last ? `<text x="${L + i * slot + slot / 2}" y="${H - 4}" text-anchor="middle">${esc(label(p))}</text>` : ''}`; }).join('');
+    const sel = selected != null && i === selected ? `<rect x="${L + i * slot}" y="${T - 4}" width="${slot}" height="${H - B - T + 4}" rx="3" fill="var(--color-ink)" opacity="0.07"/>` : '';
+    return `${sel}${p.segs ? stack(p, x) : `<path d="${r4(x, y, bw, H - B - y)}" fill="${p.color ?? color}" opacity="${p.dim ? 0.45 : 1}"/>`}${i % every === 0 || i === last ? `<text x="${L + i * slot + slot / 2}" y="${H - 4}" text-anchor="middle">${esc(label(p))}</text>` : ''}`; }).join('');
   const lastV = points[last].value || 0, lx = L + last * slot + slot / 2;
   const grid = `<line class="grid" x1="${L}" x2="${W - R}" y1="${H - B}" y2="${H - B}"/><line class="grid" x1="${L}" x2="${W - R}" y1="${Y(top)}" y2="${Y(top)}"/><text x="${L - 4}" y="${Y(top) + 3}" text-anchor="end">${esc(fmt(top))}</text><text x="${L - 4}" y="${H - B + 3}" text-anchor="end">0</text>`;
   const g = goal ? `<line class="ref" x1="${L}" x2="${W - R}" y1="${Y(goal)}" y2="${Y(goal)}"/><text x="${L - 4}" y="${Y(goal) + 3}" text-anchor="end">${esc(fmt(goal))}</text>` : '';
   const vy = goal && Math.abs(Y(lastV) - 4 - Y(goal)) < 12 ? Math.min(Y(lastV), Y(goal)) - 6 : Y(lastV) - 4;
   const val = lastV ? `<text class="val" x="${lx}" y="${vy}" text-anchor="middle">${esc(fmt(lastV))}</text>` : '';
   const desc = `Gráfico de barras: ${points.length} valores, último ${fmt(lastV)}, máximo ${fmt(Math.max(...points.map((p) => p.value || 0)))}`;
-  const tips = points.map((p) => [label(p), p.value == null ? '–' : fmt(p.value)]);
-  return raw(`<figure class="viz" data-kind="bar" data-tip="${tipData({ L, R, W, n: points.length, rows: tips, name })}">
+  const segNames = points.find((p) => p.segs)?.segs.map((sg) => sg.name);
+  const tips = points.map((p) => [p.x ?? label(p), p.value == null || (!p.value && p.segs) ? '–' : fmt(p.value), ...(segNames ? p.segs.map((sg) => (sg.v ? (sg.fmt ?? fmt)(sg.v) : '–')) : [])]);
+  const extra = segNames ? { names: [name, ...segNames], cols: ['transparent', ...points.find((p) => p.segs).segs.map((sg) => sg.color)] } : {};
+  const legend = segNames ? `<div class="vlegend">${points.find((p) => p.segs).segs.map((sg) => `<span><i style="background:${sg.color};height:8px"></i>${esc(sg.name)}</span>`).join('')}</div>` : '';
+  return raw(`<figure class="viz${hrefs ? ' pick' : ''}" data-kind="bar" data-tip="${tipData({ L, R, W, n: points.length, rows: tips, name, ...extra, hrefs })}">${legend}
     <svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(desc)}" tabindex="0">${grid}${g}${bars}${val}<rect class="hl" x="0" y="${T - 4}" width="0" height="${H - B - T + 4}"/></svg>
-    <div class="vtip" hidden></div>${tbl(['Periodo', name], tips)}</figure>`);
+    <div class="vtip" hidden></div>${tbl(['Periodo', name, ...(segNames ?? [])], tips)}</figure>`);
 }
 export function lineChart(series, { height = 150, invert = false, band } = {}) {
   const all = series.flatMap((s) => s.points.map((p) => p.y)).filter((y) => y != null && !Number.isNaN(y));
@@ -262,6 +274,9 @@ if (typeof document !== 'undefined' && !window.__viz) {
   document.addEventListener('pointerdown', (e) => { const fig = e.target.closest?.('figure.viz'); if (fig && e.target.closest('svg')) vizAt(fig, vizIndex(fig, e.clientX)); });
   document.addEventListener('focusin', (e) => { const fig = e.target.closest?.('figure.viz'); if (fig && e.target.tagName === 'svg') vizAt(fig, fig._i ?? JSON.parse(fig.dataset.tip).n - 1); });
   document.addEventListener('focusout', (e) => { const fig = e.target.closest?.('figure.viz'); if (fig) vizOff(fig); });
+  // Barras con ruta: tocar una barra abre ese día (Intro con el teclado)
+  document.addEventListener('click', (e) => { const fig = e.target.closest?.('figure.viz.pick'); if (!fig || !e.target.closest('svg')) return; const d = JSON.parse(fig.dataset.tip); const i = vizIndex(fig, e.clientX); if (d.hrefs?.[i]) location.hash = `#/${d.hrefs[i]}`; });
+  document.addEventListener('keydown', (e) => { const fig = e.target.closest?.('figure.viz.pick'); if (fig && e.key === 'Enter' && fig._i != null) { const d = JSON.parse(fig.dataset.tip); if (d.hrefs?.[fig._i]) location.hash = `#/${d.hrefs[fig._i]}`; } });
   document.addEventListener('keydown', (e) => { const fig = e.target.closest?.('figure.viz'); if (!fig || !['ArrowLeft', 'ArrowRight'].includes(e.key)) return; e.preventDefault(); vizAt(fig, (fig._i ?? 0) + (e.key === 'ArrowRight' ? 1 : -1)); });
 }
 export function spark(values, color = 'var(--series-1)', kind = 'line', h = 36) {

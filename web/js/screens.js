@@ -80,7 +80,6 @@ export async function HOME() {
   };
 }
 
-const tile = (label, icn, color, value, sub, chart, to) => html`<div class="tile" data-act="${act(() => go(to))}"><div class="l"><span class="bub" style="background:color-mix(in srgb, ${color} 18%, transparent);color:${color}">${raw(ic(icn, 15))}</span>${label}</div><div class="v">${value}</div><div class="s">${sub}</div>${chart}</div>`;
 /** «· dom» si el dato no es de hoy (el reloj aún no ha mandado el de anoche): que no parezca la última noche. */
 const DOW = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
 const notToday = (d, t) => (d && d !== t ? ` · ${DOW[new Date(`${d}T12:00:00`).getDay()]}` : '');
@@ -101,77 +100,128 @@ function healthSummary(rows, t) {
 }
 
 // ======================= SALUD =======================
-/** Fases del sueño de la última noche (profundo, básico, REM, despierto) con su media de 7 noches. Llegan del Atajo de Apple Salud. */
+// Día a día: eliges un día en la tira de arriba (o tocando una barra) y ves esa noche y ese día; debajo, la tendencia.
 const STAGES = [['deep_min', 'Profundo', 'var(--seq-5)'], ['core_min', 'Básico', 'var(--seq-3)'], ['rem_min', 'REM', 'var(--seq-1)'], ['awake_min', 'Despierto', 'var(--series-2)']];
 const hm = (m) => (m == null ? '–' : m >= 60 ? `${Math.floor(m / 60)}h ${String(Math.round(m % 60)).padStart(2, '0')}` : `${Math.round(m)} min`);
-function sleepStages(nights, date) {
-  const n = nights.find((x) => x.date === date) ?? nights.find((x) => x.deep_min != null || x.rem_min != null);
-  if (!n) return html`<div class="small muted" style="margin-top:8px">Para ver sueño profundo, REM y despertares, conecta el Atajo de Apple Salud.</div><button class="sm ghost" style="margin-top:6px" data-act="${act(() => import('./profile.js').then((m) => m.health()))}">Configurar el Atajo</button>`;
-  const last7 = nights.slice(0, 7);
-  const av = (k) => { const v = last7.map((x) => x[k]).filter((x) => x != null).map(Number); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
-  const asleep = (+n.deep_min || 0) + (+n.core_min || 0) + (+n.rem_min || 0);
-  const parts = STAGES.filter(([k]) => n[k] != null && +n[k] > 0);
+const num = (v) => (v == null || v === '' ? null : +v);
+const asleepOf = (n) => (n && [n.deep_min, n.core_min, n.rem_min].some((v) => v != null) ? (+n.deep_min || 0) + (+n.core_min || 0) + (+n.rem_min || 0) : null);
+const es1 = (v, d = 1) => (+v).toLocaleString('es-ES', { maximumFractionDigits: d });
+/** «+4 sobre tu media» / «3 por debajo de tu media» — la comparación en palabras, nunca solo con color. */
+function vsAvg(v, mean, fmtv, { betterUp = true, tol = 0, fmtMean = fmtv } = {}) {
+  if (v == null || mean == null) return '';
+  const d = v - mean; if (Math.abs(d) <= tol) return html`<span class="cmp">en tu media (${fmtMean(mean)})</span>`;
+  const good = betterUp ? d > 0 : d < 0;
+  return html`<span class="cmp ${good ? 'up' : 'down'}">${good ? '▲' : '▼'} ${fmtv(Math.abs(d))} ${d > 0 ? 'más' : 'menos'} que tu media (${fmtMean(mean)})</span>`;
+}
+function stagesFor(n, nights7) {
+  if (!n || asleepOf(n) == null) return '';
+  const av = (k) => { const v = nights7.map((x) => num(x[k])).filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const asleep = asleepOf(n); const parts = STAGES.filter(([k]) => num(n[k]) > 0);
   return html`
-    <div class="small" style="margin:12px 0 4px;color:var(--color-ink-2)">Fases${n.date !== date ? ` · ${shortDate(n.date)}` : ''}</div>
-    <div class="segbar" role="img" aria-label="${parts.map(([k, l]) => `${l} ${hm(+n[k])}`).join(', ')}">${raw(parts.map(([k, , c]) => `<i style="flex:${+n[k]} 0 0;background:${c}"></i>`).join(''))}</div>
-    <div class="stages">${STAGES.map(([k, l, c]) => html`<div class="row"><i style="background:${c}"></i><span class="grow">${l}</span><b>${hm(n[k] != null ? +n[k] : null)}</b><span class="muted">${n[k] != null && asleep && k !== 'awake_min' ? `${Math.round((+n[k] / asleep) * 100)} %` : ''}</span><span class="muted">media ${hm(av(k))}</span></div>`)}</div>
-    ${raw(tbl(['Noche', 'Profundo', 'Básico', 'REM', 'Despierto'], nights.slice(0, 14).map((x) => [shortDate(x.date), hm(x.deep_min != null ? +x.deep_min : null), hm(x.core_min != null ? +x.core_min : null), hm(x.rem_min != null ? +x.rem_min : null), hm(x.awake_min != null ? +x.awake_min : null)])))}`;
+    <div class="segbar tall" role="img" aria-label="${parts.map(([k, l]) => `${l} ${hm(+n[k])}`).join(', ')}">${raw(parts.map(([k, , c]) => `<i style="flex:${+n[k]} 0 0;background:${c}"></i>`).join(''))}</div>
+    <div class="stages">${STAGES.map(([k, l, c]) => html`<div class="row"><i style="background:${c}"></i><span class="grow">${l}</span><b>${hm(num(n[k]))}</b><span class="muted">${num(n[k]) != null && asleep && k !== 'awake_min' ? `${Math.round((+n[k] / asleep) * 100)} %` : ''}</span><span class="muted">media ${hm(av(k))}</span></div>`)}</div>`;
 }
 export async function HEALTH(params = []) {
   const t = today();
-  const span = Number(params[0]) || 30;
+  const span = [7, 30, 90].includes(Number(params[0])) ? Number(params[0]) : 30;
   const [rows, sessions, nights] = await Promise.all([
     get('health:120', () => api.db.select('daily_health', { date: `gte.${addDays(t, -120)}`, order: 'date' }).catch(() => []), 300_000),
     get('sessions:42', () => api.db.select('sessions', { deleted_at: 'is.null', started_at: `gte.${addDays(t, -42)}`, order: 'started_at.desc' })),
-    get('sleep:30', () => api.db.select('sleep_nights', { date: `gte.${addDays(t, -30)}`, order: 'date.desc' }).catch(() => []), 300_000),
+    get('sleep:90', () => api.db.select('sleep_nights', { date: `gte.${addDays(t, -90)}`, order: 'date.desc' }).catch(() => []), 300_000),
   ]);
   const by = Object.fromEntries(rows.map((r) => [r.date, r]));
+  const nb = Object.fromEntries(nights.map((n) => [n.date, n]));
+  const hasDay = (d) => by[d] && ['sleep_h', 'hrv_ms', 'rhr', 'steps'].some((k) => by[d][k] != null) || nb[d];
+  // Día elegido: el de la ruta, o el más reciente con datos (hoy si ya llegó la noche)
+  const D = /^\d{4}-\d{2}-\d{2}$/.test(params[1] ?? '') ? params[1] : [0, 1, 2, 3].map((i) => addDays(t, -i)).find(hasDay) ?? t;
+  const day = by[D] ?? {}, night = nb[D];
+  const prev7 = [...Array(7)].map((_, i) => addDays(D, -(i + 1)));
+  const mean = (k, src = by) => { const v = prev7.map((d) => num(src[d]?.[k])).filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const sd7 = (k) => { const v = prev7.map((d) => num(by[d]?.[k])).filter((x) => x != null); const m = mean(k); return v.length > 2 ? Math.sqrt(v.reduce((a, x) => a + (x - m) ** 2, 0) / (v.length - 1)) : 0; };
+  const sleepH = num(day.sleep_h) ?? (asleepOf(night) != null ? asleepOf(night) / 60 : null);
+  const sleepMean = (() => { const v = prev7.map((d) => num(by[d]?.sleep_h) ?? (asleepOf(nb[d]) != null ? asleepOf(nb[d]) / 60 : null)).filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; })();
+  const hrvM = mean('hrv_ms'), hrvS = sd7('hrv_ms');
+  const go2 = (d, n = span) => `salud/${n}/${d}`;
+  // Tira de días (14): cada chip lleva una barrita con las horas de sueño
+  const strip = [...Array(14)].map((_, i) => addDays(t, -(13 - i)));
+  const chip = (d) => { const h = num(by[d]?.sleep_h) ?? (asleepOf(nb[d]) != null ? asleepOf(nb[d]) / 60 : null); const wd = dayName(d).split(' ')[0].replace('.', '');
+    return html`<a class="dchip ${d === D ? 'on' : ''} ${hasDay(d) ? '' : 'empty'}" href="#/${go2(d)}" aria-current="${d === D ? 'date' : 'false'}" aria-label="${dayName(d, true)}${h != null ? `, ${fmtSleep(h)} de sueño` : ''}">
+      <span class="wd">${wd}</span><b>${d.slice(8).replace(/^0/, '')}</b><span class="mb"><i style="height:${h != null ? Math.min(100, (h / 10) * 100) : 0}%"></i></span><span class="hh">${h != null ? fmtSleep(h).replace(' ', '') : '–'}</span></a>`; };
+  const dayActs = sessions.filter((s) => (s.started_at ?? '').slice(0, 10) === D);
+  const metric = (label, icn, value, unit, cmp, extra = '') => html`<div class="dm"><div class="l">${raw(ic(icn, 14))} ${label}</div><div class="v">${value ?? '–'}${value != null && unit ? html`<small>${unit}</small>` : ''}</div>${cmp}${extra}</div>`;
+  const metrics = [
+    day.hrv_ms != null || hrvM != null ? metric('VFC', 'pulse', day.hrv_ms != null ? Math.round(+day.hrv_ms) : null, ' ms', vsAvg(num(day.hrv_ms), hrvM, (v) => `${Math.round(v)} ms`, { tol: 1, fmtMean: (v) => Math.round(v) }),
+      day.hrv_ms != null && hrvM ? html`<span class="tag ${+day.hrv_ms < hrvM - hrvS ? 'amber' : 'green'}">${+day.hrv_ms < hrvM - hrvS ? 'Por debajo de tu rango' : 'En tu rango'}</span>` : '') : '',
+    day.rhr != null || mean('rhr') != null ? metric('Pulso en reposo', 'heart', day.rhr != null ? +day.rhr : null, ' ppm', vsAvg(num(day.rhr), mean('rhr'), (v) => `${Math.round(v)} ppm`, { betterUp: false, tol: 1, fmtMean: (v) => Math.round(v) })) : '',
+    day.steps != null || mean('steps') != null ? metric('Pasos', 'steps', day.steps != null ? n0(+day.steps) : null, '', vsAvg(num(day.steps), mean('steps'), (v) => n0(v), { tol: 300 })) : '',
+    day.respiration != null ? metric('Respiración dormido', 'lungs', es1(day.respiration), ' rpm', vsAvg(num(day.respiration), mean('respiration'), (v) => `${es1(v)} rpm`, { betterUp: false, tol: 0.4, fmtMean: (v) => es1(v) })) : '',
+    day.spo2 != null ? metric('Oxígeno en sangre', 'drop', es1(day.spo2), ' %', vsAvg(num(day.spo2), mean('spo2'), (v) => `${es1(v)} %`, { tol: 0.5, fmtMean: (v) => es1(v) })) : '',
+    night?.wrist_temp_c != null ? (() => { const v = +night.wrist_temp_c; const abs = v > 20;
+      const base = abs ? mean('wrist_temp_c', nb) : 0; const dev = base != null ? v - base : null;
+      return metric('Temperatura muñeca', 'thermo', abs ? es1(v, 1) : `${v > 0 ? '+' : ''}${es1(v, 2)}`, ' °C',
+        html`<span class="cmp">${dev == null ? 'Aún sin noches para comparar' : `${dev > 0 ? '+' : ''}${es1(dev, 2)} °C respecto a lo normal${Math.abs(dev) >= 0.5 ? ' · alta: atento a resfriado o fatiga' : ''}`}</span>`); })() : '',
+    day.vo2max != null ? metric('VO₂máx', 'lungs', es1(day.vo2max), '', '') : '',
+  ].join('');
+  // Tendencia
   const days = [...Array(span)].map((_, i) => addDays(t, -(span - 1 - i)));
-  const ser = (k) => days.map((d) => ({ x: shortDate(d), y: by[d]?.[k] != null ? +by[d][k] : null, label: dayName(d).slice(0, 2), value: by[d]?.[k] != null ? +by[d][k] : 0 }));
-  const vals = (k) => days.map((d) => by[d]?.[k]).filter((x) => x != null).map(Number);
+  const selI = days.indexOf(D);
+  const lab = (d) => (span > 14 ? shortDate(d) : dayName(d).slice(0, 2));
+  const anyStages = days.some((d) => asleepOf(nb[d]) != null);
+  const sleepPts = days.map((d) => { const n = nb[d]; const h = num(by[d]?.sleep_h) ?? (asleepOf(n) != null ? asleepOf(n) / 60 : null);
+    const segs = (src) => [...STAGES.slice(0, 3).map(([k, l, c]) => ({ v: src ? (num(src[k]) ?? 0) / 60 : 0, color: c, name: l, fmt: (v) => hm(v * 60) })), { v: src ? 0 : h ?? 0, color: 'var(--color-paper-3)', name: 'Sin fases', fmt: (v) => hm(v * 60) }];
+    return anyStages ? { x: shortDate(d), label: lab(d), value: asleepOf(n) != null ? asleepOf(n) / 60 : h ?? 0, segs: segs(asleepOf(n) != null ? n : null) }
+      : { x: shortDate(d), label: lab(d), value: h ?? 0, color: h != null && h < 6.5 ? 'var(--seq-1)' : undefined }; });
+  const ser = (k) => days.map((d) => ({ x: shortDate(d), y: num(by[d]?.[k]), label: lab(d), value: num(by[d]?.[k]) ?? 0 }));
+  const vals = (k) => days.map((d) => num(by[d]?.[k])).filter((x) => x != null);
   const avg = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
-  const sd = (xs) => { const m = avg(xs); return xs.length > 2 ? Math.sqrt(xs.reduce((a, x) => a + (x - m) ** 2, 0) / (xs.length - 1)) : 0; };
-  const H = healthSummary(rows, t);
-  const lastNight = [0, 1, 2].map((i) => by[addDays(t, -i)]).find((r) => r?.sleep_h != null);
-  const hrv = vals('hrv_ms'), hm = avg(hrv), hs = sd(hrv);
+  const sdv = (xs) => { const m = avg(xs); return xs.length > 2 ? Math.sqrt(xs.reduce((a, x) => a + (x - m) ** 2, 0) / (xs.length - 1)) : 0; };
+  const hv = vals('hrv_ms'), hmv = avg(hv), hsv = sdv(hv);
   const any = rows.some((r) => r.sleep_h != null || r.hrv_ms != null || r.steps != null);
-  const extraTiles = [['vo2max', 'VO₂máx', 'lungs', 'var(--blue)', ''], ['spo2', 'Oxígeno en sangre', 'drop', 'var(--red)', ' %'], ['respiration', 'Respiración', 'lungs', 'var(--green)', ' rpm'], ['body_fat', 'Grasa corporal', 'scale', 'var(--amber)', ' %']]
-    .map(([k, l, i, c, u]) => { const v = vals(k); return v.length ? tile(l, i, c, html`${(+v[v.length - 1]).toLocaleString('es-ES', { maximumFractionDigits: 1 })}<small>${u}</small>`, `media ${avg(v).toLocaleString('es-ES', { maximumFractionDigits: 1 })}${u}`, spark(v.slice(-30), c.replace(/var\((--[a-z]+)\)/, (m) => ({ '--blue': '#38bdf8', '--red': '#f87171', '--green': '#34d399', '--amber': '#fbbf24' })[m.slice(4, -1)] ?? '#7fb0ff')), 'salud') : ''; }).join('');
-  const acts = sessions.slice(0, 30);
+  const hasStagesEver = nights.some((n) => asleepOf(n) != null);
+  const others = sessions.filter((s) => (s.started_at ?? '').slice(0, 10) !== D).slice(0, 10);
   return {
-    title: 'Salud', sub: 'Apple Watch · HealthFit',
-    right: html`<button class="icon-btn" data-act="${act(() => go('inicio'))}">✕</button>`,
+    title: 'Salud', sub: 'Día a día',
+    right: html`<button class="icon-btn" aria-label="Cerrar" data-act="${act(() => go('inicio'))}">✕</button>`,
     body: html`
-      <div class="seg">${[7, 30, 90].map((n) => html`<button class="${span === n ? 'on' : ''}" data-act="${act(() => go(`salud/${n}`))}">${n} días</button>`)}</div>
       ${!any ? html`<div class="card"><h3>Aún no llega tu salud del Watch</h3><p class="small muted">Los entrenos ya llegan; el sueño, la VFC, el pulso en reposo y los pasos se activan aparte en HealthFit:</p>
         <ol class="small"><li>Abre <b>HealthFit</b> → pestaña <b>Ajustes</b> → <b>Intervals.icu</b>.</li><li>Activa <b>Sincronizar datos de salud / Health metrics</b> (sueño, VFC, FC en reposo, peso, pasos).</li><li>Pulsa <b>Sincronizar ahora</b>. En unos minutos aparece aquí (traigo los últimos 120 días).</li></ol></div>` : ''}
+      <nav class="dstrip" aria-label="Elige un día">${strip.map(chip)}</nav>
+      <section class="card dcard">
+        <div class="dhead"><h3>${dayName(D, true)}</h3><span class="small muted">${D === t ? 'Hoy · ' : ''}noche del ${addDays(D, -1).slice(8).replace(/^0/, '')} al ${D.slice(8).replace(/^0/, '')}</span></div>
+        <div class="dsleep"><div class="l">${raw(ic('moon', 14))} Sueño</div>
+          <div class="kpi">${sleepH != null ? fmtSleep(sleepH) : '–'}</div>
+          ${vsAvg(sleepH, sleepMean, (v) => fmtSleep(v).replace(/^0h /, ''), { tol: 0.15 })}
+          ${day.sleep_score != null ? html`<span class="tag">Nota ${day.sleep_score}</span>` : ''}
+        </div>
+        ${night && asleepOf(night) != null ? stagesFor(night, prev7.map((d) => nb[d]).filter(Boolean))
+          : html`<p class="small muted" style="margin:8px 0 0">${hasStagesEver ? 'Esa noche no llegaron las fases (el Atajo no se ejecutó).' : 'Para ver profundo, REM y despertares, conecta el Atajo de Apple Salud.'}</p>
+            ${hasStagesEver ? '' : html`<button class="sm ghost" style="margin-top:6px" data-act="${act(() => import('./profile.js').then((m) => m.health()))}">Configurar el Atajo</button>`}`}
+        ${metrics ? html`<div class="dmetrics">${raw(metrics)}</div>` : ''}
+        ${dayActs.length ? html`<div class="small" style="margin:14px 0 4px;color:var(--color-ink-2)">Entrenos de ese día</div>${dayActs.map(sessionRow)}` : ''}
+      </section>
+      <h2 style="margin-top:22px">Tendencia</h2>
+      <div class="seg">${[7, 30, 90].map((n) => html`<button class="${span === n ? 'on' : ''}" data-act="${act(() => go(go2(D, n)))}">${n} días</button>`)}</div>
+      <p class="xs muted" style="margin:6px 0 0">Toca una barra para ver ese día.</p>
       <div class="card">
-        <div class="row"><span class="bub" style="width:34px;height:34px;background:var(--color-paper-2);color:var(--color-ink)">${raw(ic('moon', 18))}</span><h3 class="grow" style="margin:0">Sueño</h3>${lastNight?.sleep_score != null ? html`<span class="tag purple">Nota ${lastNight.sleep_score}</span>` : ''}</div>
-        <div class="row" style="margin:10px 0 2px;align-items:flex-end"><div class="kpi">${lastNight ? fmtSleep(+lastNight.sleep_h) : '–'}</div><div class="small muted" style="margin-left:6px">${lastNight ? (lastNight.date === t ? 'anoche' : shortDate(lastNight.date)) : ''}</div></div>
-        <div class="small muted">Media ${fmtSleep(avg(vals('sleep_h')))}${lastNight?.avg_sleeping_hr ? ` · pulso dormido ${lastNight.avg_sleeping_hr} ppm` : ''}${H.sleep && H.sleep.avg7 < 7 ? ' · intenta llegar a 7–8 h' : ''}</div>
-        ${sleepStages(nights, lastNight?.date)}
-        <div class="vlegend"><span><i style="background:var(--series-1);height:8px"></i>6,5 h o más</span><span><i style="background:var(--seq-1);height:8px"></i>Menos de 6,5 h</span><span><i style="background:var(--color-muted)"></i>Objetivo 8 h</span></div>
-        ${barChart(ser('sleep_h').map((p) => ({ ...p, color: p.value && p.value < 6.5 ? 'var(--seq-1)' : undefined })), { name: 'Sueño', height: 130, goal: 8, fmt: (v) => (v % 1 ? fmtSleep(v) : `${v} h`), label: (p) => (span > 14 ? p.x : p.label) })}
+        <div class="row"><h3 class="grow" style="margin:0">Sueño</h3><span class="small muted">media ${fmtSleep(avg(sleepPts.map((p) => p.value).filter((v) => v > 0)))}</span></div>
+        ${anyStages ? '' : html`<div class="vlegend"><span><i style="background:var(--series-1);height:8px"></i>6,5 h o más</span><span><i style="background:var(--seq-1);height:8px"></i>Menos de 6,5 h</span><span><i style="background:var(--color-muted)"></i>Objetivo 8 h</span></div>`}
+        ${barChart(sleepPts, { name: 'Sueño', height: 150, goal: 8, fmt: (v) => (v % 1 ? fmtSleep(v) : `${v} h`), label: (p) => p.label, hrefs: days.map((d) => go2(d)), selected: selI >= 0 ? selI : undefined })}
       </div>
       <div class="card">
-        <div class="row"><span class="bub" style="width:34px;height:34px;background:var(--accentSoft);color:var(--accent2)">${raw(ic('pulse', 18))}</span><h3 class="grow" style="margin:0">Variabilidad cardiaca (VFC)</h3>${H.hrv && hm ? html`<span class="tag ${H.hrv.v < hm - hs ? 'amber' : 'green'}">${H.hrv.v < hm - hs ? 'Por debajo' : 'En tu rango'}</span>` : ''}</div>
-        <div class="row" style="margin:10px 0 2px;align-items:flex-end"><div class="kpi">${H.hrv ? Math.round(H.hrv.v) : '–'}<small> ms</small></div></div>
-        <div class="small muted">Tu rango normal: ${hm ? `${Math.round(hm - hs)}–${Math.round(hm + hs)} ms` : '—'} (franja verde)</div>
-        ${lineChart([{ points: ser('hrv_ms') }], { height: 130, band: hm ? [hm - hs, hm + hs] : undefined })}
+        <div class="row"><h3 class="grow" style="margin:0">VFC</h3><span class="small muted">rango normal ${hmv ? `${Math.round(hmv - hsv)}–${Math.round(hmv + hsv)} ms` : '—'}</span></div>
+        ${lineChart([{ points: ser('hrv_ms'), name: 'VFC', fmt: (v) => `${Math.round(v)} ms` }], { height: 130, band: hmv ? [hmv - hsv, hmv + hsv] : undefined })}
+        <p class="xs muted" style="margin:4px 0 0">Franja verde: tu rango normal en este periodo.</p>
       </div>
       <div class="card">
-        <div class="row"><span class="bub" style="width:34px;height:34px;background:var(--color-paper-2);color:var(--color-ink)">${raw(ic('heart', 18))}</span><h3 class="grow" style="margin:0">Pulso en reposo</h3></div>
-        <div class="row" style="margin:10px 0 2px;align-items:flex-end"><div class="kpi">${H.rhr ? H.rhr.v : '–'}<small> ppm</small></div></div>
-        ${lineChart([{ points: ser('rhr') }], { height: 110 })}
+        <div class="row"><h3 class="grow" style="margin:0">Pulso en reposo</h3><span class="small muted">media ${avg(vals('rhr')) ? Math.round(avg(vals('rhr'))) : '–'} ppm</span></div>
+        ${lineChart([{ points: ser('rhr'), name: 'Reposo', fmt: (v) => `${Math.round(v)} ppm` }], { height: 110 })}
       </div>
       <div class="card">
-        <div class="row"><span class="bub" style="width:34px;height:34px;background:var(--color-paper-2);color:var(--color-ink)">${raw(ic('steps', 18))}</span><h3 class="grow" style="margin:0">Pasos</h3><span class="small muted">media ${n0(avg(vals('steps')))}</span></div>
-        ${barChart(ser('steps'), { name: 'Pasos', height: 120, goal: 8000, fmt: (v) => `${Math.round(v / 1000)}k`, label: (p) => (span > 14 ? p.x : p.label) })}
+        <div class="row"><h3 class="grow" style="margin:0">Pasos</h3><span class="small muted">media ${n0(avg(vals('steps')))}</span></div>
+        ${barChart(ser('steps'), { name: 'Pasos', height: 120, goal: 8000, fmt: (v) => `${Math.round(v / 1000)}k`, label: (p) => p.label, hrefs: days.map((d) => go2(d)), selected: selI >= 0 ? selI : undefined })}
       </div>
-      ${extraTiles ? html`<div class="tiles">${raw(extraTiles)}</div>` : ''}
-      <h2>Todas tus actividades</h2>
-      ${acts.length ? acts.map(sessionRow) : html`<div class="card muted small">Sin actividades en las últimas semanas.</div>`}
-      <p class="xs muted center" style="padding:16px 0">Llegan del Apple Watch a través de HealthFit e Intervals.icu cada pocos minutos.</p>`,
+      ${others.length ? html`<h2>Otras actividades recientes</h2>${others.map(sessionRow)}` : ''}
+      <p class="xs muted center" style="padding:16px 0">Sueño total, VFC, pulso y pasos llegan del Apple Watch vía HealthFit e Intervals.icu; las fases y el resto, del Atajo de Apple Salud.</p>`,
   };
 }
 

@@ -155,6 +155,36 @@ figure.viz svg:focus-visible { outline: 2px solid var(--color-focus); outline-of
 .dtable td + td, .dtable th + th { text-align: right; }
 .segbar { display: flex; gap: var(--space-3xs); height: 12px; margin: var(--space-xs) 0; }
 .segbar i { border-radius: 999px; min-width: 2px; }
+/* Salud día a día: tira de días (cada chip con una barrita de horas de sueño) y la ficha del día */
+.dstrip { display: flex; gap: var(--space-2xs); overflow-x: auto; scroll-snap-type: x proximity; padding: var(--space-2xs) 0 var(--space-xs); margin: 0 calc(var(--space-md) * -1); padding-inline: var(--space-md); scrollbar-width: none; }
+.dstrip::-webkit-scrollbar { display: none; }
+.dchip { flex: 0 0 52px; scroll-snap-align: end; display: grid; justify-items: center; gap: 2px; padding: var(--space-2xs) 0; border-radius: var(--radius-card); border: var(--rule-hair) solid var(--color-rule); color: var(--color-ink); text-decoration: none; background: var(--color-paper); min-height: 44px; }
+.dchip .wd { font-size: var(--text-xs); color: var(--color-muted); text-transform: lowercase; }
+.dchip b { font: 600 var(--text-md) var(--font-body); font-variant-numeric: tabular-nums; }
+.dchip .mb { width: 8px; height: 26px; border-radius: 4px; background: var(--color-paper-3); display: flex; align-items: flex-end; overflow: hidden; }
+.dchip .mb i { width: 100%; background: var(--series-1); border-radius: 4px; }
+.dchip .hh { font-size: 11px; color: var(--color-muted); font-variant-numeric: tabular-nums; }
+.dchip.empty { opacity: 0.55; }
+.dchip.on { background: var(--color-ink); border-color: var(--color-ink); color: var(--color-paper); }
+.dchip.on .wd, .dchip.on .hh { color: color-mix(in oklab, var(--color-paper) 75%, transparent); }
+.dchip.on .mb { background: color-mix(in oklab, var(--color-paper) 20%, transparent); }
+.dchip.on .mb i { background: var(--color-brass); }
+.dchip:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.dhead { display: flex; flex-direction: column; gap: 2px; margin-bottom: var(--space-xs); }
+.dhead h3 { margin: 0; font-size: var(--text-lg); }
+.dhead h3::first-letter { text-transform: uppercase; }
+.dsleep { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2xs) var(--space-sm); }
+.dsleep .l { width: 100%; font-size: var(--text-sm); color: var(--color-ink-2); display: flex; align-items: center; gap: var(--space-2xs); }
+.cmp { font-size: var(--text-sm); color: var(--color-ink-2); }
+.cmp.up, .cmp.down { font-weight: 500; }
+.dmetrics { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-sm) var(--space-md); margin-top: var(--space-md); padding-top: var(--space-sm); border-top: var(--rule-hair) solid var(--color-rule); }
+.dm .l { font-size: var(--text-sm); color: var(--color-ink-2); display: flex; align-items: center; gap: var(--space-2xs); }
+.dm .v { font: 600 var(--text-xl) var(--font-body); font-variant-numeric: tabular-nums; }
+.dm .v small { font-size: var(--text-sm); font-weight: 500; color: var(--color-muted); }
+.dm .cmp { display: block; font-size: var(--text-xs); }
+.dm .tag { margin-top: var(--space-2xs); }
+.segbar.tall { height: 16px; }
+figure.viz.pick svg { cursor: pointer; }
 .stages { display: grid; gap: var(--space-3xs); font-size: var(--text-sm); }
 .stages .row { gap: var(--space-xs); align-items: center; }
 .stages i { width: 10px; height: 10px; border-radius: 3px; flex: none; }

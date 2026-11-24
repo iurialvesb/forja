@@ -78,7 +78,7 @@ REST.foods = E.REFERENCE_FOODS.map((f) => ({ id: f.id, name: f.name, kcal: f.per
 FN['nutrition-log'] = (b) => (b.action === 'confirm' ? { logged: { kcal: 512 }, day: null, missingInPantry: [] } : { items: [{ foodId: 'off_1', name: 'Coca de tomate', grams: 150, gramsConfidence: 'estimado', macros: { kcal: 400, protein: 9, carbs: 60, fat: 14 } }], questions: [] });
 REST.daily_health = [...Array(40)].map((_, i) => { const d = E.addDays(today, -(39 - i)); const k = Math.sin(i / 3);
   return { date: d, sleep_h: +(7.1 + k * 0.8 - (i % 9 === 0 ? 1.3 : 0)).toFixed(2), sleep_score: Math.round(78 + k * 9), hrv_ms: Math.round(52 + k * 7 + (i % 5) - 2), rhr: Math.round(50 - k * 2), steps: Math.round(9000 + k * 3500 + (i % 4) * 600), avg_sleeping_hr: 49, vo2max: 51.2, spo2: 96.5, respiration: 14.2 }; });
-REST.sleep_nights = [...Array(10)].map((_, i) => ({ date: E.addDays(today, -i), deep_min: 46 + (i % 3) * 8, core_min: 221 - i * 4, rem_min: 103 + (i % 2) * 12, awake_min: 4 + (i % 4) }));
+REST.sleep_nights = [...Array(10)].map((_, i) => ({ date: E.addDays(today, -i), deep_min: 46 + (i % 3) * 8, core_min: 221 - i * 4, rem_min: 103 + (i % 2) * 12, awake_min: 4 + (i % 4), wrist_temp_c: i === 0 ? 0.18 : null }));
 REST.food_logs = [{ id: 'fl1', date: today, slot: 'media_manana', items: [{ foodId: 'wrap_avena_hacendado', name: 'Wrap de avena Hacendado', grams: 40, macros: { kcal: 115, protein: 6, carbs: 16, fat: 2.4 } }, { foodId: 'huevo', name: 'Huevo', grams: 120, macros: { kcal: 172, protein: 15, carbs: 1, fat: 12 } }], kcal: 287, protein: 21, carbs: 17, fat: 14.4, source: 'texto', created_at: today + 'T09:00:00Z' }];
 const posted = [];
 REST.planned_sessions.push({ id: 'pcf', date: E.addDays(today, -1), slot: 'pm', type: 'crossfit_box', discipline: 'crossfit', title: 'CrossFit (pendiente de reserva)', objective: 'Mantener fuerza', intensity: 'alta', est_minutes: 60, status: 'done', completed_session_id: 's1', steps: [] },
@@ -266,6 +266,16 @@ await shot('#/inicio', '15-checkin', () => page.locator('#view .hero').first().c
 await shot('#/nutricion', '16-editar-comida', async () => { await page.getByRole('button', { name: 'Diario', exact: true }).click(); await page.waitForTimeout(500); await page.locator('.sugg .grow').first().click(); await page.waitForTimeout(450); await page.screenshot({ path: `${OUT}/16a-opciones-sugerencia.png` }); await page.getByRole('button', { name: 'Cambiar cantidades o plato' }).click(); await page.waitForTimeout(400); });
 await shot('#/salud', '25-salud');
 await page.evaluate(() => window.scrollTo(0, 900)); await page.screenshot({ path: `${OUT}/25b-salud-abajo.png` });
+{ // Elegir un día: tocar un chip de la tira cambia la ficha del día
+  const chips = page.locator('.dstrip .dchip'); const n = await chips.count();
+  await chips.nth(n - 3).click(); await page.waitForTimeout(500);
+  const h = await page.locator('.dcard .dhead h3').innerText({ timeout: 1500 });
+  const on = await page.locator('.dstrip .dchip.on').count();
+  if (n !== 14 || on !== 1 || !/\d/.test(h)) errors.push(`salud día a día: chips ${n}, activo ${on}, título «${h}»`); else console.log('Salud día a día OK:', h);
+  await page.screenshot({ path: `${OUT}/25c-salud-dia.png` });
+  await page.locator('figure.viz.pick svg').first().click({ position: { x: 60, y: 60 } }); await page.waitForTimeout(500);
+  if (!/#\/salud\/30\/\d{4}-/.test(page.url())) errors.push(`tocar barra no abre el día: ${page.url()}`); else console.log('Barra → día OK');
+}
 await shot('#/objetivo/g1', '17-objetivo-media');
 await shot('#/objetivo/g2', '18-objetivo-hyrox');
 await page.evaluate(() => window.scrollTo(0, 700)); await page.screenshot({ path: `${OUT}/18b-objetivo-hyrox-estaciones.png` });

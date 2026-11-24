@@ -68,7 +68,7 @@ code{font:500 14px ui-monospace,Menlo,monospace;background:light-dark(#e3ebe6,#2
   <div class="wrap">
     <h1>Fases del sueño en Forja con un Atajo</h1>
     <p>HealthFit solo manda a Intervals.icu el total de horas. Este Atajo lee de Apple Salud tu sueño <b>profundo, REM, básico (Core) y despierto</b> y lo envía a Forja cada mañana. Se monta una vez, unos 10 minutos. Los nombres en <b>negrita y en inglés</b> son exactamente lo que verás en tu iPhone.</p>
-    <nav class="toc"><a href="#forja">1 · Token en Forja</a><a href="#atajo">2 · Crear el Atajo</a><a href="#auto">3 · Cada mañana</a><a href="#comprobar">4 · Comprobar</a></nav>
+    <nav class="toc"><a href="#forja">1 · Token en Forja</a><a href="#atajo">2 · Crear el Atajo</a><a href="#auto">3 · Cada mañana</a><a href="#comprobar">4 · Comprobar</a><a href="#mas">5 · Más datos</a></nav>
   </div>
 </header>
 
@@ -118,7 +118,7 @@ code{font:500 14px ui-monospace,Menlo,monospace;background:light-dark(#e3ebe6,#2
       <li>En la barra de abajo <span class="en">Search for apps and actions</span>, escribe <b>health samples</b> y toca <span class="en">Find Health Samples</span>.</li>
       <li>En la acción, toca el tipo en azul (por defecto pone otro) y elige <span class="en">Sleep Analysis</span>.</li>
       <li>Toca <span class="en">Add Filter</span> → elige <span class="en">Value</span> → <span class="en">is</span> → <span class="en">Deep</span>.</li>
-      <li>Si hay un filtro <span class="en">Start Date</span>, déjalo en <span class="en">is in the last</span> <b>18</b> <span class="en">hours</span>. Si no, añádelo con <span class="en">Add Filter</span>.</li>
+      <li>Añade (o ajusta) el filtro <span class="en">Start Date</span> → <span class="en">is in the last</span> <b>1</b> <span class="en">day</span>.</li>
     </ol>
     <div class="tip">Si en <span class="en">Value</span> no aparece <span class="en">Deep</span>, puede que salga como <span class="en">Asleep (Deep)</span>; elige ese.</div>
   </div>
@@ -126,7 +126,7 @@ code{font:500 14px ui-monospace,Menlo,monospace;background:light-dark(#e3ebe6,#2
     <div class="nav"><span>‹</span><span style="color:#000;font-weight:600">Forja Sleep</span><span>▶</span></div>
     <div class="act"><span class="ic" style="background:#ff2d55">♥</span><b>Find</b> <span class="p">All</span> <span class="p hl">Sleep Analysis</span> where
       <div style="margin:6px 0 0 4px">· <span class="p">Value</span> is <span class="p hl">Deep</span></div>
-      <div style="margin:2px 0 0 4px">· <span class="p">Start Date</span> is in the last <span class="p">18</span> <span class="p">hours</span></div>
+      <div style="margin:2px 0 0 4px">· <span class="p">Start Date</span> is in the last <span class="p">1</span> <span class="p">day</span></div>
       <div style="margin-top:6px"><span class="p">Add Filter</span></div>
       <div style="color:#8e8e93;font-size:13px">Sort by None · Limit Off</div></div>
     <div class="search" style="position:absolute;left:14px;right:14px;bottom:20px">Search for apps and actions</div>
@@ -178,7 +178,7 @@ code{font:500 14px ui-monospace,Menlo,monospace;background:light-dark(#e3ebe6,#2
       <li>Busca <b>get contents</b> y añade <span class="en">Get Contents of URL</span> al final.</li>
       <li>Toca <span class="en">URL</span> y pega la URL que copiaste en el paso 1.</li>
       <li>Toca la flecha <span class="en">›</span> de la acción para ver más opciones. <span class="en">Method</span>: <span class="en">POST</span>.</li>
-      <li><span class="en">Headers</span> → <span class="en">Add new header</span>. En <span class="en">Key</span> escribe <code>x-forja-token</code>; en <span class="en">Text</span> pega tu token.</li>
+      <li><span class="en">Headers</span> → <span class="en">Add new header</span>. En <span class="en">Key</span> escribe <code>x-forja-token</code>; en <span class="en">Text</span> pega tu token. Que no quede ninguna fila vacía: una cabecera sin nombre da «400 Bad Request».</li>
       <li><span class="en">Request Body</span>: <span class="en">JSON</span>. Toca <span class="en">Add new field</span> → <span class="en">Text</span> cuatro veces, con estas claves: <code>profundo</code>, <code>rem</code>, <code>basico</code>, <code>despierto</code>.</li>
     </ol>
   </div>
@@ -256,7 +256,7 @@ code{font:500 14px ui-monospace,Menlo,monospace;background:light-dark(#e3ebe6,#2
 <section class="step">
   <div>
     <h3><span class="n">10</span>Mira tus fases</h3>
-    <p>Abre Forja (los datos se procesan al abrirla) → <b>Inicio</b> → toca el sueño, o ve a <b>Salud</b> → <b>Sueño</b>. Debajo de la duración verás <b>Fases</b>: la barra, el tiempo de cada fase, su % y tu media de 7 noches.</p>
+    <p>Abre Forja (los datos se procesan al abrirla) y en <b>Inicio</b> toca la franja oscura de Sueño · VFC · Reposo. Se abre <b>Salud</b>: arriba eliges el día y ves esa noche con sus fases, la VFC, el pulso y lo demás, comparado con tu media.</p>
     <p>El total de horas sigue llegando también de HealthFit; no tienes que quitar nada.</p>
   </div>
   <div class="phone"><div class="scr fj"><div class="isl"></div>
@@ -268,6 +268,29 @@ code{font:500 14px ui-monospace,Menlo,monospace;background:light-dark(#e3ebe6,#2
       <div>■ Profundo <b style="float:right">46 min</b></div><div>■ Básico <b style="float:right">3h 41</b></div><div>■ REM <b style="float:right">1h 43</b></div><div>■ Despierto <b style="float:right">4 min</b></div>
     </div>
     <div style="font-size:12px;color:#5a6878;margin-top:12px">Cifras de ejemplo.</div>
+  </div></div>
+</section>
+
+<h2 id="mas">5 · Añadir más datos (opcional)</h2>
+<section class="step">
+  <div>
+    <h3><span class="n">11</span>Mismo patrón, otra clave</h3>
+    <p>Para cada dato: <span class="en">Find Health Samples</span> con el tipo de la tabla y <span class="en">Start Date is in the last 1 day</span> → <span class="en">Get Details of Health Samples</span> → <span class="en">Value</span>. Luego, en <span class="en">Get Contents of URL</span>, <span class="en">Add new field</span> → <span class="en">Text</span> con la clave y esa variable.</p>
+    <table style="width:100%;border-collapse:collapse;font-size:15px">
+      <tr><th style="text-align:left;padding:6px 0;border-bottom:1px solid var(--rule)">Tipo en Shortcuts</th><th style="text-align:left;border-bottom:1px solid var(--rule)">Clave</th></tr>
+      <tr><td style="padding:6px 0"><span class="en">Respiratory Rate</span></td><td><code>respiracion</code></td></tr>
+      <tr><td style="padding:6px 0"><span class="en">Blood Oxygen Saturation</span></td><td><code>oxigeno</code></td></tr>
+      <tr><td style="padding:6px 0"><span class="en">Sleeping Wrist Temperature</span></td><td><code>temperatura</code></td></tr>
+      <tr><td style="padding:6px 0"><span class="en">Cardio Fitness</span> (last 30 days)</td><td><code>vo2max</code></td></tr>
+      <tr><td style="padding:6px 0"><span class="en">Weight</span></td><td><code>peso</code></td></tr>
+    </table>
+    <div class="tip">La temperatura de muñeca es la más útil: si sube 0,5 °C sobre lo normal, suele anticipar un resfriado o fatiga. Forja la compara con tus noches anteriores. VFC, pulso en reposo y pasos ya llegan por HealthFit.</div>
+  </div>
+  <div class="phone"><div class="scr"><div class="isl"></div>
+    <div class="nav"><span>‹</span><span style="color:#000;font-weight:600">Forja salud</span><span>▶</span></div>
+    <div class="act" style="padding:8px 10px">Find … Type is <span class="p hl">Sleeping Wrist Temperature</span> · last <span class="p">1 day</span></div>
+    <div class="act" style="padding:8px 10px">Get <span class="p hl">Value</span> from <span class="var">Health Samples</span></div>
+    <div class="act"><b>Request Body</b><div>profundo · <span class="var">Duration</span></div><div>…</div><div class="hl">temperatura · <span class="var">Value</span></div></div>
   </div></div>
 </section>
 
