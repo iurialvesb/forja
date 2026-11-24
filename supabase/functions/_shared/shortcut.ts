@@ -44,8 +44,8 @@ export function parseShortcut(p: any, today: string): { day?: ShortcutDay; worko
   const KEYS: Record<string, string[]> = {
     deepMin: ['profundo_min', 'profundo', 'sueño_profundo_min', 'sueno_profundo_min', 'deep_min', 'deep'],
     remMin: ['rem_min', 'rem', 'sueño_rem_min', 'sueno_rem_min'],
-    coreMin: ['basico_min', 'básico_min', 'basico', 'ligero_min', 'core_min', 'core', 'sueño_basico_min', 'sueno_basico_min'],
-    awakeMin: ['despierto_min', 'despierto', 'awake_min', 'awake'],
+    coreMin: ['basico_min', 'básico_min', 'basico', 'básico', 'ligero_min', 'core_min', 'core', 'sueño_basico_min', 'sueno_basico_min'],
+    awakeMin: ['despierto_min', 'despierto', 'depsierto', 'despiertos', 'awake_min', 'awake'],
     inBedMin: ['en_cama_min', 'in_bed_min'],
   };
   // Con unidades («1 hr 43 min») ya son minutos exactos; números sueltos se suman y luego se decide si eran segundos.
