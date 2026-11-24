@@ -54,7 +54,7 @@ export async function HOME() {
           <div class="grow"><div class="status">${{ verde: 'Listo para entrenar', ambar: 'Con precaución', rojo: 'Prioriza recuperar' }[lvl] ?? 'Haz el check-in'}</div>
             <div class="small muted">${readiness?.reasons?.[0] ?? 'Toca para contarme cómo estás hoy.'}</div></div>
         </div>
-        <div class="mini">
+        <div class="mini" role="link" tabindex="0" aria-label="Ver salud: sueño, VFC y pulso" style="cursor:pointer" data-act="${act(() => go('salud'))}">
           <div><div class="l">${raw(ic('moon', 13))} Sueño${notToday(H.sleep?.date, H.today)}</div><div class="v">${H.sleep ? html`<span data-count="${H.sleep.h}" data-fmt="sleep">${fmtSleep(H.sleep.h)}</span>` : '–'}</div></div>
           <div><div class="l">${raw(ic('pulse', 13))} VFC${notToday(H.hrv?.r?.date, H.today)}</div><div class="v">${H.hrv ? html`<span data-count="${Math.round(H.hrv.v)}">${Math.round(H.hrv.v)}</span>` : '–'}<small> ms</small></div></div>
           <div><div class="l">${raw(ic('heart', 13))} Reposo${notToday(H.rhr?.r?.date, H.today)}</div><div class="v">${H.rhr ? html`<span data-count="${H.rhr.v}">${H.rhr.v}</span>` : '–'}<small> ppm</small></div></div>
