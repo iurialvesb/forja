@@ -34,6 +34,39 @@ export function durationsMin(v: unknown): number | null {
   else total += bare.reduce((a, b) => a + b, 0);
   return unit ? Math.round(total * 10) / 10 : null;
 }
+const MONTHS: Record<string, number> = { jan: 0, ene: 0, feb: 1, mar: 2, apr: 3, abr: 3, may: 4, jun: 5, jul: 6, aug: 7, ago: 7, sep: 8, set: 8, oct: 9, nov: 10, dec: 11, dic: 11 };
+/** Fecha tal como la escribe Atajos («24 Nov 2026 at 0:12», «Nov 24, 2026 at 12:12 AM», «24/11/2026, 0:12», ISO). Hora local del teléfono → ms «locales». */
+export function shortcutDate(txt: string): number | null {
+  const t = txt.trim(); if (!t) return null;
+  const iso = Date.parse(t); if (/^\d{4}-\d{2}-\d{2}/.test(t) && !Number.isNaN(iso)) return iso;
+  const tm = t.match(/(\d{1,2})[:.](\d{2})(?:[:.](\d{2}))?\s*([ap]\.?\s?m\.?)?/i);
+  let y: number | undefined, mo: number | undefined, d: number | undefined;
+  const mName = t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').match(/\b(jan|ene|feb|mar|apr|abr|may|jun|jul|aug|ago|sep|set|oct|nov|dec|dic)[a-z]*\.?/);
+  if (mName) { mo = MONTHS[mName[1]]; const ds = t.replace(tm?.[0] ?? '', ' ').match(/\d+/g)?.map(Number) ?? []; y = ds.find((x) => x > 1900); d = ds.find((x) => x >= 1 && x <= 31); }
+  else { const m = t.match(/(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})/); if (m) { d = +m[1]; mo = +m[2] - 1; y = +m[3] < 100 ? 2000 + +m[3] : +m[3]; } }
+  if (y == null || mo == null || d == null || !tm) return null;
+  let h = +tm[1]; const ap = tm[4]?.toLowerCase().replace(/[^ap]/g, '');
+  if (ap === 'p' && h < 12) h += 12; if (ap === 'a' && h === 12) h = 0;
+  return Date.UTC(y, mo, d, h, +tm[2], +(tm[3] ?? 0));
+}
+/**
+ * Muestras de sueño sueltas (fase, inicio y duración de cada tramo, una por línea): se agrupan en noches (un hueco de más de 3 h
+ * separa noches) y se suma solo la última. Así el Atajo puede buscar «en el último día» sin mezclar dos noches.
+ */
+export function stagesFromSamples(fases: unknown, inicios: unknown, duraciones: unknown): { deepMin?: number; remMin?: number; coreMin?: number; awakeMin?: number; bedtime?: number; wake?: number } | null {
+  const L = (v: unknown) => (Array.isArray(v) ? v.map(String) : String(v ?? '').split(/\n/)).map((x) => x.trim()).filter(Boolean);
+  const f = L(fases), st = L(inicios), du = L(duraciones);
+  if (!f.length || f.length !== st.length || f.length !== du.length) return null;
+  const rows = f.map((x, i) => ({ k: x.toLowerCase(), s: shortcutDate(st[i]), m: durationsMin(du[i]) ?? (Number(du[i]) || 0) / 60 })).filter((r) => r.s != null) as { k: string; s: number; m: number }[];
+  if (!rows.length) return null;
+  rows.sort((a, b) => a.s - b.s);
+  let start = 0, end = rows[0].s + rows[0].m * 60000;
+  for (let i = 1; i < rows.length; i++) { if (rows[i].s - end > 3 * 3600_000) start = i; end = Math.max(end, rows[i].s + rows[i].m * 60000); }
+  const night = rows.slice(start);
+  const sumK = (re: RegExp) => { const v = night.filter((r) => re.test(r.k)).reduce((a, r) => a + r.m, 0); return v ? Math.round(v * 10) / 10 : undefined; };
+  return { deepMin: sumK(/deep|profund/), remMin: sumK(/rem/), coreMin: sumK(/core|basic|básic|light|ligero|^asleep$|unspecified/), awakeMin: sumK(/awake|despiert/),
+    bedtime: night[0].s, wake: Math.max(...night.map((r) => r.s + r.m * 60000)) };
+}
 const avg = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : undefined);
 const sum = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) : undefined);
 // Claves tal como las escribe la persona en Atajos: sin tildes, mayúsculas ni espacios sobrantes («básico » = «basico»)
@@ -71,6 +104,9 @@ export function parseShortcut(p: any, today: string): { day?: ShortcutDay; worko
   const r1 = (v?: number) => (v == null ? undefined : Math.round((secs ? v / 60 : v) * 10) / 10);
   const ts = (v: unknown) => { const t = v != null ? Date.parse(String(v)) : NaN; return Number.isNaN(t) ? undefined : new Date(t).toISOString(); };
   const r2 = (k: string) => withUnits[k] ?? r1(raw[k]);
+  // Forma recomendada: una sola búsqueda con fase, inicio y duración de cada tramo; Forja separa las noches
+  const smp = stagesFromSamples(pick(p, 'fase', 'fases', 'value', 'valor', 'tipo'), pick(p, 'inicio', 'inicios', 'start', 'start_date'), pick(p, 'duracion', 'duración', 'duraciones', 'duration'));
+  if (smp) Object.assign(withUnits, Object.fromEntries(Object.entries({ deepMin: smp.deepMin, remMin: smp.remMin, coreMin: smp.coreMin, awakeMin: smp.awakeMin }).filter(([, v]) => v != null)));
   const stages: SleepStages = { deepMin: r2('deepMin'), remMin: r2('remMin'), coreMin: r2('coreMin'), awakeMin: r2('awakeMin'), inBedMin: r2('inBedMin'),
     bedtime: ts(pick(p, 'acostarse', 'hora_acostarse', 'bedtime')), wakeTime: ts(pick(p, 'despertar', 'hora_despertar', 'wake_time')) };
   const stageSum = [stages.deepMin, stages.remMin, stages.coreMin].some((v) => v != null) ? (stages.deepMin ?? 0) + (stages.remMin ?? 0) + (stages.coreMin ?? 0) : undefined;
