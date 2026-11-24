@@ -1,0 +1,11 @@
+name: diag
+on: push
+jobs:
+  d:
+    if: contains(github.event.head_commit.message, '[diag]')
+    runs-on: ubuntu-latest
+    steps:
+      - env: { T: "${{ secrets.SUPABASE_ACCESS_TOKEN }}", P: "${{ secrets.SUPABASE_PROJECT_ID }}" }
+        run: |
+          q() { curl -s -X POST "https://api.supabase.com/v1/projects/$P/database/query" -H "Authorization: Bearer $T" -H 'content-type: application/json' -d "$(jq -n --arg q "$1" '{query:$q}')"; echo; }
+          q "select received_at, processed_at, payload::text p from health_inbox order by received_at desc limit 4"
