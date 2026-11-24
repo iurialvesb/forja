@@ -55,9 +55,9 @@ export async function HOME() {
             <div class="small muted">${readiness?.reasons?.[0] ?? 'Toca para contarme cómo estás hoy.'}</div></div>
         </div>
         <div class="mini">
-          <div><div class="l">${raw(ic('moon', 13))} Sueño</div><div class="v">${H.sleep ? html`<span data-count="${H.sleep.h}" data-fmt="sleep">${fmtSleep(H.sleep.h)}</span>` : '–'}</div></div>
-          <div><div class="l">${raw(ic('pulse', 13))} VFC</div><div class="v">${H.hrv ? html`<span data-count="${Math.round(H.hrv.v)}">${Math.round(H.hrv.v)}</span>` : '–'}<small> ms</small></div></div>
-          <div><div class="l">${raw(ic('heart', 13))} Reposo</div><div class="v">${H.rhr ? html`<span data-count="${H.rhr.v}">${H.rhr.v}</span>` : '–'}<small> ppm</small></div></div>
+          <div><div class="l">${raw(ic('moon', 13))} Sueño${notToday(H.sleep?.date, H.today)}</div><div class="v">${H.sleep ? html`<span data-count="${H.sleep.h}" data-fmt="sleep">${fmtSleep(H.sleep.h)}</span>` : '–'}</div></div>
+          <div><div class="l">${raw(ic('pulse', 13))} VFC${notToday(H.hrv?.r?.date, H.today)}</div><div class="v">${H.hrv ? html`<span data-count="${Math.round(H.hrv.v)}">${Math.round(H.hrv.v)}</span>` : '–'}<small> ms</small></div></div>
+          <div><div class="l">${raw(ic('heart', 13))} Reposo${notToday(H.rhr?.r?.date, H.today)}</div><div class="v">${H.rhr ? html`<span data-count="${H.rhr.v}">${H.rhr.v}</span>` : '–'}<small> ppm</small></div></div>
         </div>
       </div>
       ${noWod.map((s) => html`<div class="card tight row notice"><span class="bub" style="width:40px;height:40px;background:var(--accentSoft);color:var(--accent2)">${raw(ic('watch', 22))}</span><div class="grow"><b class="small">${sessionName(s)} · ${timeOf(s.started_at)}</b><div class="xs muted">Llegó del Apple Watch sin el WOD.</div></div><button class="sm primary" data-act="${act(() => addWodTo(s))}">Añadir WOD</button></div>`)}
@@ -81,6 +81,9 @@ export async function HOME() {
 }
 
 const tile = (label, icn, color, value, sub, chart, to) => html`<div class="tile" data-act="${act(() => go(to))}"><div class="l"><span class="bub" style="background:color-mix(in srgb, ${color} 18%, transparent);color:${color}">${raw(ic(icn, 15))}</span>${label}</div><div class="v">${value}</div><div class="s">${sub}</div>${chart}</div>`;
+/** «· dom» si el dato no es de hoy (el reloj aún no ha mandado el de anoche): que no parezca la última noche. */
+const DOW = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+const notToday = (d, t) => (d && d !== t ? ` · ${DOW[new Date(`${d}T12:00:00`).getDay()]}` : '');
 export const fmtSleep = (h) => (h == null ? '–' : `${Math.floor(h)}h ${String(Math.round((h % 1) * 60)).padStart(2, '0')}`);
 /** Últimos valores de salud (sueño de anoche, VFC, pulso en reposo, pasos) y sus series para los gráficos. */
 function healthSummary(rows, t) {
@@ -90,8 +93,8 @@ function healthSummary(rows, t) {
   const avg = (xs) => { const v = xs.filter((x) => x != null).map(Number); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
   const sl = lastWith('sleep_h'), st = by[t]?.steps != null ? { v: +by[t].steps } : lastWith('steps');
   return {
-    sleep: sl ? { h: sl.v, score: sl.r.sleep_score, avg7: avg(days(7).map((r) => r?.sleep_h)) } : null,
-    hrv: lastWith('hrv_ms'), rhr: lastWith('rhr'),
+    sleep: sl ? { h: sl.v, date: sl.r.date, score: sl.r.sleep_score, avg7: avg(days(7).map((r) => r?.sleep_h)) } : null,
+    hrv: lastWith('hrv_ms'), rhr: lastWith('rhr'), today: t,
     steps: st ? { v: st.v, avg7: avg(days(7).map((r) => r?.steps)) } : null,
     sleepSeries: days(7).map((r) => r?.sleep_h ?? null), stepsSeries: days(7).map((r) => r?.steps ?? null),
   };

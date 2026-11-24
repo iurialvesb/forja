@@ -1,5 +1,8 @@
 # Changelog
 
+## Sueño de qué noche
+- Inicio: si el sueño, la VFC o el pulso en reposo aún no han llegado para hoy, se muestra el último con su día («Sueño · dom»), para no confundirlo con la noche pasada.
+
 ## IA de comidas y raciones de una tanda
 - Gemini 2.5 Flash-Lite ya no admite cuentas nuevas: Forja pasa a Gemini 3.5 Flash-Lite / 3.5 Flash. Si la IA falla, el aviso dice el motivo real (cupo o saturación) y no el «404» de un modelo retirado.
 - «1/4 de las verduras del horno (150 g de brócoli + 500 g de patata dulce + 500 g de calabaza)» se reparte solo: 38 g + 125 g + 125 g, sin IA. También «la mitad», «un tercio», «tres cuartos».
