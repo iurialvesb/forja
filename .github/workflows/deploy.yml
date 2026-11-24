@@ -28,8 +28,13 @@ jobs:
       PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
     steps:
       - uses: actions/checkout@v4
-      - uses: supabase/setup-cli@v1
+      # A veces GitHub limita la consulta de «latest» (rate limit): entonces se instala la CLI desde npm.
+      - id: cli
+        uses: supabase/setup-cli@v1
+        continue-on-error: true
         with: { version: latest }
+      - if: steps.cli.outcome == 'failure'
+        run: npm i --prefix "$RUNNER_TEMP/sb" supabase@latest && echo "$RUNNER_TEMP/sb/node_modules/.bin" >> "$GITHUB_PATH"
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       - name: Copiar el motor a las funciones
