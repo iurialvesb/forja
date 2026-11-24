@@ -1,5 +1,10 @@
 # Changelog
 
+## Añadir RM a mano
+- Entrenos → «+» → «Un RM o marca», o Progreso → «Añadir RM»: ejercicio, kg, repeticiones (1–15), fecha y nota. Se guardan como récord real.
+- Cuentan para el 1RM, el estimado y los pesos que propone el plan (se suman a los levantamientos de tus sesiones).
+- Los RM añadidos a mano se pueden borrar desde Récords; la lista va de más reciente a más antiguo y muestra el año si no es el actual.
+
 ## Arreglos de Salud
 - Tira de días ordenada de hoy (izquierda) hacia atrás; flechas de día anterior/siguiente; enlace «Ver sueño y salud por días» en Inicio.
 - Atajo: las duraciones «m:ss» de Atajos se leían como horas (90 h de profundo); ahora se leen bien, y los segundos sueltos también. Las claves se aceptan con tildes, mayúsculas o espacios («básico »).

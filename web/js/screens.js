@@ -6,6 +6,7 @@ import {
   icon, intensityTag, levelColor, ring, bar, barChart, lineChart, steps, resizeImage, phaseName, slotName, SLOTS, spark, dec, plural, sessionName, tbl,
 } from './ui.js';
 import { ic } from './icons.js';
+import { EXERCISES, resolveExercise, getExercise } from './engine/exercises.js';
 import { goalCard } from './goals.js';
 
 import { activityExtras } from './activity.js';
@@ -473,7 +474,8 @@ function addWorkoutMenu() {
   sheet('Registrar entreno', html`${opt('clipboard', 'Pegar texto', 'Strava, notas, WhatsApp o la pizarra copiada', () => startFromText(), true)}
     ${opt('camera', 'Foto de la pizarra', 'O una captura de WodBuster', () => startFromPhoto())}
     ${opt('dumbbell', 'CrossFit a mano', 'Por bloques: fuerza, WOD, endurance', () => startManual())}
-    ${opt('pen', 'Otra actividad', 'Carrera, pádel, natación…', manualWorkout)}`);
+    ${opt('pen', 'Otra actividad', 'Carrera, pádel, natación…', manualWorkout)}
+    ${opt('trophy', 'Un RM o marca', 'De meses anteriores o de otra app', () => addRM())}`);
 }
 
 /** Compatibilidad: otras pantallas abren el pegado de texto. */
@@ -497,6 +499,33 @@ function manualWorkout() {
     <button class="primary block">Guardar</button></form>`);
 }
 
+// --- RM a mano (de meses anteriores o de otra app) ---
+const LIFTS = EXERCISES.filter((e) => e.prTracked === 'load').sort((a, b) => a.name.localeCompare(b.name, 'es'));
+function addRM(preset) {
+  const kgOf = (v) => +String(v ?? '').replace(',', '.');
+  sheet('Añadir RM', html`<form data-submit="${act((v, f) => busy(f.querySelector('button.primary'), async () => {
+      const ex = getExercise(v.ex) ?? (() => { const r = resolveExercise(v.ex ?? ''); return r ? getExercise(r.id) : null; })();
+      const kg = kgOf(v.kg), reps = Math.round(+v.reps || 1);
+      if (!ex) return toast('Elige el ejercicio de la lista');
+      if (!(kg > 0)) return toast('Escribe el peso en kg');
+      if (!(reps >= 1 && reps <= 20)) return toast('Repeticiones entre 1 y 20');
+      if (!v.date || v.date > today()) return toast('Pon la fecha en que lo hiciste');
+      const k = String(kg).replace('.', ',');
+      await api.db.insert('personal_records', [{ user_id: uid(), metric: `${ex.id}:${reps}rm`, value: kg, unit: 'kg', kind: 'actual', achieved_on: v.date, session_id: null,
+        detail: `${ex.name} ${k} kg × ${reps}${v.note ? ` · ${String(v.note).slice(0, 60)}` : ''}` }]);
+      closeSheet(); invalidate('records', 'insights'); render();
+      toast(`${ex.name}: ${k} kg × ${reps} guardado. Ya cuenta para tus cargas.`);
+    }))}">
+    <label for="rm-ex">Ejercicio</label>
+    <select id="rm-ex" name="ex" required>${LIFTS.map((e) => html`<option value="${e.id}" ${e.id === (preset ?? 'back_squat') ? 'selected' : ''}>${e.name}</option>`)}</select>
+    <div class="grid2"><div><label for="rm-kg">Peso (kg)</label><input id="rm-kg" name="kg" inputmode="decimal" placeholder="100" required></div>
+      <div><label for="rm-reps">Repeticiones</label><select id="rm-reps" name="reps">${[1, 2, 3, 4, 5, 6, 8, 10, 12, 15].map((n) => html`<option value="${n}">${n === 1 ? '1 (RM)' : `${n} (${n}RM)`}</option>`)}</select></div></div>
+    <label for="rm-date">Fecha</label><input id="rm-date" type="date" name="date" value="${today()}" max="${today()}">
+    <label for="rm-note">Nota (opcional)</label><input id="rm-note" name="note" placeholder="Competición, con cinturón…">
+    <p class="xs muted">Cuenta como levantamiento real: Forja lo usa para tu 1RM y para calcular los pesos del plan. Si es de hace muchos meses, pesa menos que lo que levantes ahora.</p>
+    <button class="block primary">Guardar RM</button></form>`);
+}
+
 // --- Progreso ---
 async function progress() {
   const d = await get('insights', () => api.fn('insights', {}), 300_000);
@@ -516,19 +545,21 @@ async function progress() {
     <div class="card"><h3>Km por semana</h3>${barChart(r.weeks.map((w) => ({ value: w.km, label: shortDate(w.week) })))}</div>
     ${r.runs.length >= 3 ? html`<div class="card"><h3>Evolución del ritmo</h3>${lineChart([{ fmt: pace, points: r.runs.slice(-30).map((x) => ({ x: shortDate(x.date), y: x.paceSecPerKm })) }], { invert: true })}</div>` : ''}
     <h2>Fuerza</h2>
-    <button class="block" data-act="${act(() => exerciseHistory())}">${raw(ic('activity', 17))} Historial por ejercicio (pesos y repeticiones)</button>
+    <div class="grid2"><button class="block primary" data-act="${act(() => addRM())}">${raw(ic('plus', 17))} Añadir RM</button><button class="block" data-act="${act(() => exerciseHistory())}">${raw(ic('activity', 17))} Historial por ejercicio</button></div>
     ${d.lifts.length ? d.lifts.map((l) => html`<div class="card"><h3>${l.name}</h3>
       <div class="stats"><div class="stat"><div class="l">1RM real</div><div class="v">${l.bestActual1RM ? l.bestActual1RM.kg : '–'}<span class="u"> kg</span></div></div>
         <div class="stat"><div class="l">Estimado</div><div class="v">${l.bestE1RM ? dec(l.bestE1RM.kg, 1) : '–'}</div></div>
         <div class="stat"><div class="l">De trabajo</div><div class="v" style="color:var(--color-ink-2)">${l.workingE1RM ? dec(l.workingE1RM.kg, 1) : '–'}</div></div></div>
       ${l.history.length >= 2 ? lineChart([{ points: l.history.map((h) => ({ x: shortDate(h.date), y: h.e1rm })) }], { height: 110 }) : ''}
+      <button class="sm ghost" data-act="${act(() => addRM(l.exerciseId))}">${raw(ic('plus', 15))} RM de ${l.name}</button>
       <p class="xs muted">${l.suggestion.explanation}</p></div>`) : html`<div class="card muted small">Registra series con peso (o pega tus WODs) y verás aquí tu evolución y tu 1RM estimado.</div>`}
     <h2>Carga</h2>
     ${await loadCard()}
     <div class="card"><h3>Forma y fatiga</h3>${lineChart([{ name: 'Forma', points: d.fitness.map((f) => ({ x: shortDate(f.date), y: f.ctl })) }, { name: 'Fatiga', points: d.fitness.map((f) => ({ x: shortDate(f.date), y: f.atl })) }])}
       <p class="xs muted">Carga crónica de 42 días (tu forma) y aguda de 7 días (tu fatiga).</p></div>
     <h2>Récords</h2>
-    ${latest.length ? latest.map((x) => html`<div class="card tight row"><div class="grow"><b>${x.detail ?? x.metric}</b><div class="xs muted">${shortDate(x.achieved_on)}</div></div><span class="tag ${x.kind === 'actual' ? 'green' : 'amber'}">${x.kind === 'actual' ? 'Real' : 'Estimado'}</span></div>`) : html`<div class="card muted small">Se guardan solos al registrar entrenamientos.</div>`}`;
+    ${latest.length ? latest.sort((a, b) => b.achieved_on.localeCompare(a.achieved_on)).map((x) => html`<div class="card tight row"><div class="grow"><b>${x.detail ?? x.metric}</b><div class="xs muted">${shortDate(x.achieved_on)}${x.achieved_on.slice(0, 4) !== today().slice(0, 4) ? ` ${x.achieved_on.slice(0, 4)}` : ''}${x.session_id ? '' : ' · añadido a mano'}</div></div><span class="tag ${x.kind === 'actual' ? 'green' : 'amber'}">${x.kind === 'actual' ? 'Real' : 'Estimado'}</span>
+      ${x.session_id ? '' : html`<button class="icon-btn" aria-label="Borrar ${x.detail ?? x.metric}" data-act="${act((b) => busy(b, async () => { if (!confirm('¿Borrar este RM?')) return; await api.db.remove('personal_records', { id: `eq.${x.id}` }); invalidate('records', 'insights'); render(); }))}">${raw(ic('trash', 16))}</button>`}</div>`) : html`<div class="card muted small">Se guardan solos al registrar entrenamientos. Los de antes, añádelos con «Añadir RM».</div>`}`;
 }
 
 /** Carga de esta semana frente a tu media (ratio agudo:crónico) y fatiga de piernas, en palabras. */

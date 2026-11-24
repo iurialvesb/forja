@@ -102,6 +102,7 @@ const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome'
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'es-ES', timezoneId: 'Europe/Madrid' });
 const page = await ctx.newPage();
 const errors = [];
+const restPosts = []; page.on('request', (r) => { if (r.method() === 'POST' && r.url().includes('/rest/v1/')) restPosts.push({ url: r.url(), body: r.postData() }); });
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(`console: ${m.text()}`); });
 await page.route('http://forja.test/**', (route) => {
@@ -264,6 +265,13 @@ await shot('#/perfil', '14b-watch', () => page.getByText('Apple Watch automátic
 await shot('#/perfil', '14-atajo', () => page.getByText('Apple Salud (Atajo)').click());
 await shot('#/inicio', '15-checkin', () => page.locator('#view .hero').first().click());
 await shot('#/nutricion', '16-editar-comida', async () => { await page.getByRole('button', { name: 'Diario', exact: true }).click(); await page.waitForTimeout(500); await page.locator('.sugg .grow').first().click(); await page.waitForTimeout(450); await page.screenshot({ path: `${OUT}/16a-opciones-sugerencia.png` }); await page.getByRole('button', { name: 'Cambiar cantidades o plato' }).click(); await page.waitForTimeout(400); });
+await shot('#/entrenos', '27-rm', async () => {
+  await page.getByRole('button', { name: 'Progreso', exact: true }).first().click(); await page.waitForTimeout(500);
+  await page.getByRole('button', { name: /Añadir RM/ }).first().click(); await page.waitForTimeout(400);
+  await page.selectOption('#rm-ex', 'deadlift'); await page.fill('#rm-kg', '140'); await page.selectOption('#rm-reps', '1'); await page.fill('#rm-date', '2026-06-12');
+});
+await page.getByRole('button', { name: 'Guardar RM' }).click(); await page.waitForTimeout(500);
+{ const ok = restPosts.some((p) => /personal_records/.test(p.url) && /deadlift:1rm/.test(p.body ?? '')); if (!ok) errors.push('Añadir RM no guarda'); else console.log('Añadir RM OK'); }
 await shot('#/salud', '25-salud');
 await page.evaluate(() => window.scrollTo(0, 900)); await page.screenshot({ path: `${OUT}/25b-salud-abajo.png` });
 { // Elegir un día: tocar un chip de la tira cambia la ficha del día

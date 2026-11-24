@@ -6,7 +6,7 @@ import type { SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import type { AthleteProfile, Goal, Session, DailyHealth, CheckIn, SessionBlock } from './engine/index.ts';
 import {
   buildMacrocycle, estimateVdot, effortsFromSessions, trainingPaces, hrZones, liftsFromSessions, summarizeLift,
-  dailyLoads, fitnessSeries, residualLegFatigue, computeReadiness, addDays, isoDate, EXERCISES,
+  dailyLoads, fitnessSeries, residualLegFatigue, computeReadiness, addDays, isoDate, EXERCISES, getExercise,
   calendarConstraints, DEFAULT_RULES,
   type LiftSummary, type Readiness, type TrainingPaces, type HrZones, type Phase, type FitnessPoint, type FixedSession, type SlotOverride, type CalendarEvent,
 } from './engine/index.ts';
@@ -68,7 +68,7 @@ export async function loadContext(sb: SupabaseClient, userId: string, now = new 
   const today = todayMadrid(now);
   const since = addDays(today, -180);
   const calSetP = sb.from('calendar_settings').select('*').eq('user_id', userId).maybeSingle();
-  const [prof, phys, avail, inj, goals, sess, health, checkin, mem, bm] = await Promise.all([
+  const [prof, phys, avail, inj, goals, sess, health, checkin, mem, bm, manualRM] = await Promise.all([
     sb.from('profiles').select('*').eq('id', userId).single(),
     sb.from('physiology').select('*').eq('user_id', userId).lte('effective_from', today).order('effective_from', { ascending: false }).limit(1),
     sb.from('availability').select('*').eq('user_id', userId),
@@ -79,6 +79,8 @@ export async function loadContext(sb: SupabaseClient, userId: string, now = new 
     sb.from('checkins').select('*').eq('user_id', userId).eq('date', today).maybeSingle(),
     sb.from('coach_memory').select('fact, category').eq('user_id', userId).eq('active', true).order('created_at', { ascending: false }).limit(50),
     sb.from('body_metrics').select('weight_kg').eq('user_id', userId).not('weight_kg', 'is', null).order('date', { ascending: false }).limit(1),
+    // RM añadidos a mano (sin sesión): cuentan como levantamientos reales para el 1RM y las cargas
+    sb.from('personal_records').select('metric, value, achieved_on').eq('user_id', userId).is('session_id', null).eq('kind', 'actual').like('metric', '%rm'),
   ]);
   for (const r of [prof, phys, avail, inj, goals, sess, health, mem, bm]) if (r.error) throw r.error;
   // Calendario (clases reservadas de WodBuster / Google / iCloud y agenda ocupada): próximas 3 semanas.
@@ -110,6 +112,10 @@ export async function loadContext(sb: SupabaseClient, userId: string, now = new 
   const vd = estimateVdot(effortsFromSessions(sessions, profile.hrMax), today);
   const lifts: Record<string, LiftSummary> = {};
   const entries = liftsFromSessions(sessions);
+  for (const r of manualRM.data ?? []) {
+    const m = String(r.metric).match(/^(.+):(\d+)rm$/);
+    if (m && getExercise(m[1]) && Number(r.value) > 0) entries.push({ date: String(r.achieved_on), exerciseId: m[1], loadKg: Number(r.value), reps: Number(m[2]) });
+  }
   for (const e of EXERCISES.filter((x) => x.prTracked === 'load')) {
     const s = summarizeLift(entries, e.id, today);
     if (s.history.length || s.bestActual1RM) lifts[e.id] = s;
