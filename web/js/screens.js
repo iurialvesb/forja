@@ -453,7 +453,7 @@ export async function PLAN() {
 let wTab = 'historial';
 export async function WORKOUTS(params = []) {
   const openWod = params[0] === 'wod';
-  const right = html`<button class="icon-btn primary" aria-label="Registrar entreno" data-act="${act(addWorkoutMenu)}">${raw(ic('plus', 22))}</button>`;
+  const right = html`<span class="row" style="gap:8px"><a class="icon-btn rmbtn" href="#/rm" aria-label="Tus RM y porcentajes">% RM</a><button class="icon-btn primary" aria-label="Registrar entreno" data-act="${act(addWorkoutMenu)}">${raw(ic('plus', 22))}</button></span>`;
   const seg = html`<div class="seg"><button class="${wTab === 'historial' ? 'on' : ''}" data-act="${act(() => { wTab = 'historial'; render(); })}">Historial</button><button class="${wTab === 'progreso' ? 'on' : ''}" data-act="${act(() => { wTab = 'progreso'; render(); })}">Progreso</button></div>`;
   if (wTab === 'progreso') return { title: 'Entrenos', right, body: html`${seg}${await progress()}` };
   const list = await get('sessions:365', () => api.db.select('sessions', { deleted_at: 'is.null', started_at: `gte.${addDays(today(), -365)}`, order: 'started_at.desc', limit: 300 }));
@@ -501,7 +501,7 @@ function manualWorkout() {
 
 // --- RM a mano (de meses anteriores o de otra app) ---
 const LIFTS = EXERCISES.filter((e) => e.prTracked === 'load').sort((a, b) => a.name.localeCompare(b.name, 'es'));
-function addRM(preset) {
+export function addRM(preset) {
   const kgOf = (v) => +String(v ?? '').replace(',', '.');
   sheet('Añadir RM', html`<form data-submit="${act((v, f) => busy(f.querySelector('button.primary'), async () => {
       const ex = getExercise(v.ex) ?? (() => { const r = resolveExercise(v.ex ?? ''); return r ? getExercise(r.id) : null; })();
@@ -513,7 +513,7 @@ function addRM(preset) {
       const k = String(kg).replace('.', ',');
       await api.db.insert('personal_records', [{ user_id: uid(), metric: `${ex.id}:${reps}rm`, value: kg, unit: 'kg', kind: 'actual', achieved_on: v.date, session_id: null,
         detail: `${ex.name} ${k} kg × ${reps}${v.note ? ` · ${String(v.note).slice(0, 60)}` : ''}` }]);
-      closeSheet(); invalidate('records', 'insights'); render();
+      closeSheet(); invalidate('records', 'insights', 'rm:sets'); render();
       toast(`${ex.name}: ${k} kg × ${reps} guardado. Ya cuenta para tus cargas.`);
     }))}">
     <label for="rm-ex">Ejercicio</label>
@@ -545,7 +545,8 @@ async function progress() {
     <div class="card"><h3>Km por semana</h3>${barChart(r.weeks.map((w) => ({ value: w.km, label: shortDate(w.week) })))}</div>
     ${r.runs.length >= 3 ? html`<div class="card"><h3>Evolución del ritmo</h3>${lineChart([{ fmt: pace, points: r.runs.slice(-30).map((x) => ({ x: shortDate(x.date), y: x.paceSecPerKm })) }], { invert: true })}</div>` : ''}
     <h2>Fuerza</h2>
-    <div class="grid2"><button class="block primary" data-act="${act(() => addRM())}">${raw(ic('plus', 17))} Añadir RM</button><button class="block" data-act="${act(() => exerciseHistory())}">${raw(ic('activity', 17))} Historial por ejercicio</button></div>
+    <a class="card rmlink" href="#/rm"><span class="grow"><b>Tus RM y porcentajes</b><small>Busca un ejercicio y mira el 50 %, 70 %… en kg</small></span>${raw(ic('chevron', 18))}</a>
+    <div class="grid2"><button class="block" data-act="${act(() => addRM())}">${raw(ic('plus', 17))} Añadir RM</button><button class="block" data-act="${act(() => exerciseHistory())}">${raw(ic('activity', 17))} Historial por ejercicio</button></div>
     ${d.lifts.length ? d.lifts.map((l) => html`<div class="card"><h3>${l.name}</h3>
       <div class="stats"><div class="stat"><div class="l">1RM real</div><div class="v">${l.bestActual1RM ? l.bestActual1RM.kg : '–'}<span class="u"> kg</span></div></div>
         <div class="stat"><div class="l">Estimado</div><div class="v">${l.bestE1RM ? dec(l.bestE1RM.kg, 1) : '–'}</div></div>

@@ -193,6 +193,43 @@ figure.viz svg:focus-visible { outline: 2px solid var(--color-focus); outline-of
 .dm .tag { margin-top: var(--space-2xs); }
 .segbar.tall { height: 16px; }
 figure.viz.pick svg { cursor: pointer; }
+/* Tus RM: buscador, lista y porcentajes de un vistazo */
+.rmbtn { width: auto; padding: 0 var(--space-sm); font: 600 var(--text-sm) var(--font-body); text-decoration: none; color: var(--color-ink); }
+.rmlink { display: flex; align-items: center; gap: var(--space-sm); text-decoration: none; color: var(--color-ink); min-height: 56px; }
+.rmlink small, .rmrow small { display: block; color: var(--color-muted); font-size: var(--text-xs); margin-top: 2px; }
+.rmsearch { display: flex; align-items: center; gap: var(--space-xs); padding: 0 var(--space-sm); background: var(--color-paper); border: var(--rule-hair) solid var(--color-rule-2); border-radius: var(--radius-card); margin-bottom: var(--space-sm); }
+.rmsearch svg { flex: none; color: var(--color-muted); }
+.rmsearch input, .rmsearch input:focus, .rmsearch input:focus-visible { border: 0; background: transparent; min-height: 48px; padding: 0; outline: none; box-shadow: none; }
+.rmsearch:focus-within { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.rmlist { display: grid; border-top: var(--rule-hair) solid var(--color-rule); }
+.rmrow { display: flex; align-items: center; gap: var(--space-sm); min-height: 56px; padding: var(--space-xs) 0; border-bottom: var(--rule-hair) solid var(--color-rule); color: var(--color-ink); text-decoration: none; }
+.rmrow[hidden] { display: none; }
+.rmrow svg { flex: none; color: var(--color-muted); }
+.rmv { white-space: nowrap; font: 800 var(--text-2xl)/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.rmv small { font: 500 var(--text-sm) var(--font-body); color: var(--color-muted); }
+.rmhero { background: var(--color-ink); color: var(--color-paper); border-radius: var(--radius-card); padding: var(--space-md); }
+.rmhero .l { font-size: var(--text-sm); color: color-mix(in oklab, var(--color-paper) 75%, transparent); }
+.rmhero .v { font: 800 clamp(48px, 16vw, 64px)/1 var(--font-display); color: var(--color-brass); font-variant-numeric: tabular-nums; }
+.rmhero .v small { font: 500 var(--text-lg) var(--font-body); color: var(--color-paper); }
+.rmhero .s { font-size: var(--text-sm); color: color-mix(in oklab, var(--color-paper) 80%, transparent); margin-top: var(--space-2xs); }
+.rmhero .rmseg { margin-top: var(--space-sm); }
+.rmhero .rmseg button { color: var(--color-paper); }
+.rmhero .rmseg button.on { background: var(--color-paper); color: var(--color-ink); }
+.rmgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2xs); }
+.rmgrid.reps { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.rmcell { display: flex; flex-direction: column; align-items: flex-start; padding: var(--space-xs) var(--space-sm); border-radius: var(--radius-card); background: var(--color-paper-2); }
+.rmcell.odd { background: var(--color-paper); border: var(--rule-hair) solid var(--color-rule); }
+.rmcell span { font-size: var(--text-xs); color: var(--color-ink-2); font-variant-numeric: tabular-nums; }
+.rmcell b { font: 700 var(--text-xl) var(--font-body); font-variant-numeric: tabular-nums; }
+.rmcustom { display: flex; align-items: center; gap: var(--space-sm); margin-top: var(--space-sm); }
+.rmcustom label { margin: 0; white-space: nowrap; }
+.rmcustom input { width: 96px; }
+.rmcustom output { font: 700 var(--text-xl) var(--font-body); font-variant-numeric: tabular-nums; }
+.rmtable { display: grid; font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+.rmtable > div { display: grid; grid-template-columns: 1.3fr 0.6fr 1fr 0.9fr 44px; align-items: center; gap: var(--space-2xs); min-height: 44px; border-bottom: var(--rule-hair) solid var(--color-rule); }
+.rmtable > div.h { color: var(--color-muted); font-size: var(--text-xs); min-height: 32px; }
+.rmtable > div.on { background: var(--color-paper-2); }
+.rmtable > div > span:nth-child(n+2):nth-child(-n+4) { text-align: right; }
 .stages { display: grid; gap: var(--space-3xs); font-size: var(--text-sm); }
 .stages .row { gap: var(--space-xs); align-items: center; }
 .stages i { width: 10px; height: 10px; border-radius: 3px; flex: none; }

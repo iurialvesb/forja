@@ -1,5 +1,9 @@
 # Changelog
 
+## Tus RM y porcentajes
+- Nueva pantalla «Tus RM» (Entrenos → «% RM», o Progreso): buscador de ejercicios (nombre o alias en español e inglés; Intro abre el primero) y lista con tu 1RM.
+- Por ejercicio: 1RM real o estimado (último o mejor), cuadrícula de porcentajes del 100 % al 30 % en kg redondeados a 0,5, «Otro %» libre, kg para 1–12 repeticiones, tu evolución y la tabla de registros (los añadidos a mano se pueden borrar).
+
 ## Añadir RM a mano
 - Entrenos → «+» → «Un RM o marca», o Progreso → «Añadir RM»: ejercicio, kg, repeticiones (1–15), fecha y nota. Se guardan como récord real.
 - Cuentan para el 1RM, el estimado y los pesos que propone el plan (se suman a los levantamientos de tus sesiones).

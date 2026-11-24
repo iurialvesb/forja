@@ -272,6 +272,11 @@ await shot('#/entrenos', '27-rm', async () => {
 });
 await page.getByRole('button', { name: 'Guardar RM' }).click(); await page.waitForTimeout(500);
 { const ok = restPosts.some((p) => /personal_records/.test(p.url) && /deadlift:1rm/.test(p.body ?? '')); if (!ok) errors.push('Añadir RM no guarda'); else console.log('Añadir RM OK'); }
+await shot('#/rm', '28-rm-lista', async () => { await page.fill('#rmq', 'sentadilla front'); await page.waitForTimeout(200);
+  const vis = await page.locator('.rmrow:not([hidden])').count(); if (vis < 1) errors.push('buscador de RM no encuentra «sentadilla front»'); else console.log('Buscador RM OK', vis); });
+await shot('#/rm/front_squat', '28b-rm-detalle', async () => {
+  const cells = await page.locator('.rmgrid .rmcell').count(); await page.fill('#rmpct', '72,5'); await page.waitForTimeout(100);
+  const o = await page.locator('#rmpcto').innerText(); if (cells < 20 || !/kg/.test(o)) errors.push(`detalle RM: ${cells} celdas, otro % «${o}»`); else console.log('Detalle RM OK', o); });
 await shot('#/salud', '25-salud');
 await page.evaluate(() => window.scrollTo(0, 900)); await page.screenshot({ path: `${OUT}/25b-salud-abajo.png` });
 { // Elegir un día: tocar un chip de la tira cambia la ficha del día
