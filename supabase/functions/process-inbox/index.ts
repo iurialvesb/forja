@@ -1,6 +1,6 @@
 // POST /process-inbox → procesa lo que ha enviado tu Atajo de Apple Salud (con TUS permisos) y recalcula el día.
 import { handler, json, requireUser, userClient } from '../_shared/supabase.ts';
-import { parseShortcut, disciplineFromType } from '../_shared/shortcut.ts';
+import { parseShortcut, disciplineFromType, stageMinuteLists, stripPrevNight } from '../_shared/shortcut.ts';
 import { ingestSession } from '../_shared/ingest.ts';
 import { todayMadrid } from '../_shared/context.ts';
 
@@ -14,6 +14,17 @@ Deno.serve(handler(async (req) => {
       const r = parseShortcut(it.payload, todayMadrid(new Date(it.received_at)));
       if (r.day) {
         const d = r.day;
+        // Atajos a veces cuela la noche anterior en la búsqueda: si los primeros tramos suman lo ya guardado ayer, se quitan
+        if (d.stages) {
+          const prevDate = new Date(Date.parse(d.date + 'T12:00:00Z') - 86400000).toISOString().slice(0, 10);
+          const { data: prev } = await sb.from('sleep_nights').select('deep_min,rem_min,core_min,awake_min').eq('user_id', userId).eq('date', prevDate).maybeSingle();
+          const cut = prev ? stripPrevNight(stageMinuteLists(it.payload), { deepMin: prev.deep_min, remMin: prev.rem_min, coreMin: prev.core_min, awakeMin: prev.awake_min }) : null;
+          if (cut) {
+            Object.assign(d.stages, cut);
+            const tot = (cut.deepMin ?? 0) + (cut.remMin ?? 0) + (cut.coreMin ?? 0);
+            d.stages.asleepMin = Math.round(tot * 10) / 10; d.sleepH = Math.round(tot / 60 * 100) / 100;
+          }
+        }
         // Si el Atajo suma más de una noche (o duplica fuentes) el total es imposible: se descarta el sueño de ese envío
         const stT = d.stages ? (d.stages.deepMin ?? 0) + (d.stages.coreMin ?? 0) + (d.stages.remMin ?? 0) : 0;
         if (stT > 14 * 60 || (d.sleepH ?? 0) > 14) { d.stages = undefined; d.sleepH = undefined; }

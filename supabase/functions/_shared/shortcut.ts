@@ -78,6 +78,31 @@ const pick = (o: any, ...keys: string[]) => {
   return undefined;
 };
 
+/**
+ * Tramos de cada fase como lista de minutos, en el orden en que los manda el Atajo (cronológico). Sirve para quitar la noche
+ * anterior cuando Atajos la cuela en la búsqueda: sus primeros tramos suman exactamente lo que ya se guardó ayer.
+ */
+export function stageMinuteLists(p: any): Record<'deepMin' | 'remMin' | 'coreMin' | 'awakeMin', number[] | undefined> {
+  const K = { deepMin: ['profundo', 'deep', 'profundo_min', 'deep_min'], remMin: ['rem', 'rem_min'], coreMin: ['basico', 'básico', 'core', 'basico_min', 'core_min'], awakeMin: ['despierto', 'depsierto', 'awake', 'despierto_min', 'awake_min'] } as const;
+  const out: any = {};
+  for (const [k, ks] of Object.entries(K)) {
+    const v = pick(p, ...ks); if (v == null || typeof v !== 'string' || !v.includes(':')) { out[k] = undefined; continue; }
+    out[k] = v.split(/\n/).map((x) => x.trim()).filter(Boolean).map((x) => durationsMin(x) ?? (Number(x) || 0) / 60);
+  }
+  return out;
+}
+/** Quita del principio de cada lista los tramos que suman lo guardado la noche anterior. Null si no encaja en todas las fases. */
+export function stripPrevNight(lists: Record<string, number[] | undefined>, prev: Record<string, number | null | undefined>): Record<string, number> | null {
+  const res: Record<string, number> = {}; let cut = false;
+  for (const [k, arr] of Object.entries(lists)) {
+    if (!arr) continue;
+    const target = Number(prev[k] ?? 0); let acc = 0, i = 0;
+    if (target > 0) { while (i < arr.length && acc < target - 0.3) acc += arr[i++]; if (Math.abs(acc - target) > 0.3) return null; cut = cut || i > 0; }
+    res[k] = Math.round(arr.slice(i).reduce((a, b) => a + b, 0) * 10) / 10;
+  }
+  return cut ? res : null;
+}
+
 export function parseShortcut(p: any, today: string): { day?: ShortcutDay; workouts: ShortcutWorkout[] } {
   const date = String(pick(p, 'fecha', 'date') ?? today).slice(0, 10);
   let sleepMin = sum(nums(pick(p, 'sueño_min', 'sueno_min', 'sleep_min')));
