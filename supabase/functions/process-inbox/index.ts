@@ -14,6 +14,9 @@ Deno.serve(handler(async (req) => {
       const r = parseShortcut(it.payload, todayMadrid(new Date(it.received_at)));
       if (r.day) {
         const d = r.day;
+        // Si el Atajo suma más de una noche (o duplica fuentes) el total es imposible: se descarta el sueño de ese envío
+        const stT = d.stages ? (d.stages.deepMin ?? 0) + (d.stages.coreMin ?? 0) + (d.stages.remMin ?? 0) : 0;
+        if (stT > 14 * 60 || (d.sleepH ?? 0) > 14) { d.stages = undefined; d.sleepH = undefined; }
         // Solo lo que envía el Atajo: un campo que no llega no borra el que ya vino de Intervals.icu
         const vals: Record<string, unknown> = { hrv_ms: d.hrvMs, hrv_method: d.hrvMs ? 'sdnn' : undefined, rhr: d.rhr != null ? Math.round(d.rhr) : undefined, sleep_h: d.sleepH, steps: d.steps != null ? Math.round(d.steps) : undefined, active_kcal: d.activeKcal, exercise_min: d.exerciseMin != null ? Math.round(d.exerciseMin) : undefined, respiration: d.respiration, spo2: d.spo2, vo2max: d.vo2max };
         const set = Object.fromEntries(Object.entries(vals).filter(([, v]) => v != null));
